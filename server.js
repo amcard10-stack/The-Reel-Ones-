@@ -41,19 +41,14 @@ app.get('/friends', (req, res) => {
     res.sendFile(__dirname + '/public/html/friends.html');
 });
 
-// Route to serve movies.html
-app.get('/movies', (req, res) => {
-    res.sendFile(__dirname + '/public/html/movies.html');
+// Route to serve subscriptions.html
+app.get('/subscriptions', (req, res) => {
+    res.sendFile(__dirname + '/public/html/subscriptions.html');
 });
 
-// Route to serve movies.html
-app.get('/shows', (req, res) => {
-    res.sendFile(__dirname + '/public/html/shows.html');
-});
-
-// Route to serve suggestions.html
-app.get('/suggestions', (req, res) => {
-    res.sendFile(__dirname + '/public/html/suggestions.html');
+// Route to serve recommendations.html
+app.get('/recommendations', (req, res) => {
+    res.sendFile(__dirname + '/public/html/recommendations.html');
 });
 
 //////////////////////////////////////
@@ -76,39 +71,34 @@ async function createConnection() {
 
 // **Authorization Middleware: Verify JWT Token and Check User in Database**
 async function authenticateToken(req, res, next) {
-    const token = req.headers['authorization'];
+  const authHeader = req.headers['authorization']; // "Bearer <token>"
 
-    if (!token) {
-        return res.status(401).json({ message: 'Access denied. No token provided.' });
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Access denied. Missing Bearer token.' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const connection = await createConnection();
+    const [rows] = await connection.execute(
+      'SELECT email FROM user WHERE email = ?',
+      [decoded.email]
+    );
+    await connection.end();
+
+    if (rows.length === 0) {
+      return res.status(401).json({ message: 'Account not found.' });
     }
 
-    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-        if (err) {
-            return res.status(403).json({ message: 'Invalid token.' });
-        }
+    req.user = decoded;
+    return next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Invalid or expired token.' });
+  }
 
-        try {
-            const connection = await createConnection();
-
-            // Query the database to verify that the email is associated with an active account
-            const [rows] = await connection.execute(
-                'SELECT email FROM user WHERE email = ?',
-                [decoded.email]
-            );
-
-            await connection.end();  // Close connection
-
-            if (rows.length === 0) {
-                return res.status(403).json({ message: 'Account not found or deactivated.' });
-            }
-
-            req.user = decoded;  // Save the decoded email for use in the route
-            next();  // Proceed to the next middleware or route handler
-        } catch (dbError) {
-            console.error(dbError);
-            res.status(500).json({ message: 'Database error during authentication.' });
-        }
-    });
 }
 /////////////////////////////////////////////////
 //END HELPER FUNCTIONS AND AUTHENTICATION MIDDLEWARE

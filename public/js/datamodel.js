@@ -43,10 +43,9 @@ const DataModel = (function () {
                 const response = await fetch('/api/users', {
                     method: 'GET',
                     headers: {
-                        // we need to send the token in the headers
-                        'Authorization': token,
-                        'Content-Type': 'application/json',
-                    },
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+},
                 });
 
                 if (!response.ok) {
