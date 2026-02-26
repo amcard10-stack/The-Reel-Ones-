@@ -20,6 +20,23 @@ body {
     align-items: center;
 }
 
+.title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px; 
+}
+
+.title-group h1 {
+    margin: 0;
+    font-size: 28px;
+}
+
+.title-group h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: normal;
+    color: #666;
+}
 .header-right button {
     margin-left: 8px;
     padding: 6px 12px;
@@ -34,7 +51,6 @@ body {
     background-color: #0056b3;
 }
 
-/* Optional: different colors */
 #refreshButton {
     background-color: #28a745;
 }
@@ -53,16 +69,23 @@ body {
 
 .feature-nav {
     margin-top: 20px;
+    display: flex;
+    gap: 8px;
 }
 
 .feature-nav button {
-    margin-right: 8px;
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
     background-color: #6c757d;
     color: white;
     border: none;
-    padding: 10px 20px;
     border-radius: 5px;
     cursor: pointer;
+    text-align: center;
+    white-space: nowrap;   
+    overflow: hidden;      
+    font-size: clamp(10px, 1vw, 14px); 
 }
 
 .feature-nav button:hover {
