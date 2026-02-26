@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,17 +7,35 @@
     <link rel="stylesheet" href="/css/dashboard.css">
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Users</h1>
-            <div>
-                <button id="refreshButton">Refresh List</button>
-                <button id="logoutButton">Log Out</button>
-            </div>
+
+<div class="container">
+    <!-- HEADER -->
+    <div class="header">
+        <h1>Dashboard</h1>
+
+        <div class="header-right">
+            <button id="refreshButton">Refresh</button>
+            <button id="logoutButton">Log Out</button>
         </div>
+    </div>
+    <!-- FEATURE NAVIGATION -->
+    <div class="feature-nav">
+        <button onclick="window.location.href='/profile'">Profile</button>
+        <button onclick="window.location.href='/ratings'">Ratings</button>
+        <button onclick="window.location.href='/friends'">Friends</button>
+        <button onclick="window.location.href='/subscriptions'">Subscriptions</button>
+        <button onclick="window.location.href='/recommendations'">Recommendations</button>
+    </div>
+    <!-- USER LIST SECTION -->
+    <div class="section">
+        <h2>All Users</h2>
         <div class="user-list" id="userList"></div>
     </div>
-    <script src="/js/dashboard.js"></script>
-    <script src="/js/datamodel.js"></script>
+
+</div>
+
+<script src="/js/datamodel.js"></script>
+<script src="/js/dashboard.js"></script>
+
 </body>
 </html>

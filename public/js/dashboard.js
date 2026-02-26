@@ -8,7 +8,7 @@
 //ADD ALL EVENT LISTENERS INSIDE DOMCONTENTLOADED
 //AT THE BOTTOM OF DOMCONTENTLOADED, ADD ANY CODE THAT NEEDS TO RUN IMMEDIATELY
 document.addEventListener('DOMContentLoaded', () => {
-    
+
     //////////////////////////////////////////
     //ELEMENTS TO ATTACH EVENT LISTENERS
     //////////////////////////////////////////
@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     //////////////////////////////////////////
     // Log out and redirect to login
     logoutButton.addEventListener('click', () => {
-        localStorage.removeItem('token');
+        localStorage.removeItem('jwtToken');
         window.location.href = '/';
     });
 
