@@ -1,18 +1,17 @@
 body {
     font-family: Arial, sans-serif;
-    background-color: #f4f4f4;
+    background-color: #f4f4f9;
     margin: 0;
-    padding: 0;
+
 }
 
 .container {
-    background-color: white;
+    width: 85%;
+    margin: 30px auto;
+    background: white;
     padding: 30px;
     border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    width: 60%;
-    margin: 0 auto;
-    margin-top: 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .header {
@@ -21,17 +20,9 @@ body {
     align-items: center;
 }
 
-.header div {
-    display: flex;
-    gap: 10px;
-}
-
-h1 {
-    margin: 0;
-}
-
-#logoutButton {
-    padding: 10px 20px;
+.header-right button {
+    margin-left: 8px;
+    padding: 6px 12px;
     background-color: #007bff;
     color: white;
     border: none;
@@ -39,12 +30,34 @@ h1 {
     cursor: pointer;
 }
 
-#logoutButton:hover {
+.header-right button:hover {
     background-color: #0056b3;
 }
 
+/* Optional: different colors */
 #refreshButton {
-    background-color: #28a745; /* Same green color from logon button */
+    background-color: #28a745;
+}
+
+#refreshButton:hover {
+    background-color: #218838;
+}
+
+#logoutButton {
+    background-color: #dc3545;
+}
+
+#logoutButton:hover {
+    background-color: #c82333;
+}
+
+.feature-nav {
+    margin-top: 20px;
+}
+
+.feature-nav button {
+    margin-right: 8px;
+    background-color: #6c757d;
     color: white;
     border: none;
     padding: 10px 20px;
@@ -52,12 +65,16 @@ h1 {
     cursor: pointer;
 }
 
-#refreshButton:hover {
-    background-color: #218838; /* Slightly darker green for hover effect */
+.feature-nav button:hover {
+    background-color: #5a6268;
+}
+
+.section {
+    margin-top: 30px;
 }
 
 .user-list {
-    margin-top: 20px;
+    margin-top: 10px;
 }
 
 .user-item {

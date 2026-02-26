@@ -8,7 +8,7 @@
 //ADD ALL EVENT LISTENERS INSIDE DOMCONTENTLOADED
 //AT THE BOTTOM OF DOMCONTENTLOADED, ADD ANY CODE THAT NEEDS TO RUN IMMEDIATELY
 document.addEventListener('DOMContentLoaded', () => {
-    
+
     //////////////////////////////////////////
     //ELEMENTS TO ATTACH EVENT LISTENERS
     //////////////////////////////////////////

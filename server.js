@@ -18,13 +18,39 @@ app.use(express.static('public'));
 //////////////////////////////////////
 // Default route to serve logon.html
 app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/public/logon.html');
+    res.sendFile(__dirname + '/public/html/logon.html');
 });
 
 // Route to serve dashboard.html
 app.get('/dashboard', (req, res) => {
-    res.sendFile(__dirname + '/public/dashboard.html');
+    res.sendFile(__dirname + '/public/html/dashboard.html');
 });
+
+// Route to serve profile.html
+app.get('/profile', (req, res) => {
+    res.sendFile(__dirname + '/public/html/profile.html');
+});
+
+// Route to serve ratings.html
+app.get('/ratings', (req, res) => {
+    res.sendFile(__dirname + '/public/html/ratings.html');
+});
+
+// Route to serve friends.html
+app.get('/friends', (req, res) => {
+    res.sendFile(__dirname + '/public/html/friends.html');
+});
+
+// Route to serve subscriptions.html
+app.get('/subscriptions', (req, res) => {
+    res.sendFile(__dirname + '/public/html/subscriptions.html');
+});
+
+// Route to serve recommendations.html
+app.get('/recommendations', (req, res) => {
+    res.sendFile(__dirname + '/public/html/recommendations.html');
+});
+
 //////////////////////////////////////
 //END ROUTES TO SERVE HTML FILES
 //////////////////////////////////////
