@@ -1,0 +1,42 @@
+body {
+    font-family: Arial;
+    background-color: #f4f4f9;
+    margin: 0;
+}
+
+.container {
+    width: 85%;
+    margin: 30px auto;
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+}
+
+.section {
+    margin-top: 30px;
+}
+
+input, select, textarea {
+    width: 100%;
+    margin-bottom: 15px;
+    padding: 8px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+
+.rating-list {
+    margin-top: 15px;
+}
+
+.primary {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 5px;
+}

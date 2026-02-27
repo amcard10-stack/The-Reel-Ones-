@@ -1,0 +1,32 @@
+body {
+    font-family: Arial;
+    background-color: #f4f4f9;
+    margin: 0;
+}
+
+.container {
+    width: 85%;
+    margin: 30px auto;
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+}
+
+.section {
+    margin-top: 30px;
+}
+
+input {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+}
+
+.friends-list {
+    margin-top: 15px;
+}

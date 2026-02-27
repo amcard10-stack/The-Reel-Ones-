@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Friends</title>
+    <link rel="stylesheet" href="../css/friends.css">
+</head>
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>Friends</h1>
+        <div class="header-right">
+            <button onclick="window.location.href='/dashboard'">Dashboard</button>
+            <button id="logoutButton">Log Out</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Search Users</h2>
+        <input type="text" placeholder="Search by email or username">
+        <button class="primary">Add Friend</button>
+    </div>
+
+    <div class="section">
+        <h2>My Friends</h2>
+        <div class="friends-list">
+            <p>No friends added yet.</p>
+        </div>
+    </div>
+
+</div>
+
+<script src="/js/datamodel.js"></script>
+<script src="/js/friends.js"></script>
+
+</body>
+</html>

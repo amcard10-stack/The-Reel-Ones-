@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Subscriptions</title>
+    <link rel="stylesheet" href="../css/subscriptions.css">
+</head>
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>My Streaming Services</h1>
+        <div class="header-right">
+            <button onclick="window.location.href='/dashboard'">Dashboard</button>
+            <button id="logoutButton">Log Out</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Select Your Platforms</h2>
+
+        <label><input type="checkbox"> Netflix</label><br>
+        <label><input type="checkbox"> Hulu</label><br>
+        <label><input type="checkbox"> Amazon Prime</label><br>
+        <label><input type="checkbox"> Disney+</label><br>
+
+        <button class="primary">Save Subscriptions</button>
+    </div>
+
+</div>
+
+<script src="/js/datamodel.js"></script>
+<script src="/js/subscriptions.js"></script>
+
+</body>
+</html>

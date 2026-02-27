@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Suggestions</title>
+    <link rel="stylesheet" href="../css/suggestions.css">
+</head>
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>Recommended For You</h1>
+        <div class="header-right">
+            <button onclick="window.location.href='/dashboard'">Dashboard</button>
+            <button id="logoutButton">Log Out</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="recommendation-card">
+            <h3>Movie Title</h3>
+            <p>Genre: Action</p>
+            <button class="primary">Interested</button>
+            <button>Not Interested</button>
+        </div>
+
+        <div class="recommendation-card">
+            <h3>Another Title</h3>
+            <p>Genre: Comedy</p>
+            <button class="primary">Interested</button>
+            <button>Not Interested</button>
+        </div>
+    </div>
+
+</div>
+
+<script src="/js/datamodel.js"></script>
+<script src="/js/suggestions.js"></script>
+
+</body>
+</html>
