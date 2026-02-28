@@ -10,6 +10,8 @@ loginTab.addEventListener('click', () => {
     createAccountForm.classList.remove('active-form');
     loginTab.classList.add('active');
     createAccountTab.classList.remove('active');
+    messageEl.textContent = '';
+    messageEl.classList.remove('error', 'success');
 });
 
 createAccountTab.addEventListener('click', () => {
@@ -17,6 +19,8 @@ createAccountTab.addEventListener('click', () => {
     logonForm.classList.remove('active-form');
     createAccountTab.classList.add('active');
     loginTab.classList.remove('active');
+    messageEl.textContent = '';
+    messageEl.classList.remove('error', 'success');
 });
 
 // Logon form submission
@@ -38,11 +42,13 @@ logonForm.addEventListener('submit', async (event) => {
             window.location.href = '/dashboard';
         } else {
             messageEl.textContent = result.message;
+            messageEl.classList.remove('success');
             messageEl.classList.add('error');
         }
     } catch (error) {
         console.error('Error:', error);
         messageEl.textContent = 'An error occurred. Please try again later.';
+        messageEl.classList.remove('success');
         messageEl.classList.add('error');
     }
 });
@@ -63,6 +69,7 @@ createAccountForm.addEventListener('submit', async (event) => {
         const result = await response.json();
         if (response.ok) {
             messageEl.textContent = 'Account created successfully! You can now log in.';
+            messageEl.classList.remove('error');
             messageEl.classList.add('success');
             document.getElementById('login-email').value = email;
             document.getElementById('login-password').value = password;
@@ -72,11 +79,13 @@ createAccountForm.addEventListener('submit', async (event) => {
             createAccountTab.classList.remove('active');
         } else {
             messageEl.textContent = result.message;
+            messageEl.classList.remove('success');
             messageEl.classList.add('error');
         }
     } catch (error) {
         console.error('Error:', error);
         messageEl.textContent = 'An error occurred. Please try again later.';
+        messageEl.classList.remove('success');
         messageEl.classList.add('error');
     }
 });
