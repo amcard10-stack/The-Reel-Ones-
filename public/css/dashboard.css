@@ -37,8 +37,29 @@ body {
     font-weight: normal;
     color: #666;
 }
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.header-right #searchInput {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    min-width: 140px;
+}
+
+.header-right #searchButton {
+    background-color: #17a2b8;
+}
+
+.header-right #searchButton:hover {
+    background-color: #138496;
+}
+
 .header-right button {
-    margin-left: 8px;
     padding: 6px 12px;
     background-color: #007bff;
     color: white;
@@ -96,11 +117,107 @@ body {
     margin-top: 30px;
 }
 
-.user-list {
+.quick-add {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.quick-add input,
+.quick-add select {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    min-width: 120px;
+}
+
+.quick-add button {
+    padding: 8px 16px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.quick-add button:hover {
+    background-color: #0056b3;
+}
+
+.section-hint {
+    color: #666;
+    font-size: 0.9em;
+    margin-bottom: 10px;
+}
+
+.section-hint a {
+    color: #007bff;
+}
+
+.dashboard-list {
     margin-top: 10px;
 }
 
-.user-item {
-    padding: 10px;
-    border-bottom: 1px solid #ddd;
+.dashboard-item {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    background: #fafafa;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.dashboard-item .meta {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.dashboard-item .rating-stars {
+    color: #f0ad4e;
+    margin: 0 6px;
+}
+
+.dashboard-item .review-text {
+    margin: 8px 0 0 0;
+    font-size: 0.9em;
+    color: #555;
+}
+
+.empty-message {
+    color: #888;
+    font-style: italic;
+    padding: 16px;
+}
+
+.loading-message {
+    color: #666;
+    padding: 16px;
+}
+
+.list-card {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid #e9ecef;
+}
+
+.list-name {
+    margin: 0 0 12px 0;
+    font-size: 1.1em;
+    color: #333;
+}
+
+.list-items {
+    margin-top: 8px;
+}
+
+.list-item {
+    padding: 6px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 0.95em;
+}
+
+.list-item:last-child {
+    border-bottom: none;
 }

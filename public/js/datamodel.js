@@ -67,6 +67,114 @@ const DataModel = (function () {
             }
         },
 
+        getWatchHistory: async function () {
+            if (!token) return [];
+            try {
+                const response = await fetch('/api/dashboard/watch-history', {
+                    method: 'GET',
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                });
+                if (!response.ok) return [];
+                const data = await response.json();
+                return data.watchHistory || [];
+            } catch (error) {
+                console.error("Error fetching watch history:", error);
+                return [];
+            }
+        },
+
+        getRatings: async function () {
+            if (!token) return [];
+            try {
+                const response = await fetch('/api/dashboard/ratings', {
+                    method: 'GET',
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                });
+                if (!response.ok) return [];
+                const data = await response.json();
+                return data.ratings || [];
+            } catch (error) {
+                console.error("Error fetching ratings:", error);
+                return [];
+            }
+        },
+
+        getLists: async function () {
+            if (!token) return [];
+            try {
+                const response = await fetch('/api/dashboard/lists', {
+                    method: 'GET',
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                });
+                if (!response.ok) return [];
+                const data = await response.json();
+                return data.lists || [];
+            } catch (error) {
+                console.error("Error fetching lists:", error);
+                return [];
+            }
+        },
+
+        addRating: async function (title, rating, review) {
+            if (!token) return { ok: false };
+            try {
+                const response = await fetch('/api/dashboard/ratings', {
+                    method: 'POST',
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, rating, review }),
+                });
+                return { ok: response.ok, data: await response.json() };
+            } catch (error) {
+                console.error("Error adding rating:", error);
+                return { ok: false };
+            }
+        },
+
+        addWatchHistory: async function (title, type) {
+            if (!token) return { ok: false };
+            try {
+                const response = await fetch('/api/dashboard/watch-history', {
+                    method: 'POST',
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, type: type || 'movie' }),
+                });
+                return { ok: response.ok, data: await response.json() };
+            } catch (error) {
+                console.error("Error adding watch history:", error);
+                return { ok: false };
+            }
+        },
+
+        createList: async function (name) {
+            if (!token) return { ok: false };
+            try {
+                const response = await fetch('/api/dashboard/lists', {
+                    method: 'POST',
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name }),
+                });
+                return { ok: response.ok, data: await response.json() };
+            } catch (error) {
+                console.error("Error creating list:", error);
+                return { ok: false };
+            }
+        },
+
+        addToList: async function (listId, title) {
+            if (!token) return { ok: false };
+            try {
+                const response = await fetch(`/api/dashboard/lists/${listId}/items`, {
+                    method: 'POST',
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title }),
+                });
+                return { ok: response.ok, data: await response.json() };
+            } catch (error) {
+                console.error("Error adding to list:", error);
+                return { ok: false };
+            }
+        },
+
         //ADD MORE FUNCTIONS HERE TO FETCH DATA FROM THE SERVER
         //AND SEND DATA TO THE SERVER AS NEEDED
     };

@@ -185,6 +185,139 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// Route: Get current user's watch history
+app.get('/api/dashboard/watch-history', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            'SELECT id, title, type, watched_at FROM watch_history WHERE user_email = ? ORDER BY watched_at DESC LIMIT 20',
+            [req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ watchHistory: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving watch history.' });
+    }
+});
+
+// Route: Get current user's ratings
+app.get('/api/dashboard/ratings', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            'SELECT id, title, rating, review, rated_at FROM rating WHERE user_email = ? ORDER BY rated_at DESC LIMIT 20',
+            [req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ ratings: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving ratings.' });
+    }
+});
+
+// Route: Add to watch history
+app.post('/api/dashboard/watch-history', authenticateToken, async (req, res) => {
+    const { title, type } = req.body;
+    if (!title) return res.status(400).json({ message: 'Title is required.' });
+    try {
+        const connection = await createConnection();
+        await connection.execute(
+            'INSERT INTO watch_history (user_email, title, type) VALUES (?, ?, ?)',
+            [req.user.email, title, type || 'movie']
+        );
+        await connection.end();
+        res.status(201).json({ message: 'Added to watch history.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error adding to watch history.' });
+    }
+});
+
+// Route: Add rating
+app.post('/api/dashboard/ratings', authenticateToken, async (req, res) => {
+    const { title, rating, review } = req.body;
+    if (!title || !rating) return res.status(400).json({ message: 'Title and rating are required.' });
+    const r = parseInt(rating, 10);
+    if (isNaN(r) || r < 1 || r > 5) return res.status(400).json({ message: 'Rating must be 1-5.' });
+    try {
+        const connection = await createConnection();
+        await connection.execute(
+            'INSERT INTO rating (user_email, title, rating, review) VALUES (?, ?, ?, ?)',
+            [req.user.email, title, r, review || null]
+        );
+        await connection.end();
+        res.status(201).json({ message: 'Rating added.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error adding rating.' });
+    }
+});
+
+// Route: Create list
+app.post('/api/dashboard/lists', authenticateToken, async (req, res) => {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ message: 'List name is required.' });
+    try {
+        const connection = await createConnection();
+        const [result] = await connection.execute(
+            'INSERT INTO list (user_email, name) VALUES (?, ?)',
+            [req.user.email, name]
+        );
+        await connection.end();
+        res.status(201).json({ message: 'List created.', listId: result.insertId });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error creating list.' });
+    }
+});
+
+// Route: Add item to list
+app.post('/api/dashboard/lists/:listId/items', authenticateToken, async (req, res) => {
+    const { listId } = req.params;
+    const { title } = req.body;
+    if (!title) return res.status(400).json({ message: 'Title is required.' });
+    try {
+        const connection = await createConnection();
+        const [lists] = await connection.execute('SELECT id FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
+        if (lists.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'List not found.' });
+        }
+        await connection.execute('INSERT INTO list_item (list_id, title) VALUES (?, ?)', [listId, title]);
+        await connection.end();
+        res.status(201).json({ message: 'Item added to list.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error adding to list.' });
+    }
+});
+
+// Route: Get current user's lists with items
+app.get('/api/dashboard/lists', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [lists] = await connection.execute(
+            'SELECT id, name, created_at FROM list WHERE user_email = ? ORDER BY created_at ASC',
+            [req.user.email]
+        );
+        const listsWithItems = [];
+        for (const list of lists) {
+            const [items] = await connection.execute(
+                'SELECT id, title, added_at FROM list_item WHERE list_id = ? ORDER BY added_at DESC',
+                [list.id]
+            );
+            listsWithItems.push({ ...list, items });
+        }
+        await connection.end();
+        res.status(200).json({ lists: listsWithItems });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving lists.' });
+    }
+});
+
 // Route: Get All Email Addresses
 app.get('/api/users', authenticateToken, async (req, res) => {
     try {

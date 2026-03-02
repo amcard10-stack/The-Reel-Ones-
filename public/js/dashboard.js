@@ -14,6 +14,11 @@ document.addEventListener('DOMContentLoaded', () => {
     //////////////////////////////////////////
     const logoutButton = document.getElementById('logoutButton');
     const refreshButton = document.getElementById('refreshButton');
+    const searchButton = document.getElementById('searchButton');
+    const searchInput = document.getElementById('searchInput');
+    const addWatchHistoryBtn = document.getElementById('addWatchHistoryBtn');
+    const createListBtn = document.getElementById('createListBtn');
+    const addToListBtn = document.getElementById('addToListBtn');
     //////////////////////////////////////////
     //END ELEMENTS TO ATTACH EVENT LISTENERS
     //////////////////////////////////////////
@@ -24,13 +29,52 @@ document.addEventListener('DOMContentLoaded', () => {
     //////////////////////////////////////////
     // Log out and redirect to login
     logoutButton.addEventListener('click', () => {
-        localStorage.removeItem('token');
+        localStorage.removeItem('jwtToken');
         window.location.href = '/';
     });
 
-    // Refresh list when the button is clicked
+    // Refresh dashboard when the button is clicked
     refreshButton.addEventListener('click', async () => {
-        renderUserList();
+        renderDashboard();
+    });
+
+    searchButton.addEventListener('click', () => {
+        performSearch();
+    });
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') performSearch();
+    });
+
+    addWatchHistoryBtn.addEventListener('click', async () => {
+        const title = document.getElementById('watchHistoryTitle').value.trim();
+        const type = document.getElementById('watchHistoryType').value;
+        if (!title) return;
+        const result = await DataModel.addWatchHistory(title, type);
+        if (result.ok) {
+            document.getElementById('watchHistoryTitle').value = '';
+            renderWatchHistory();
+        }
+    });
+
+    createListBtn.addEventListener('click', async () => {
+        const name = document.getElementById('newListName').value.trim();
+        if (!name) return;
+        const result = await DataModel.createList(name);
+        if (result.ok) {
+            document.getElementById('newListName').value = '';
+            renderLists();
+        }
+    });
+
+    addToListBtn.addEventListener('click', async () => {
+        const listId = document.getElementById('listSelect').value;
+        const title = document.getElementById('listItemTitle').value.trim();
+        if (!listId || !title) return;
+        const result = await DataModel.addToList(listId, title);
+        if (result.ok) {
+            document.getElementById('listItemTitle').value = '';
+            renderLists();
+        }
     });
     //////////////////////////////////////////
     //END EVENT LISTENERS
@@ -46,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = '/';
     } else {
         DataModel.setToken(token);
-        renderUserList();
+        renderDashboard();
     }
     //////////////////////////////////////////
     //END CODE THAT NEEDS TO RUN IMMEDIATELY AFTER PAGE LOADS
@@ -58,15 +102,70 @@ document.addEventListener('DOMContentLoaded', () => {
 //////////////////////////////////////////
 //FUNCTIONS TO MANIPULATE THE DOM
 //////////////////////////////////////////
-async function renderUserList() {
-    const userListElement = document.getElementById('userList');
-    userListElement.innerHTML = '<div class="loading-message">Loading user list...</div>';
-    const users = await DataModel.getUsers(); 
-    users.forEach(user => {
-        const userItem = document.createElement('div');
-        userItem.classList.add('user-item');
-        userItem.textContent = user;
-        userListElement.appendChild(userItem);
+let cachedWatchHistory = [];
+let cachedLists = [];
+
+async function renderDashboard() {
+    cachedWatchHistory = await DataModel.getWatchHistory();
+    cachedLists = await DataModel.getLists();
+    const searchTerm = document.getElementById('searchInput')?.value?.trim().toLowerCase() || '';
+    renderWatchHistory(searchTerm);
+    renderLists(searchTerm);
+}
+
+function performSearch() {
+    renderDashboard();
+}
+
+function renderWatchHistory(searchTerm) {
+    const el = document.getElementById('watchHistory');
+    let items = cachedWatchHistory;
+    if (searchTerm) {
+        items = items.filter(item => item.title.toLowerCase().includes(searchTerm));
+    }
+    el.innerHTML = '';
+    if (items.length === 0) {
+        el.innerHTML = '<p class="empty-message">' + (searchTerm ? 'No matching items in watch history.' : 'No watch history yet.') + '</p>';
+        return;
+    }
+    items.forEach(item => {
+        const div = document.createElement('div');
+        div.classList.add('dashboard-item');
+        const date = new Date(item.watched_at).toLocaleDateString();
+        div.innerHTML = `<strong>${item.title}</strong> <span class="meta">(${item.type}) · ${date}</span>`;
+        el.appendChild(div);
+    });
+}
+
+function renderLists(searchTerm) {
+    const el = document.getElementById('listsContainer');
+    const listSelect = document.getElementById('listSelect');
+    const addToListForm = document.getElementById('addToListForm');
+    const lists = cachedLists;
+    el.innerHTML = '';
+    if (lists.length === 0) {
+        el.innerHTML = '<p class="empty-message">No lists yet.</p>';
+        addToListForm.style.display = 'none';
+        return;
+    }
+    addToListForm.style.display = 'flex';
+    listSelect.innerHTML = '<option value="">Select a list</option>';
+    lists.forEach(list => {
+        listSelect.innerHTML += `<option value="${list.id}">${list.name}</option>`;
+        const listDiv = document.createElement('div');
+        listDiv.classList.add('list-card');
+        let items = list.items || [];
+        if (searchTerm) {
+            items = items.filter(i => i.title.toLowerCase().includes(searchTerm));
+        }
+        let itemsHtml = '';
+        if (items.length > 0) {
+            itemsHtml = items.map(i => `<div class="list-item">${i.title}</div>`).join('');
+        } else {
+            itemsHtml = '<p class="empty-message">' + (searchTerm ? 'No matching items.' : 'Empty list') + '</p>';
+        }
+        listDiv.innerHTML = `<h3 class="list-name">${list.name}</h3><div class="list-items">${itemsHtml}</div>`;
+        el.appendChild(listDiv);
     });
 }
 //////////////////////////////////////////
