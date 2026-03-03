@@ -39,6 +39,77 @@ input, select, textarea {
     border: 1px solid #ccc;
 }
 
+.scale-legend {
+    color: #555;
+    font-size: 0.95em;
+    margin-bottom: 20px;
+}
+
+.form-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.form-row input {
+    flex: 2;
+    margin-bottom: 0;
+}
+
+.form-row select {
+    flex: 1;
+    min-width: 120px;
+    margin-bottom: 0;
+}
+
+.rating-scale {
+    margin-bottom: 20px;
+}
+
+.rating-scale label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.star-rating {
+    display: flex;
+    gap: 4px;
+    font-size: 28px;
+    cursor: pointer;
+}
+
+.star-rating .star {
+    color: #ddd;
+    transition: color 0.2s;
+}
+
+.star-rating .star:hover,
+.star-rating .star.selected {
+    color: #f0ad4e;
+}
+
+.scale-label {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.9em;
+    color: #666;
+}
+
+.type-badge {
+    font-size: 0.75em;
+    background: #e9ecef;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: normal;
+}
+
+.rating-item .review-text {
+    margin-top: 8px;
+    color: #555;
+    font-size: 0.95em;
+}
+
 .rating-list {
     margin-top: 15px;
 }

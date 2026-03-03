@@ -27,11 +27,50 @@ body {
     cursor: pointer;
 }
 
+.ratings-summary {
+    font-size: 1.1em;
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.section-hint {
+    color: #666;
+    font-size: 0.9em;
+    margin-bottom: 12px;
+}
+
+.empty-message {
+    color: #888;
+    font-style: italic;
+}
+
 .recommendation-card {
     border: 1px solid #ddd;
     padding: 15px;
     border-radius: 8px;
     margin-bottom: 15px;
+}
+
+.recommendation-card h3 {
+    margin: 0 0 8px 0;
+}
+
+.recommendation-card p {
+    margin: 0 0 12px 0;
+    color: #555;
+}
+
+.recommendation-card a.primary {
+    display: inline-block;
+    text-decoration: none;
+    padding: 6px 12px;
+    border-radius: 5px;
+    background-color: #28a745;
+    color: white;
+}
+
+.recommendation-card a.primary:hover {
+    background-color: #218838;
 }
 
 .primary {

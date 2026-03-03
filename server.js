@@ -211,7 +211,7 @@ app.get('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
         const [rows] = await connection.execute(
-            'SELECT id, title, rating, review, rated_at FROM rating WHERE user_email = ? ORDER BY rated_at DESC LIMIT 20',
+            'SELECT id, title, type, rating, review, rated_at FROM rating WHERE user_email = ? ORDER BY rated_at DESC',
             [req.user.email]
         );
         await connection.end();
@@ -242,15 +242,16 @@ app.post('/api/dashboard/watch-history', authenticateToken, async (req, res) => 
 
 // Route: Add rating
 app.post('/api/dashboard/ratings', authenticateToken, async (req, res) => {
-    const { title, rating, review } = req.body;
+    const { title, type, rating, review } = req.body;
     if (!title || !rating) return res.status(400).json({ message: 'Title and rating are required.' });
     const r = parseInt(rating, 10);
     if (isNaN(r) || r < 1 || r > 5) return res.status(400).json({ message: 'Rating must be 1-5.' });
+    const contentType = type === 'show' ? 'show' : 'movie';
     try {
         const connection = await createConnection();
         await connection.execute(
-            'INSERT INTO rating (user_email, title, rating, review) VALUES (?, ?, ?, ?)',
-            [req.user.email, title, r, review || null]
+            'INSERT INTO rating (user_email, title, type, rating, review) VALUES (?, ?, ?, ?, ?)',
+            [req.user.email, title, contentType, r, review || null]
         );
         await connection.end();
         res.status(201).json({ message: 'Rating added.' });
@@ -320,6 +321,59 @@ app.get('/api/dashboard/lists', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error retrieving lists.' });
+    }
+});
+
+// Route: Get personalized suggestions (uses ratings to improve recommendations)
+app.get('/api/suggestions', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const email = req.user.email;
+
+        // Get user's rating count
+        const [[{ count: ratingsCount }]] = await connection.execute(
+            'SELECT COUNT(*) as count FROM rating WHERE user_email = ?',
+            [email]
+        );
+
+        // Titles from watch history that user hasn't rated yet (suggest to rate)
+        const [toRateRows] = await connection.execute(
+            `SELECT wh.title, wh.type FROM watch_history wh
+             LEFT JOIN rating r ON r.user_email = wh.user_email AND LOWER(r.title) = LOWER(wh.title)
+             WHERE wh.user_email = ? AND r.id IS NULL
+             LIMIT 10`,
+            [email]
+        );
+
+        // Recommendations: titles other users rated 4-5 stars that this user hasn't rated
+        const [recRows] = await connection.execute(
+            `SELECT DISTINCT r.title, r.type, AVG(r.rating) as avg_rating
+             FROM rating r
+             WHERE r.user_email != ?
+             AND r.rating >= 4
+             AND NOT EXISTS (
+                 SELECT 1 FROM rating r2 WHERE r2.user_email = ? AND LOWER(r2.title) = LOWER(r.title)
+             )
+             GROUP BY r.title, r.type
+             ORDER BY avg_rating DESC
+             LIMIT 10`,
+            [email, email]
+        );
+
+        await connection.end();
+
+        res.status(200).json({
+            ratingsCount,
+            toRate: toRateRows,
+            recommendations: recRows.map(row => ({
+                title: row.title,
+                type: row.type || 'movie',
+                avgRating: Math.round(parseFloat(row.avg_rating) * 10) / 10
+            }))
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving suggestions.' });
     }
 });
 

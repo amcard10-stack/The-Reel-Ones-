@@ -115,13 +115,13 @@ const DataModel = (function () {
             }
         },
 
-        addRating: async function (title, rating, review) {
+        addRating: async function (title, type, rating, review) {
             if (!token) return { ok: false };
             try {
                 const response = await fetch('/api/dashboard/ratings', {
                     method: 'POST',
                     headers: { 'Authorization': token, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title, rating, review }),
+                    body: JSON.stringify({ title, type: type || 'movie', rating, review }),
                 });
                 return { ok: response.ok, data: await response.json() };
             } catch (error) {
@@ -157,6 +157,21 @@ const DataModel = (function () {
             } catch (error) {
                 console.error("Error creating list:", error);
                 return { ok: false };
+            }
+        },
+
+        getSuggestions: async function () {
+            if (!token) return null;
+            try {
+                const response = await fetch('/api/suggestions', {
+                    method: 'GET',
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                });
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (error) {
+                console.error("Error fetching suggestions:", error);
+                return null;
             }
         },
 

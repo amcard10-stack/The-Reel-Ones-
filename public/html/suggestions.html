@@ -2,7 +2,7 @@
 <html>
 <head>
     <title>Suggestions</title>
-    <link rel="stylesheet" href="../css/suggestions.css">
+    <link rel="stylesheet" href="/css/suggestions.css">
 </head>
 <body>
 
@@ -17,19 +17,19 @@
     </div>
 
     <div class="section">
-        <div class="recommendation-card">
-            <h3>Movie Title</h3>
-            <p>Genre: Action</p>
-            <button class="primary">Interested</button>
-            <button>Not Interested</button>
-        </div>
+        <p id="ratingsSummary" class="ratings-summary"></p>
+    </div>
 
-        <div class="recommendation-card">
-            <h3>Another Title</h3>
-            <p>Genre: Comedy</p>
-            <button class="primary">Interested</button>
-            <button>Not Interested</button>
-        </div>
+    <div class="section" id="toRateSection">
+        <h2>Rate These to Improve Recommendations</h2>
+        <p class="section-hint">Titles from your watch history you haven't rated yet.</p>
+        <div id="toRateList"></div>
+    </div>
+
+    <div class="section" id="recommendationsSection">
+        <h2>Recommended For You</h2>
+        <p class="section-hint">Based on ratings from users with similar taste.</p>
+        <div id="recommendationsList"></div>
     </div>
 
 </div>

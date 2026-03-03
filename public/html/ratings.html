@@ -2,7 +2,7 @@
 <html>
 <head>
     <title>Ratings</title>
-    <link rel="stylesheet" href="../css/ratings.css">
+    <link rel="stylesheet" href="/css/ratings.css">
 </head>
 <body>
 
@@ -17,18 +17,30 @@
     </div>
 
     <div class="section">
-        <h2>Rate a Movie/Show</h2>
+        <h2>Rate a Movie or Show</h2>
+        <p class="scale-legend">Use our standardized 1–5 scale to rate titles. Your ratings help improve your recommendations.</p>
 
-        <input type="text" id="ratingTitle" placeholder="Title Name">
-        <select id="ratingSelect">
-            <option value="">Select Rating</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-        </select>
-        <textarea id="ratingReview" placeholder="Write your review..."></textarea>
+        <div class="form-row">
+            <input type="text" id="ratingTitle" placeholder="Movie or show title">
+            <select id="ratingType">
+                <option value="movie">Movie</option>
+                <option value="show">TV Show</option>
+            </select>
+        </div>
+
+        <div class="rating-scale">
+            <label>Your rating:</label>
+            <div class="star-rating" id="starRating">
+                <span class="star" data-value="1" title="Poor">★</span>
+                <span class="star" data-value="2" title="Fair">★</span>
+                <span class="star" data-value="3" title="Good">★</span>
+                <span class="star" data-value="4" title="Very Good">★</span>
+                <span class="star" data-value="5" title="Excellent">★</span>
+            </div>
+            <span class="scale-label" id="scaleLabel">Select a rating</span>
+        </div>
+
+        <textarea id="ratingReview" placeholder="Write your review (optional)..."></textarea>
         <button class="primary" id="submitRatingBtn">Submit Rating</button>
         <p id="ratingMessage"></p>
     </div>
