@@ -1,17 +1,14 @@
 body {
     font-family: Arial, sans-serif;
-    background-color: #f4f4f9;
+    background-color: #0A1A2F; 
     margin: 0;
-
+    color: #F2F4F7;
 }
 
 .container {
     width: 85%;
-    margin: 30px auto;
-    background: white;
+    margin: 40px auto;
     padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .header {
@@ -23,7 +20,7 @@ body {
 .title-group {
     display: flex;
     flex-direction: column;
-    gap: 10px; 
+    gap: 6px;
 }
 
 .title-group h1 {
@@ -35,124 +32,110 @@ body {
     margin: 0;
     font-size: 18px;
     font-weight: normal;
-    color: #666;
+    color: #D9DEE4; 
 }
+
 .header-right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     flex-wrap: wrap;
 }
 
 .header-right #searchInput {
-    padding: 6px 12px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    min-width: 140px;
-}
-
-.header-right #searchButton {
-    background-color: #17a2b8;
-}
-
-.header-right #searchButton:hover {
-    background-color: #138496;
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1px solid #2B2F36;
+    background-color: #1A1C20; 
+    color: #F2F4F7;
+    min-width: 160px;
+    box-sizing: border-box;
 }
 
 .header-right button {
-    padding: 6px 12px;
-    background-color: #007bff;
-    color: white;
+    padding: 8px 14px;
+    border-radius: 10px;
     border: none;
-    border-radius: 5px;
     cursor: pointer;
+    background-color: #3A6EA5; 
+    color: #F2F4F7;
 }
 
 .header-right button:hover {
-    background-color: #0056b3;
-}
-
-#refreshButton {
-    background-color: #28a745;
-}
-
-#refreshButton:hover {
-    background-color: #218838;
-}
-
-#logoutButton {
-    background-color: #dc3545;
-}
-
-#logoutButton:hover {
-    background-color: #c82333;
+    background-color: #A7D3F5;
+    color: #0A1A2F;
 }
 
 .feature-nav {
-    margin-top: 20px;
+    margin-top: 25px;
     display: flex;
-    gap: 8px;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .feature-nav button {
     flex: 1;
-    min-width: 0;
-    padding: 8px 12px;
-    background-color: #6c757d;
-    color: white;
+    min-width: 120px;
+    padding: 10px 16px;
+    border-radius: 14px;
     border: none;
-    border-radius: 5px;
+    background-color: #1E3A5F; 
+    color: #F2F4F7;
     cursor: pointer;
-    text-align: center;
-    white-space: nowrap;   
-    overflow: hidden;      
-    font-size: clamp(10px, 1vw, 14px); 
+    transition: 0.2s ease;
 }
 
 .feature-nav button:hover {
-    background-color: #5a6268;
+    background-color: #3A6EA5;
 }
 
 .section {
-    margin-top: 30px;
+    margin-top: 35px;
+    background-color: #1E3A5F;
+    padding: 25px;
+    border-radius: 18px;
 }
 
 .quick-add {
     display: flex;
-    gap: 8px;
-    margin-bottom: 12px;
+    gap: 10px;
+    margin-bottom: 16px;
     flex-wrap: wrap;
 }
 
 .quick-add input,
 .quick-add select {
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    min-width: 120px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #2B2F36;
+    background-color: #1A1C20;
+    color: #F2F4F7;
+    min-width: 150px;
+    box-sizing: border-box;
 }
 
 .quick-add button {
-    padding: 8px 16px;
-    background-color: #007bff;
-    color: white;
+    padding: 10px 18px;
+    border-radius: 10px;
     border: none;
-    border-radius: 5px;
+    background-color: #3A6EA5;
+    color: #F2F4F7;
     cursor: pointer;
 }
 
 .quick-add button:hover {
-    background-color: #0056b3;
+    background-color: #A7D3F5;
+    color: #0A1A2F;
 }
 
 .section-hint {
-    color: #666;
+    color: #D9DEE4;
     font-size: 0.9em;
     margin-bottom: 10px;
 }
 
 .section-hint a {
-    color: #007bff;
+    color: #A7D3F5;
 }
 
 .dashboard-list {
@@ -160,52 +143,49 @@ body {
 }
 
 .dashboard-item {
-    padding: 12px;
-    border-bottom: 1px solid #eee;
-    background: #fafafa;
-    border-radius: 6px;
-    margin-bottom: 8px;
+    padding: 14px;
+    background: #2B2F36; 
+    border-radius: 10px;
+    margin-bottom: 10px;
 }
 
 .dashboard-item .meta {
-    color: #666;
+    color: #D9DEE4;
     font-size: 0.9em;
 }
 
 .dashboard-item .rating-stars {
-    color: #f0ad4e;
+    color: #E26A6A; 
     margin: 0 6px;
 }
 
 .dashboard-item .review-text {
-    margin: 8px 0 0 0;
+    margin-top: 6px;
     font-size: 0.9em;
-    color: #555;
+    color: #F2F4F7;
 }
 
 .empty-message {
-    color: #888;
+    color: #D9DEE4;
     font-style: italic;
     padding: 16px;
 }
 
 .loading-message {
-    color: #666;
+    color: #D9DEE4;
     padding: 16px;
 }
 
 .list-card {
-    background: #f8f9fa;
-    border-radius: 8px;
-    padding: 16px;
+    background: #2B2F36;
+    border-radius: 12px;
+    padding: 18px;
     margin-bottom: 16px;
-    border: 1px solid #e9ecef;
 }
 
 .list-name {
     margin: 0 0 12px 0;
     font-size: 1.1em;
-    color: #333;
 }
 
 .list-items {
@@ -213,8 +193,8 @@ body {
 }
 
 .list-item {
-    padding: 6px 0;
-    border-bottom: 1px solid #eee;
+    padding: 8px 0;
+    border-bottom: 1px solid #1A1C20;
     font-size: 0.95em;
 }
 

@@ -1,41 +1,65 @@
 body {
-    font-family: 'Arial', sans-serif;
-    background-color: #f4f4f9;
     margin: 0;
-    padding: 0;
+    font-family: Arial, sans-serif;
+    color: #F2F4F7;
+
+    background:
+        url("/roll_the_tapes.jpg");
+
+    background-repeat: no-repeat;
+    background-size: cover;        
+    background-position: left center; 
+    min-height: 100vh;
+}
+
+.logon-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
 }
 
 .container {
-    max-width: 400px;
-    margin: 5% auto;
-    padding: 20px;
-    background-color: white;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    width: 400px;
+    padding: 40px;
+    background-color: #1E3A5F; 
+    border-radius: 18px;
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.4);
 }
 
-h1 {
+.app-title {
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 30px;
+    font-size: 28px;
 }
 
 .tab {
     display: flex;
-    justify-content: space-around;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
+    background-color: #1A1C20;
+    border-radius: 12px;
+    overflow: hidden;
 }
 
 .tab-button {
     flex: 1;
-    padding: 10px 0;
+    padding: 12px 0;
     border: none;
     cursor: pointer;
-    background-color: #ddd;
+    background-color: transparent;
+    color: #D9DEE4;
+    font-weight: bold;
+    transition: 0.2s ease;
 }
 
 .tab-button.active {
-    background-color: #4caf50;
-    color: white;
+    background-color: #3A6EA5; 
+    color: #F2F4F7;
+}
+
+.tab-button:hover {
+    background-color: #A7D3F5;
+    color: #0A1A2F;
 }
 
 form {
@@ -48,41 +72,66 @@ form.active-form {
 
 label {
     display: block;
-    margin: 10px 0 5px;
+    margin: 12px 0 6px;
+    color: #D9DEE4;
+    font-size: 14px;
 }
 
 input {
     width: 100%;
-    padding: 10px;
-    margin-bottom: 10px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    border-radius: 12px;
+    border: 1px solid #2B2F36;
+    background-color: #1A1C20;
+    color: #F2F4F7;
+    font-size: 15px;
+    box-sizing: border-box;
 }
 
-.button {
+input:focus {
+    outline: none;
+    border-color: #3A6EA5;
+}
+
+.primary-btn {
     width: 100%;
-    padding: 10px;
-    background-color: #4caf50;
-    color: white;
+    padding: 14px;
+    background-color: #3A6EA5;
+    color: #F2F4F7;
     border: none;
-    border-radius: 5px;
+    border-radius: 14px;
     cursor: pointer;
+    font-size: 15px;
+    font-weight: bold;
+    transition: 0.2s ease;
 }
 
-.button:hover {
-    background-color: #45a049;
+.primary-btn:hover {
+    background-color: #A7D3F5;
+    color: #0A1A2F;
 }
 
 .message {
-    margin-top: 10px;
+    margin-top: 15px;
     text-align: center;
     font-size: 14px;
 }
 
 .success {
-    color: green;
+    color: #A7D3F5;
 }
 
 .error {
-    color: red;
+    color: #E26A6A; 
+}
+
+/* Fix Chrome Autofill Background */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #1A1C20 inset !important;
+    -webkit-text-fill-color: #F2F4F7 !important;
+    transition: background-color 9999s ease-in-out 0s;
 }
