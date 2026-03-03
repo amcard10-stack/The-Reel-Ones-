@@ -41,9 +41,9 @@ app.get('/friends', (req, res) => {
     res.sendFile(__dirname + '/public/html/friends.html');
 });
 
-// Route to serve subscriptions.html
-app.get('/subscriptions', (req, res) => {
-    res.sendFile(__dirname + '/public/html/subscriptions.html');
+// Route to serve movies.html
+app.get('/movies', (req, res) => {
+    res.sendFile(__dirname + '/public/html/movies.html');
 });
 
 // Route to serve suggestions.html
