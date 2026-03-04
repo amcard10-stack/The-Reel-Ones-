@@ -56,9 +56,9 @@ app.get('/shows', (req, res) => {
     res.sendFile(__dirname + '/public/html/shows.html');
 });
 
-// Route to serve recommendations.html
-app.get('/recommendations', (req, res) => {
-    res.sendFile(__dirname + '/public/html/recommendations.html');
+// Route to serve suggestions.html
+app.get('/suggestions', (req, res) => {
+    res.sendFile(__dirname + '/public/html/suggestions.html');
 });
 
 //////////////////////////////////////
