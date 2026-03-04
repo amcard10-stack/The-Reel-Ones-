@@ -2,21 +2,23 @@
 <html>
 <head>
     <title>Subscriptions</title>
-    <link rel="stylesheet" href="../css/movies.css">
+    <link rel="stylesheet" href="/css/movies.css">
 </head>
 <body>
 
 <div class="container">
 
     <div class="header">
-        <h1>Movies:</h1>
+        <h1>Movies</h1>
         <div class="header-right">
+            <input type="text" id="movieSearch" placeholder="Search movies..." class="page-search">
+            <button id="movieSearchBtn">Search</button>
             <button onclick="window.location.href='/dashboard'">Dashboard</button>
             <button id="logoutButton">Log Out</button>
         </div>
     </div>
-    
-<h3 class="row-title">Trending</h3>
+
+    <h3 class="row-title" id="moviesSectionTitle">Trending</h3>
 
     <div class="row-container">
 

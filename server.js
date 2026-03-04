@@ -393,6 +393,34 @@ app.get('/api/users', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error retrieving email addresses.' });
     }
 });
+// TMDB: Search movies or TV (type=movie or type=tv)
+app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
+    const q = (req.query.q || '').trim();
+    const type = req.query.type || 'movie';
+    if (q.length < 2) {
+        return res.status(400).json({ message: 'Query must be at least 2 characters' });
+    }
+    if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+        return res.status(503).json({ message: 'TMDB API key not configured.' });
+    }
+    try {
+        const base = 'https://api.themoviedb.org/3';
+        const key = process.env.TMDB_API_KEY;
+        const encoded = encodeURIComponent(q);
+        const endpoint = type === 'tv' ? 'search/tv' : 'search/movie';
+        const url = `${base}/${endpoint}?api_key=${key}&query=${encoded}&language=en-US&include_adult=false`;
+        const tmdbRes = await fetch(url);
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+        }
+        const data = await tmdbRes.json();
+        res.status(200).json(data);
+    } catch (error) {
+        console.error('TMDB search error:', error);
+        res.status(500).json({ message: 'Error searching TMDB.' });
+    }
+});
+
 // TMDB: Trending Movies only
 app.get('/api/trending/movies', authenticateToken, async (req, res) => {
     try {
