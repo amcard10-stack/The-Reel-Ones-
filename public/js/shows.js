@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
 
         const res = await fetch('/api/trending/shows', {
-            headers: { Authorization: token }
+            headers: { Authorization: `Bearer ${token}` }
         });
 
         const data = await res.json();

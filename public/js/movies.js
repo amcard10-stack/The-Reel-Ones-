@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
 
         const res = await fetch('/api/trending/movies', {
-            headers: { Authorization: token }
+            headers: { Authorization: `Bearer ${token}` }
         });
 
         if (!res.ok) {
@@ -76,6 +76,4 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 });
 
-    //////////////////////////////////////////////////////////////
-// SUBSCRIPTIONS.JS  (will become Movies tab)
-//////////////////////////////////////////////////////////////
+  
