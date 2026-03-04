@@ -393,6 +393,44 @@ app.get('/api/users', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error retrieving email addresses.' });
     }
 });
+// TMDB: Trending (movies + TV)
+app.get('/api/tmdb/trending', authenticateToken, async (req, res) => {
+    try {
+        const url = `https://api.themoviedb.org/3/trending/all/day?api_key=${process.env.TMDB_API_KEY}`;
+        const tmdbRes = await fetch(url);
+
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+        }
+
+        const data = await tmdbRes.json();
+        res.status(200).json(data);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error calling TMDB.' });
+    }
+});
+
+// // TMDB: Search (movies + TV)
+// app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
+//     try {
+//         const q = req.query.q;
+//         if (!q) return res.status(400).json({ message: 'Missing query param: q' });
+
+//         const url = `https://api.themoviedb.org/3/search/multi?api_key=${process.env.TMDB_API_KEY}&query=${encodeURIComponent(q)}`;
+//         const tmdbRes = await fetch(url);
+
+//         if (!tmdbRes.ok) {
+//             return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+//         }
+
+//         const data = await tmdbRes.json();
+//         res.status(200).json(data);
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ message: 'Error calling TMDB.' });
+//     }
+// });
 //////////////////////////////////////
 //END ROUTES TO HANDLE API REQUESTS
 //////////////////////////////////////

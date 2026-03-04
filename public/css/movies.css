@@ -43,3 +43,49 @@ label {
     padding: 8px 12px;
     border-radius: 5px;
 }
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: white;   /* back to white */
+    color: black;
+}
+
+.container {
+    padding: 20px;
+}
+
+/* Header styling */
+.header h1 {
+    font-size: 28px;
+    font-weight: bold;
+    margin-bottom: 20px;
+}
+
+/* Grid  */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 18px;
+}
+
+/* Movie card */
+.media-card {
+    text-align: center;
+}
+
+/* Poster image */
+.media-card img {
+    width: 100%;
+    border-radius: 10px;
+}
+
+/* Movie title */
+.media-card p {
+    font-size: 14px;
+    font-weight: bold;   
+    margin-top: 8px;
+}
+.media-card img:hover {
+    transform: scale(1.05);
+    transition: transform 0.2s;
+}
