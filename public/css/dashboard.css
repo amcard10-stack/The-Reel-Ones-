@@ -42,16 +42,6 @@ body {
     flex-wrap: wrap;
 }
 
-.header-right #searchInput {
-    padding: 8px 14px;
-    border-radius: 10px;
-    border: 1px solid #2B2F36;
-    background-color: #1A1C20; 
-    color: #F2F4F7;
-    min-width: 160px;
-    box-sizing: border-box;
-}
-
 .header-right button {
     padding: 8px 14px;
     border-radius: 10px;
@@ -94,6 +84,17 @@ body {
     background-color: #1E3A5F;
     padding: 25px;
     border-radius: 18px;
+}
+
+.section-search {
+    width: 100%;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+    border: 1px solid #2B2F36;
+    background-color: #1A1C20;
+    color: #F2F4F7;
+    box-sizing: border-box;
 }
 
 .quick-add {

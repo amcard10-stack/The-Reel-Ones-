@@ -18,8 +18,6 @@
     </div>
 
     <div class="header-right">
-        <input type="text" id="searchInput" placeholder="Search...">
-        <button id="searchButton">Search</button>
         <button id="refreshButton">Refresh</button>
         <button id="logoutButton">Log Out</button>
     </div>
@@ -36,6 +34,7 @@
     <!-- WATCH HISTORY SECTION -->
     <div class="section">
         <h2>Watch History</h2>
+        <input type="text" id="watchHistorySearch" placeholder="Search watch history..." class="section-search">
         <div class="quick-add">
             <input type="text" id="watchHistoryTitle" placeholder="Movie or show title">
             <select id="watchHistoryType">
@@ -50,6 +49,7 @@
     <!-- LISTS SECTION -->
     <div class="section">
         <h2>My Lists</h2>
+        <input type="text" id="listsSearch" placeholder="Search lists..." class="section-search">
         <div class="quick-add">
             <input type="text" id="newListName" placeholder="List name (e.g. Watchlist)">
             <button id="createListBtn">Create List</button>

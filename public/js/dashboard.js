@@ -14,8 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     //////////////////////////////////////////
     const logoutButton = document.getElementById('logoutButton');
     const refreshButton = document.getElementById('refreshButton');
-    const searchButton = document.getElementById('searchButton');
-    const searchInput = document.getElementById('searchInput');
+    const watchHistorySearch = document.getElementById('watchHistorySearch');
+    const listsSearch = document.getElementById('listsSearch');
     const addWatchHistoryBtn = document.getElementById('addWatchHistoryBtn');
     const createListBtn = document.getElementById('createListBtn');
     const addToListBtn = document.getElementById('addToListBtn');
@@ -38,12 +38,14 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDashboard();
     });
 
-    searchButton.addEventListener('click', () => {
-        performSearch();
-    });
-    searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') performSearch();
-    });
+    if (watchHistorySearch) {
+        watchHistorySearch.addEventListener('input', () => filterBySearch());
+        watchHistorySearch.addEventListener('keypress', (e) => { if (e.key === 'Enter') filterBySearch(); });
+    }
+    if (listsSearch) {
+        listsSearch.addEventListener('input', () => filterBySearch());
+        listsSearch.addEventListener('keypress', (e) => { if (e.key === 'Enter') filterBySearch(); });
+    }
 
     addWatchHistoryBtn.addEventListener('click', async () => {
         const title = document.getElementById('watchHistoryTitle').value.trim();
@@ -52,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const result = await DataModel.addWatchHistory(title, type);
         if (result.ok) {
             document.getElementById('watchHistoryTitle').value = '';
-            renderWatchHistory();
+            filterBySearch();
         }
     });
 
@@ -62,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const result = await DataModel.createList(name);
         if (result.ok) {
             document.getElementById('newListName').value = '';
-            renderLists();
+            filterBySearch();
         }
     });
 
@@ -73,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const result = await DataModel.addToList(listId, title);
         if (result.ok) {
             document.getElementById('listItemTitle').value = '';
-            renderLists();
+            filterBySearch();
         }
     });
     //////////////////////////////////////////
@@ -108,13 +110,14 @@ let cachedLists = [];
 async function renderDashboard() {
     cachedWatchHistory = await DataModel.getWatchHistory();
     cachedLists = await DataModel.getLists();
-    const searchTerm = document.getElementById('searchInput')?.value?.trim().toLowerCase() || '';
-    renderWatchHistory(searchTerm);
-    renderLists(searchTerm);
+    filterBySearch();
 }
 
-function performSearch() {
-    renderDashboard();
+function filterBySearch() {
+    const watchHistoryTerm = document.getElementById('watchHistorySearch')?.value?.trim().toLowerCase() || '';
+    const listsTerm = document.getElementById('listsSearch')?.value?.trim().toLowerCase() || '';
+    renderWatchHistory(watchHistoryTerm);
+    renderLists(listsTerm);
 }
 
 function renderWatchHistory(searchTerm) {
