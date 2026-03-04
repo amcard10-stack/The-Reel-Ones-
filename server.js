@@ -429,6 +429,43 @@ app.get('/api/trending/shows', authenticateToken, async (req, res) => {
     }
 });
 
+<<<<<<< HEAD
+=======
+//         const data = await tmdbRes.json();
+//         res.status(200).json(data);
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ message: 'Error calling TMDB.' });
+//     }
+// });
+// Route: Set or Update Watch Status
+app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
+    const { title, type, status } = req.body;
+
+    if (!title || !status) {
+        return res.status(400).json({ message: 'Title and status required.' });
+    }
+
+    try {
+        const connection = await createConnection();
+
+        await connection.execute(
+            `INSERT INTO watch_status (user_email, title, type, status)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE status = VALUES(status)`,
+            [req.user.email, title, type || 'movie', status]
+        );
+
+        await connection.end();
+
+        res.status(200).json({ message: 'Status updated.' });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error updating status.' });
+    }
+});
+>>>>>>> 0f561ca (film status)
 //////////////////////////////////////
 //END ROUTES TO HANDLE API REQUESTS
 //////////////////////////////////////

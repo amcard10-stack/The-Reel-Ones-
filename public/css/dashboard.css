@@ -202,3 +202,61 @@ body {
 .list-item:last-child {
     border-bottom: none;
 }
+.status-grid{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap:16px;
+  margin-top:12px;
+}
+.status-col{
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 14px;
+  min-height: 180px;
+}
+.status-col h3{
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  opacity: 0.9;
+}
+.status-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.status-card{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 12px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.18);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.status-title{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+.status-title strong{
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.status-title .meta{
+  font-size:12px;
+  opacity:0.75;
+}
+.status-card select{
+  border-radius:10px;
+  padding:6px 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: inherit;
+}
+@media (max-width: 900px){
+  .status-grid{ grid-template-columns: 1fr; }
+}

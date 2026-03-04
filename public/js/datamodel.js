@@ -188,7 +188,39 @@ const DataModel = (function () {
                 return { ok: false };
             }
         },
+getStatuses: async function () {
+    if (!token) return [];
+    try {
+        const response = await fetch('/api/dashboard/status', {
+            method: 'GET',
+            headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+        });
 
+        if (!response.ok) return [];
+
+        const data = await response.json();
+        return data.statuses || [];
+    } catch (error) {
+        console.error("Error fetching statuses:", error);
+        return [];
+    }
+},
+
+setStatus: async function (title, type, status) {
+    if (!token) return { ok: false };
+    try {
+        const response = await fetch('/api/dashboard/status', {
+            method: 'POST',
+            headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, type, status }),
+        });
+
+        return { ok: response.ok, data: await response.json() };
+    } catch (error) {
+        console.error("Error setting status:", error);
+        return { ok: false };
+    }
+},
         //ADD MORE FUNCTIONS HERE TO FETCH DATA FROM THE SERVER
         //AND SEND DATA TO THE SERVER AS NEEDED
     };
