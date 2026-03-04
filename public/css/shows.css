@@ -43,3 +43,80 @@ label {
     padding: 8px 12px;
     border-radius: 5px;
 }
+body {
+    font-family: Arial, sans-serif;
+    background: white;
+    color: black;
+}
+
+.container {
+    padding: 20px;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.row-title {
+    margin-top: 25px;
+    margin-bottom: 10px;
+    font-size: 20px;
+    font-weight: 600;
+}
+.row-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.movie-row {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+    padding: 10px 0;
+}
+
+.movie-row::-webkit-scrollbar {
+    display: none;
+}
+
+.media-card {
+    flex: 0 0 auto;
+    width: 160px;
+    text-align: center;
+}
+
+.media-card img {
+    width: 160px;
+    border-radius: 10px;
+}
+
+.media-card p {
+    font-weight: bold;
+    font-size: 14px;
+    margin-top: 6px;
+}
+
+.scroll-btn {
+    border: none;
+    background: rgba(0,0,0,0.1);
+    font-size: 28px;
+    cursor: pointer;
+    padding: 10px;
+}
+.scroll-btn.right {
+    right: -10px;
+}
+.media-card img {
+    width: 160px;
+    border-radius: 10px;
+    transition: transform 0.2s ease;
+}
+
+.media-card img:hover {
+    transform: scale(1.05);
+}

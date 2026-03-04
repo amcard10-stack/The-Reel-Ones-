@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
 
     const token = localStorage.getItem('jwtToken');
 
@@ -16,79 +16,66 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = '/';
     });
 
-    //////////////////////////////////////////////////////////////
-// SUBSCRIPTIONS.JS  (will become Movies tab)
-//////////////////////////////////////////////////////////////
+      const row = document.getElementById('moviesRow');
 
-// 🔹 Load movies automatically when page loads
-    loadTrending();
-});
+    if (!row) {
+        console.error("moviesRow container not found");
+        return;
+    }
 
-async function loadTrending() {
     try {
-        const res = await fetch('/api/tmdb/trending', {
-            headers: {
-                authorization: localStorage.getItem('jwtToken')
-            }
+
+        const res = await fetch('/api/trending/movies', {
+            headers: { Authorization: token }
         });
+
+        if (!res.ok) {
+            throw new Error("Failed to fetch movies");
+        }
 
         const data = await res.json();
 
-        if (!res.ok) {
-            console.error("TMDB route error:", data);
-            alert(data.message || "Failed to load movies.");
-            return;
-        }
+        const movies = data.results || [];
 
-        renderItems(data.results || []);
+        movies.forEach(movie => {
 
-    } catch (err) {
-        console.error("Fetch error:", err);
-        alert("Error loading movies.");
+            if (!movie.poster_path) return;
+
+            const card = document.createElement("div");
+            card.className = "media-card";
+
+            card.innerHTML = `
+                <img src="https://image.tmdb.org/t/p/w342${movie.poster_path}">
+                <p>${movie.title}</p>
+            `;
+
+            row.appendChild(card);
+
+        });
+
+    } catch (error) {
+        console.error("Error loading movies:", error);
     }
-}
 
-function renderItems(items) {
-    const container = document.getElementById('results');
-    if (!container) return;
+    const scrollLeft = document.getElementById("scrollLeft");
+    const scrollRight = document.getElementById("scrollRight");
 
-    container.innerHTML = '';
-
-    items.forEach(item => {
-        const title = item.title || item.name || 'Untitled';
-        const posterPath = item.poster_path;
-
-        // Skip items with no poster?
-        if (!posterPath) return;
-
-        const posterUrl = `https://image.tmdb.org/t/p/w342${posterPath}`;
-
-        const card = document.createElement('div');
-        card.className = 'poster-card';
-        card.title = title;
-
-        card.innerHTML = `
-            <img src="${posterUrl}" alt="${title}" loading="lazy" />
-        `;
-
-        container.appendChild(card);
+    scrollLeft.addEventListener("click", () => {
+        row.scrollBy({
+            left: -400,
+            behavior: "smooth"
+        });
     });
-}
 
-    items.forEach(item => {
-
-        const title = item.title || item.name || 'Untitled';
-        const poster = item.poster_path
-            ? `https://image.tmdb.org/t/p/w342${item.poster_path}`
-            : null;
-
-        const card = document.createElement('div');
-        card.className = 'movie-card';
-
-        card.innerHTML = `
-            <h3>${title}</h3>
-            ${poster ? `<img src="${poster}" alt="${title}" style="max-width:150px;" />` : ''}
-        `;
-
-        container.appendChild(card);
+    scrollRight.addEventListener("click", () => {
+        row.scrollBy({
+            left: 400,
+            behavior: "smooth"
+        });
     });
+
+});
+
+    //////////////////////////////////////////////////////////////
+// SUBSCRIPTIONS.JS  (will become Movies tab)
+//////////////////////////////////////////////////////////////
