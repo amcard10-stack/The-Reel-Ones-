@@ -457,15 +457,6 @@ app.get('/api/trending/shows', authenticateToken, async (req, res) => {
     }
 });
 
-<<<<<<< HEAD
-=======
-//         const data = await tmdbRes.json();
-//         res.status(200).json(data);
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({ message: 'Error calling TMDB.' });
-//     }
-// });
 // Route: Set or Update Watch Status
 app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
     const { title, type, status } = req.body;
@@ -493,7 +484,6 @@ app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error updating status.' });
     }
 });
->>>>>>> 0f561ca (film status)
 //////////////////////////////////////
 //END ROUTES TO HANDLE API REQUESTS
 //////////////////////////////////////

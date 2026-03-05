@@ -20,9 +20,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.location.href = '/';
     });
 
+    let debounceTimer = null;
+    const DEBOUNCE_MS = 400;
+    const MIN_CHARS = 2;
+
     searchBtn.addEventListener('click', () => loadMovies());
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') loadMovies();
+    });
+    searchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => loadMovies(), DEBOUNCE_MS);
     });
 
     const scrollLeft = document.getElementById("scrollLeft");
@@ -34,7 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const query = searchInput?.value?.trim();
         row.innerHTML = '';
 
-        if (query && query.length >= 2) {
+        if (query && query.length >= MIN_CHARS) {
             sectionTitle.textContent = `Results for "${query}"`;
             try {
                 const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, {
