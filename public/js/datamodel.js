@@ -71,7 +71,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/watch-history', {
                     method: 'GET',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 });
                 if (!response.ok) return [];
                 const data = await response.json();
@@ -87,7 +87,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/ratings', {
                     method: 'GET',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 });
                 if (!response.ok) return [];
                 const data = await response.json();
@@ -103,7 +103,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/lists', {
                     method: 'GET',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 });
                 if (!response.ok) return [];
                 const data = await response.json();
@@ -119,7 +119,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/ratings', {
                     method: 'POST',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, type: type || 'movie', rating, review }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -134,7 +134,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/watch-history', {
                     method: 'POST',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, type: type || 'movie' }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -149,7 +149,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/lists', {
                     method: 'POST',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -164,7 +164,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/suggestions', {
                     method: 'GET',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 });
                 if (!response.ok) return null;
                 return await response.json();
@@ -179,7 +179,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch(`/api/dashboard/lists/${listId}/items`, {
                     method: 'POST',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -193,7 +193,7 @@ getStatuses: async function () {
     try {
         const response = await fetch('/api/dashboard/status', {
             method: 'GET',
-            headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         });
 
         if (!response.ok) return [];
@@ -211,7 +211,7 @@ setStatus: async function (title, type, status) {
     try {
         const response = await fetch('/api/dashboard/status', {
             method: 'POST',
-            headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, type, status }),
         });
 
@@ -221,6 +221,54 @@ setStatus: async function (title, type, status) {
         return { ok: false };
     }
 },
+
+        getFriends: async function () {
+            if (!token) return [];
+            try {
+                const response = await fetch('/api/friends', {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                });
+                if (!response.ok) return [];
+                const data = await response.json();
+                return data.friends || [];
+            } catch (error) {
+                console.error("Error fetching friends:", error);
+                return [];
+            }
+        },
+
+        searchUsers: async function (query) {
+            if (!token) return [];
+            try {
+                const q = encodeURIComponent((query || '').trim());
+                const response = await fetch(`/api/users?q=${q}`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                });
+                if (!response.ok) return [];
+                const data = await response.json();
+                return data.emails || [];
+            } catch (error) {
+                console.error("Error searching users:", error);
+                return [];
+            }
+        },
+
+        addFriend: async function (friendEmail) {
+            if (!token) return { ok: false };
+            try {
+                const response = await fetch('/api/friends', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ friendEmail }),
+                });
+                return { ok: response.ok, data: await response.json() };
+            } catch (error) {
+                console.error("Error adding friend:", error);
+                return { ok: false };
+            }
+        },
         //ADD MORE FUNCTIONS HERE TO FETCH DATA FROM THE SERVER
         //AND SEND DATA TO THE SERVER AS NEEDED
     };
