@@ -61,12 +61,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const res = await fetch('/api/trending/shows', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const data = await res.json();
-                if (!res.ok) throw new Error('Failed to load');
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    if (res.status === 401) {
+                        localStorage.removeItem('jwtToken');
+                        window.location.href = '/';
+                        return;
+                    }
+                    throw new Error(data.message || 'Failed to load');
+                }
                 renderShows(data.results || []);
             } catch (err) {
                 console.error(err);
-                row.innerHTML = `<p style="color:#dc3545;padding:20px">Failed to load shows.</p>`;
+                row.innerHTML = `<p style="color:#dc3545;padding:20px">${err.message}</p>`;
             }
         }
     }
