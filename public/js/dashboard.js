@@ -60,6 +60,46 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Item popup
+    const popup = document.getElementById('itemPopup');
+    const popupClose = document.getElementById('popupClose');
+    const popupCancel = document.getElementById('popupCancel');
+    const popupSave = document.getElementById('popupSave');
+    const popupStars = document.getElementById('popupStars');
+    const popupStatusSection = document.getElementById('popupStatusSection');
+    const popupStatusSelect = document.getElementById('popupStatusSelect');
+    popupClose?.addEventListener('click', () => { popup.style.display = 'none'; });
+    popupCancel?.addEventListener('click', () => { popup.style.display = 'none'; });
+    popup?.addEventListener('click', (e) => { if (e.target === popup) popup.style.display = 'none'; });
+    popupStars?.addEventListener('click', (e) => {
+        const span = e.target.closest('span[data-rating]');
+        if (!span) return;
+        const r = parseInt(span.dataset.rating, 10);
+        currentPopupItem._rating = r;
+        [...popupStars.querySelectorAll('span')].forEach((s, i) => {
+            s.textContent = i < r ? '★' : '☆';
+            s.classList.toggle('filled', i < r);
+        });
+    });
+    popupSave?.addEventListener('click', async () => {
+        if (!currentPopupItem) return;
+        const rating = currentPopupItem._rating || 0;
+        const review = document.getElementById('popupReview')?.value?.trim() || '';
+        const status = popupStatusSection?.style.display !== 'none' ? popupStatusSelect?.value : null;
+        if (rating >= 1 && rating <= 5) {
+            const hasExisting = (currentPopupItem.rating != null && currentPopupItem.rating > 0);
+            const result = hasExisting
+                ? await DataModel.updateRating(currentPopupItem.title, currentPopupItem.type, rating, review)
+                : await DataModel.addRating(currentPopupItem.title, currentPopupItem.type, rating, review);
+            if (result.ok) { /* ok */ }
+        }
+        if (status) {
+            await DataModel.setStatus(currentPopupItem.title, currentPopupItem.type, status);
+        }
+        popup.style.display = 'none';
+        renderDashboard();
+    });
+
     // TMDB search for Watch History add
     setupTMDBSearch(watchHistoryTitle, watchHistoryType, 'watchHistoryResults', async (item) => {
         const result = await DataModel.addWatchHistory(item.title, item.type);
@@ -239,6 +279,47 @@ let cachedWatchHistory = [];
 let cachedLists = [];
 let cachedStatuses = [];
 let posterCache = {};
+let currentPopupItem = null;
+
+function showItemPopup(item) {
+    const whItem = cachedWatchHistory.find(w => w.title === item.title && (w.type || 'movie') === (item.type || 'movie'));
+    const merged = whItem ? { ...item, rating: whItem.rating, review: whItem.review, watched_at: whItem.watched_at } : item;
+    currentPopupItem = { ...merged, _rating: merged.rating || 0 };
+    const popup = document.getElementById('itemPopup');
+    const posterEl = document.getElementById('popupPoster');
+    const titleEl = document.getElementById('popupTitle');
+    const metaEl = document.getElementById('popupMeta');
+    const statusEl = document.getElementById('popupStatus');
+    const reviewEl = document.getElementById('popupReview');
+    const starsEl = document.getElementById('popupStars');
+    const statusSection = document.getElementById('popupStatusSection');
+    const statusSelect = document.getElementById('popupStatusSelect');
+
+    const url = posterUrl(merged);
+    const placeholderEl = document.getElementById('popupPosterPlaceholder');
+    if (posterEl) {
+        posterEl.src = url || '';
+        posterEl.style.display = url ? 'block' : 'none';
+    }
+    if (placeholderEl) placeholderEl.style.display = url ? 'none' : 'block';
+    if (titleEl) titleEl.textContent = merged.title || 'Untitled';
+    if (metaEl) metaEl.textContent = `${merged.type || 'movie'}${merged.watched_at ? ' · ' + new Date(merged.watched_at).toLocaleDateString() : ''}`;
+    if (statusEl) {
+        statusEl.textContent = merged.status ? `Status: ${merged.status.replace('_', ' ')}` : '';
+        statusEl.style.display = merged.status ? 'block' : 'none';
+    }
+    if (reviewEl) reviewEl.value = merged.review || '';
+    if (starsEl) {
+        const r = merged.rating || 0;
+        [...starsEl.querySelectorAll('span')].forEach((s, i) => {
+            s.textContent = i < r ? '★' : '☆';
+            s.classList.toggle('filled', i < r);
+        });
+    }
+    if (statusSection) statusSection.style.display = 'block';
+    if (statusSelect) statusSelect.value = merged.status || 'completed';
+    if (popup) popup.style.display = 'flex';
+}
 
 async function renderDashboard() {
     cachedWatchHistory = await DataModel.getWatchHistory();
@@ -298,6 +379,7 @@ function createPosterCard(item) {
     div.innerHTML = url
         ? `<img src="${url}" alt="${name}"><p>${name}</p>`
         : `<div class="poster-placeholder"></div><p>${name}</p>`;
+    div.addEventListener('click', () => showItemPopup(item));
     return div;
 }
 
@@ -339,6 +421,7 @@ function renderWatchHistory(searchTerm) {
                 ${item.review ? `<p class="review-text">${item.review}</p>` : ''}
             </div>
         `;
+        div.addEventListener('click', () => showItemPopup({ ...item, status: 'completed' }));
         el.appendChild(div);
     });
 }

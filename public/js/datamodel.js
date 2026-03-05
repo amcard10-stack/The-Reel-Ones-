@@ -129,6 +129,21 @@ const DataModel = (function () {
             }
         },
 
+        updateRating: async function (title, type, rating, review) {
+            if (!token) return { ok: false };
+            try {
+                const response = await fetch('/api/dashboard/ratings', {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, type: type || 'movie', rating, review }),
+                });
+                return { ok: response.ok, data: await response.json() };
+            } catch (error) {
+                console.error("Error updating rating:", error);
+                return { ok: false };
+            }
+        },
+
         addWatchHistory: async function (title, type) {
             if (!token) return { ok: false };
             try {

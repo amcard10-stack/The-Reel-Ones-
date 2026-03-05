@@ -300,18 +300,30 @@ app.get('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     }
 });
 
-// Route: Add to watch history
+// Route: Add to watch history (also marks as completed in status)
 app.post('/api/dashboard/watch-history', authenticateToken, async (req, res) => {
     const { title, type } = req.body;
-    if (!title) return res.status(400).json({ message: 'Title is required.' });
+    const titleTrim = (title || '').trim();
+    if (!titleTrim) return res.status(400).json({ message: 'Title is required.' });
+    const contentType = type === 'show' ? 'show' : 'movie';
     try {
         const connection = await createConnection();
         await connection.execute(
             'INSERT INTO watch_history (user_email, title, type) VALUES (?, ?, ?)',
-            [req.user.email, title, type || 'movie']
+            [req.user.email, titleTrim, contentType]
         );
+        try {
+            await connection.execute(
+                `INSERT INTO watch_status (user_email, title, type, status)
+                 VALUES (?, ?, ?, 'completed')
+                 ON DUPLICATE KEY UPDATE status = 'completed'`,
+                [req.user.email, titleTrim, contentType]
+            );
+        } catch (statusErr) {
+            console.error('watch_status insert failed:', statusErr.message);
+        }
         await connection.end();
-        res.status(201).json({ message: 'Added to watch history.' });
+        res.status(201).json({ message: 'Added to watch history and marked as completed.' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error adding to watch history.' });
@@ -357,6 +369,34 @@ app.post('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error adding rating.' });
+    }
+});
+
+// Route: Update rating (by title + type)
+app.put('/api/dashboard/ratings', authenticateToken, async (req, res) => {
+    const { title, type, rating, review } = req.body;
+    const titleTrim = (title || '').trim();
+    if (!titleTrim || !rating) return res.status(400).json({ message: 'Title and rating are required.' });
+    const r = parseInt(rating, 10);
+    if (isNaN(r) || r < 1 || r > 5) return res.status(400).json({ message: 'Rating must be 1-5.' });
+    const contentType = type === 'show' ? 'show' : 'movie';
+    try {
+        const connection = await createConnection();
+        const [result] = await connection.execute(
+            'UPDATE rating SET rating = ?, review = ? WHERE user_email = ? AND title = ? AND type = ?',
+            [r, review || null, req.user.email, titleTrim, contentType]
+        );
+        if (result.affectedRows === 0) {
+            await connection.execute(
+                'INSERT INTO rating (user_email, title, type, rating, review) VALUES (?, ?, ?, ?, ?)',
+                [req.user.email, titleTrim, contentType, r, review || null]
+            );
+        }
+        await connection.end();
+        res.status(200).json({ message: 'Rating updated.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error updating rating.' });
     }
 });
 
@@ -654,13 +694,33 @@ app.get('/api/trending/shows', authenticateToken, async (req, res) => {
     }
 });
 
-// Route: Get Watch Statuses
+// Route: Get Watch Statuses (syncs watch_history → completed in watch_status first)
 app.get('/api/dashboard/status', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
+        const email = req.user.email;
+
+        // Backfill: ensure all watch_history items exist in watch_status as 'completed'
+        try {
+            const [whRows] = await connection.execute(
+                'SELECT title, type FROM watch_history WHERE user_email = ?',
+                [email]
+            );
+            for (const row of whRows) {
+                await connection.execute(
+                    `INSERT INTO watch_status (user_email, title, type, status)
+                     VALUES (?, ?, ?, 'completed')
+                     ON DUPLICATE KEY UPDATE status = 'completed'`,
+                    [email, row.title, row.type || 'movie']
+                );
+            }
+        } catch (syncErr) {
+            if (syncErr.code !== 'ER_NO_SUCH_TABLE') console.error('watch_status sync:', syncErr.message);
+        }
+
         const [rows] = await connection.execute(
             'SELECT title, type, status FROM watch_status WHERE user_email = ? ORDER BY updated_at DESC',
-            [req.user.email]
+            [email]
         );
         await connection.end();
         res.status(200).json({ statuses: rows });
