@@ -23,11 +23,20 @@ const DataModel = (function () {
     //USE THAT DATA TO UPDATE THE VIEW.  THE CONTROLLER CAN ALSO
     //SEND DATA TO THE SERVER TO BE STORED IN THE DATABASE BY
     //CALLING FUNCTIONS THAT WE DEFINE HERE.
+
+    // Helper: always send Bearer token because authenticateToken() expects "Bearer <token>"
+    function authHeaders() {
+        return {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        };
+    }
+
     return {
         //utility function to store the token so that we
         //can use it later to make authenticated requests
         setToken: function (newToken) {
-            token = newToken;
+            token = newToken; // store RAW token, NOT "Bearer ..."
         },
 
         //function to fetch the list of users from the server
@@ -42,10 +51,7 @@ const DataModel = (function () {
                 // this is our call to the /api/users route on the server
                 const response = await fetch('/api/users', {
                     method: 'GET',
-                    headers: {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json',
-},
+                    headers: authHeaders(),
                 });
 
                 if (!response.ok) {
@@ -71,9 +77,13 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/watch-history', {
                     method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
                 });
-                if (!response.ok) return [];
+                if (!response.ok) {
+                    // Helpful debug
+                    // console.error("getWatchHistory failed:", response.status, await response.text());
+                    return [];
+                }
                 const data = await response.json();
                 return data.watchHistory || [];
             } catch (error) {
@@ -87,9 +97,12 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/ratings', {
                     method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
                 });
-                if (!response.ok) return [];
+                if (!response.ok) {
+                    // console.error("getRatings failed:", response.status, await response.text());
+                    return [];
+                }
                 const data = await response.json();
                 return data.ratings || [];
             } catch (error) {
@@ -103,9 +116,12 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/lists', {
                     method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
                 });
-                if (!response.ok) return [];
+                if (!response.ok) {
+                    // console.error("getLists failed:", response.status, await response.text());
+                    return [];
+                }
                 const data = await response.json();
                 return data.lists || [];
             } catch (error) {
@@ -119,7 +135,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/ratings', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, type: type || 'movie', rating, review }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -149,7 +165,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/watch-history', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, type: type || 'movie' }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -226,7 +242,7 @@ deleteStatus: async function (title, type) {
             try {
                 const response = await fetch('/api/dashboard/lists', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -241,7 +257,7 @@ deleteStatus: async function (title, type) {
             try {
                 const response = await fetch('/api/suggestions', {
                     method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
                 });
                 if (!response.ok) return null;
                 return await response.json();
@@ -256,7 +272,7 @@ deleteStatus: async function (title, type) {
             try {
                 const response = await fetch(`/api/dashboard/lists/${listId}/items`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -270,25 +286,28 @@ getStatuses: async function () {
     try {
         const response = await fetch('/api/dashboard/status', {
             method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': token, 'Content-Type': 'application/json' },
         });
 
-        if (!response.ok) return [];
+                if (!response.ok) {
+                    // console.error("getStatuses failed:", response.status, await response.text());
+                    return [];
+                }
 
-        const data = await response.json();
-        return data.statuses || [];
-    } catch (error) {
-        console.error("Error fetching statuses:", error);
-        return [];
-    }
-},
+                const data = await response.json();
+                return data.statuses || [];
+            } catch (error) {
+                console.error("Error fetching statuses:", error);
+                return [];
+            }
+        },
 
 setStatus: async function (title, type, status) {
     if (!token) return { ok: false };
     try {
         const response = await fetch('/api/dashboard/status', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': token, 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, type, status }),
         });
 
@@ -298,84 +317,6 @@ setStatus: async function (title, type, status) {
         return { ok: false };
     }
 },
-
-        getFriends: async function () {
-            if (!token) return [];
-            try {
-                const response = await fetch('/api/friends', {
-                    method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                });
-                if (!response.ok) return [];
-                const data = await response.json();
-                return data.friends || [];
-            } catch (error) {
-                console.error("Error fetching friends:", error);
-                return [];
-            }
-        },
-
-        searchUsers: async function (query) {
-            if (!token) return [];
-            try {
-                const q = encodeURIComponent((query || '').trim());
-                const response = await fetch(`/api/users?q=${q}`, {
-                    method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                });
-                if (!response.ok) return [];
-                const data = await response.json();
-                return data.emails || [];
-            } catch (error) {
-                console.error("Error searching users:", error);
-                return [];
-            }
-        },
-
-        addFriend: async function (friendEmail) {
-            if (!token) return { ok: false };
-            try {
-                const response = await fetch('/api/friends', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ friendEmail }),
-                });
-                return { ok: response.ok, data: await response.json() };
-            } catch (error) {
-                console.error("Error adding friend:", error);
-                return { ok: false };
-            }
-        },
-
-        getPostersForItems: async function (items) {
-            if (!token || !items || items.length === 0) return {};
-            try {
-                const response = await fetch('/api/tmdb/posters', {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ items }),
-                });
-                if (!response.ok) return {};
-                const data = await response.json();
-                return data.posters || {};
-            } catch (error) {
-                console.error("Error fetching posters:", error);
-                return {};
-            }
-        },
-        async deleteFromLists(title) {
-
-        const response = await fetch('/api/dashboard/lists/items', {
-        method: 'DELETE',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ title })
-    });
-
-    return response.json();
-}
         //ADD MORE FUNCTIONS HERE TO FETCH DATA FROM THE SERVER
         //AND SEND DATA TO THE SERVER AS NEEDED
     };
