@@ -35,14 +35,14 @@
     <div class="section">
         <h2>Watch History</h2>
         <input type="text" id="watchHistorySearch" placeholder="Search watch history..." class="section-search">
-        <div class="quick-add">
-            <input type="text" id="watchHistoryTitle" placeholder="Movie or show title">
+        <div class="add-section">
+            <input type="text" id="watchHistoryTitle" placeholder="Search movies or shows to add..." class="tmdb-search-input">
             <select id="watchHistoryType">
                 <option value="movie">Movie</option>
                 <option value="show">Show</option>
             </select>
-            <button id="addWatchHistoryBtn">Add</button>
         </div>
+        <div id="watchHistoryResults" class="tmdb-results-grid"></div>
         <div class="dashboard-list" id="watchHistory"></div>
     </div>
 
@@ -67,8 +67,8 @@
     </div>
   </div>
 
-  <div class="quick-add" style="margin-top:12px;">
-    <input id="statusTitle" type="text" placeholder="Movie or show title">
+  <div class="add-section" style="margin-top:12px;">
+    <input id="statusTitle" type="text" placeholder="Search movies or shows to add..." class="tmdb-search-input">
     <select id="statusType">
       <option value="movie">Movie</option>
       <option value="show">Show</option>
@@ -78,8 +78,8 @@
       <option value="completed">completed</option>
       <option value="want_to_watch">want to watch</option>
     </select>
-    <button id="setStatusBtn">Set Status</button>
   </div>
+  <div id="statusResults" class="tmdb-results-grid"></div>
 </div>
 <!-- END WATCH STATUS BOARD -->
 
@@ -91,11 +91,11 @@
             <input type="text" id="newListName" placeholder="List name (e.g. Watchlist)">
             <button id="createListBtn">Create List</button>
         </div>
-        <div id="addToListForm" class="quick-add" style="display:none;">
-            <select id="listSelect"></select>
-            <input type="text" id="listItemTitle" placeholder="Add item to list">
-            <button id="addToListBtn">Add</button>
+        <div id="addToListForm" class="add-section" style="display:none;">
+            <select id="listSelect" placeholder="Select a list"></select>
+            <input type="text" id="listItemTitle" placeholder="Search movies or shows to add..." class="tmdb-search-input">
         </div>
+        <div id="listItemResults" class="tmdb-results-grid"></div>
         <div class="dashboard-list" id="listsContainer"></div>
     </div>
 

@@ -16,10 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshButton = document.getElementById('refreshButton');
     const watchHistorySearch = document.getElementById('watchHistorySearch');
     const listsSearch = document.getElementById('listsSearch');
-    const addWatchHistoryBtn = document.getElementById('addWatchHistoryBtn');
+    const watchHistoryTitle = document.getElementById('watchHistoryTitle');
+    const watchHistoryType = document.getElementById('watchHistoryType');
+    const statusTitle = document.getElementById('statusTitle');
+    const statusType = document.getElementById('statusType');
+    const statusValue = document.getElementById('statusValue');
+    const listItemTitle = document.getElementById('listItemTitle');
+    const listSelect = document.getElementById('listSelect');
     const createListBtn = document.getElementById('createListBtn');
-    const addToListBtn = document.getElementById('addToListBtn');
-    const setStatusBtn = document.getElementById('setStatusBtn');
     //////////////////////////////////////////
     //END ELEMENTS TO ATTACH EVENT LISTENERS
     //////////////////////////////////////////
@@ -28,13 +32,11 @@ document.addEventListener('DOMContentLoaded', () => {
     //////////////////////////////////////////
     //EVENT LISTENERS
     //////////////////////////////////////////
-    // Log out and redirect to login
     logoutButton.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
         window.location.href = '/';
     });
 
-    // Refresh dashboard when the button is clicked
     refreshButton.addEventListener('click', async () => {
         renderDashboard();
     });
@@ -48,17 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
         listsSearch.addEventListener('keypress', (e) => { if (e.key === 'Enter') filterBySearch(); });
     }
 
-    addWatchHistoryBtn.addEventListener('click', async () => {
-        const title = document.getElementById('watchHistoryTitle').value.trim();
-        const type = document.getElementById('watchHistoryType').value;
-        if (!title) return;
-        const result = await DataModel.addWatchHistory(title, type);
-        if (result.ok) {
-            document.getElementById('watchHistoryTitle').value = '';
-            filterBySearch();
-        }
-    });
-
     createListBtn.addEventListener('click', async () => {
         const name = document.getElementById('newListName').value.trim();
         if (!name) return;
@@ -69,30 +60,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    addToListBtn.addEventListener('click', async () => {
-        const listId = document.getElementById('listSelect').value;
-        const title = document.getElementById('listItemTitle').value.trim();
-        if (!listId || !title) return;
-        const result = await DataModel.addToList(listId, title);
+    // TMDB search for Watch History add
+    setupTMDBSearch(watchHistoryTitle, watchHistoryType, 'watchHistoryResults', async (item) => {
+        const result = await DataModel.addWatchHistory(item.title, item.type);
         if (result.ok) {
-            document.getElementById('listItemTitle').value = '';
-            filterBySearch();
+            watchHistoryTitle.value = '';
+            document.getElementById('watchHistoryResults').innerHTML = '';
+            renderDashboard();
         }
     });
 
-    if (setStatusBtn) {
-        setStatusBtn.addEventListener('click', async () => {
-            const title = document.getElementById('statusTitle')?.value?.trim();
-            const type = document.getElementById('statusType')?.value || 'movie';
-            const status = document.getElementById('statusValue')?.value;
-            if (!title || !status) return;
-            const result = await DataModel.setStatus(title, type, status);
-            if (result.ok) {
-                document.getElementById('statusTitle').value = '';
-                renderDashboard();
-            }
-        });
-    }
+    // TMDB search for Status add
+    setupTMDBSearch(statusTitle, statusType, 'statusResults', async (item) => {
+        const status = statusValue?.value;
+        if (!status) return;
+        const result = await DataModel.setStatus(item.title, item.type, status);
+        if (result.ok) {
+            statusTitle.value = '';
+            document.getElementById('statusResults').innerHTML = '';
+            renderDashboard();
+        }
+    });
+
+    // TMDB search for List item add
+    setupTMDBSearch(listItemTitle, null, 'listItemResults', async (item) => {
+        const listId = listSelect?.value;
+        if (!listId) {
+            alert('Please select a list first.');
+            return;
+        }
+        const result = await DataModel.addToList(listId, item.title);
+        if (result.ok) {
+            listItemTitle.value = '';
+            document.getElementById('listItemResults').innerHTML = '';
+            renderDashboard();
+        }
+    }, true);
     //////////////////////////////////////////
     //END EVENT LISTENERS
     //////////////////////////////////////////
@@ -117,18 +120,145 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 //////////////////////////////////////////
+//TMDB SEARCH HELPERS
+//////////////////////////////////////////
+const DEBOUNCE_MS = 400;
+const MIN_CHARS = 2;
+
+function setupTMDBSearch(inputEl, typeSelectEl, resultsContainerId, onSelect, searchBoth = false) {
+    if (!inputEl || !resultsContainerId) return;
+    let debounceTimer = null;
+
+    inputEl.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => loadTMDBResults(), DEBOUNCE_MS);
+    });
+    inputEl.addEventListener('focus', () => {
+        const q = inputEl.value?.trim();
+        if (!q || q.length < MIN_CHARS) loadTMDBResults(true);
+    });
+
+    async function loadTMDBResults(showTrending = false) {
+        const container = document.getElementById(resultsContainerId);
+        if (!container) return;
+        const query = inputEl.value?.trim();
+        const type = typeSelectEl?.value || 'movie';
+
+        if (showTrending || !query || query.length < MIN_CHARS) {
+            container.innerHTML = '<p class="loading-message">Loading...</p>';
+            try {
+                let results = [];
+                if (searchBoth) {
+                    const [moviesRes, showsRes] = await Promise.all([
+                        fetch('/api/trending/movies', { headers: { 'Authorization': `Bearer ${localStorage.getItem('jwtToken')}` } }),
+                        fetch('/api/trending/shows', { headers: { 'Authorization': `Bearer ${localStorage.getItem('jwtToken')}` } })
+                    ]);
+                    const moviesData = await moviesRes.json();
+                    const showsData = await showsRes.json();
+                    const movies = (moviesData.results || []).slice(0, 10).map(m => ({ ...m, _type: 'movie', _title: m.title }));
+                    const shows = (showsData.results || []).slice(0, 10).map(s => ({ ...s, _type: 'show', _title: s.name }));
+                    results = [...movies, ...shows];
+                } else {
+                    const res = await fetch(`/api/trending/${type === 'tv' ? 'shows' : 'movies'}`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('jwtToken')}` }
+                    });
+                    const data = await res.json();
+                    results = (data.results || []).map(r => ({
+                        ...r,
+                        _type: type === 'tv' ? 'show' : 'movie',
+                        _title: type === 'tv' ? r.name : r.title
+                    }));
+                }
+                renderTMDBResults(container, results, onSelect);
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<p class="empty-message">Failed to load.</p>';
+            }
+            return;
+        }
+
+        container.innerHTML = '<p class="loading-message">Searching...</p>';
+        try {
+            let results = [];
+            if (searchBoth) {
+                const [moviesRes, showsRes] = await Promise.all([
+                    fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('jwtToken')}` } }),
+                    fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=tv`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('jwtToken')}` } })
+                ]);
+                const moviesData = await moviesRes.json();
+                const showsData = await showsRes.json();
+                const movies = (moviesData.results || []).map(m => ({ ...m, _type: 'movie', _title: m.title }));
+                const shows = (showsData.results || []).map(s => ({ ...s, _type: 'show', _title: s.name }));
+                results = [...movies, ...shows];
+            } else {
+                const tmdbType = type === 'show' ? 'tv' : 'movie';
+                const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=${tmdbType}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('jwtToken')}` }
+                });
+                const data = await res.json();
+                results = (data.results || []).map(r => ({
+                    ...r,
+                    _type: type,
+                    _title: type === 'show' ? r.name : r.title
+                }));
+            }
+            renderTMDBResults(container, results, onSelect);
+        } catch (err) {
+            console.error(err);
+            container.innerHTML = '<p class="empty-message">Search failed.</p>';
+        }
+    }
+
+    function renderTMDBResults(container, results, onSelect) {
+        container.innerHTML = '';
+        const withPoster = results.filter(r => r.poster_path);
+        if (withPoster.length === 0) {
+            container.innerHTML = '<p class="empty-message">No results. Try a different search.</p>';
+            return;
+        }
+        withPoster.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'tmdb-result-card';
+            card.innerHTML = `
+                <img src="https://image.tmdb.org/t/p/w154${item.poster_path}" alt="${item._title || ''}">
+                <p>${item._title || 'Untitled'}</p>
+                <span class="add-hint">Click to add</span>
+            `;
+            card.addEventListener('click', () => {
+                onSelect({ title: item._title, type: item._type });
+            });
+            container.appendChild(card);
+        });
+    }
+}
+
+//////////////////////////////////////////
 //FUNCTIONS TO MANIPULATE THE DOM
 //////////////////////////////////////////
 let cachedWatchHistory = [];
 let cachedLists = [];
 let cachedStatuses = [];
+let posterCache = {};
 
 async function renderDashboard() {
     cachedWatchHistory = await DataModel.getWatchHistory();
     cachedLists = await DataModel.getLists();
     cachedStatuses = await DataModel.getStatuses();
+
+    const posterItems = [
+        ...cachedStatuses.map(s => ({ title: s.title, type: s.type || 'movie' })),
+        ...cachedLists.flatMap(list => (list.items || []).map(i => ({ title: i.title, type: 'movie' })))
+    ];
+    posterCache = await DataModel.getPostersForItems(posterItems);
+
     filterBySearch();
     renderStatuses();
+}
+
+function posterUrl(item) {
+    const key = `${item.title}|${item.type || 'movie'}`;
+    const path = posterCache[key];
+    return path ? `https://image.tmdb.org/t/p/w154${path}` : null;
 }
 
 function renderStatuses() {
@@ -145,27 +275,29 @@ function renderStatuses() {
 
     [watching, completed, want].forEach(el => el.innerHTML = '');
     byStatus.watching.forEach(s => {
-        const div = document.createElement('div');
-        div.classList.add('dashboard-item');
-        div.textContent = `${s.title} (${s.type})`;
-        watching.appendChild(div);
+        watching.appendChild(createPosterCard(s));
     });
     byStatus.completed.forEach(s => {
-        const div = document.createElement('div');
-        div.classList.add('dashboard-item');
-        div.textContent = `${s.title} (${s.type})`;
-        completed.appendChild(div);
+        completed.appendChild(createPosterCard(s));
     });
     byStatus.want_to_watch.forEach(s => {
-        const div = document.createElement('div');
-        div.classList.add('dashboard-item');
-        div.textContent = `${s.title} (${s.type})`;
-        want.appendChild(div);
+        want.appendChild(createPosterCard(s));
     });
 
     if (byStatus.watching.length === 0) watching.innerHTML = '<p class="empty-message">None</p>';
     if (byStatus.completed.length === 0) completed.innerHTML = '<p class="empty-message">None</p>';
     if (byStatus.want_to_watch.length === 0) want.innerHTML = '<p class="empty-message">None</p>';
+}
+
+function createPosterCard(item) {
+    const div = document.createElement('div');
+    div.classList.add('poster-card-small');
+    const url = posterUrl(item);
+    const name = item.title || 'Untitled';
+    div.innerHTML = url
+        ? `<img src="${url}" alt="${name}"><p>${name}</p>`
+        : `<div class="poster-placeholder"></div><p>${name}</p>`;
+    return div;
 }
 
 function filterBySearch() {
@@ -218,11 +350,18 @@ function renderLists(searchTerm) {
         }
         let itemsHtml = '';
         if (items.length > 0) {
-            itemsHtml = items.map(i => `<div class="list-item">${i.title}</div>`).join('');
+            itemsHtml = items.map(i => {
+                const itemForPoster = { title: i.title, type: 'movie' };
+                const url = posterUrl(itemForPoster);
+                const name = i.title || 'Untitled';
+                return url
+                    ? `<div class="list-item-poster"><img src="${url}" alt="${name}"><span>${name}</span></div>`
+                    : `<div class="list-item">${name}</div>`;
+            }).join('');
         } else {
             itemsHtml = '<p class="empty-message">' + (searchTerm ? 'No matching items.' : 'Empty list') + '</p>';
         }
-        listDiv.innerHTML = `<h3 class="list-name">${list.name}</h3><div class="list-items">${itemsHtml}</div>`;
+        listDiv.innerHTML = `<h3 class="list-name">${list.name}</h3><div class="list-items list-items-posters">${itemsHtml}</div>`;
         el.appendChild(listDiv);
     });
 }

@@ -269,6 +269,23 @@ setStatus: async function (title, type, status) {
                 return { ok: false };
             }
         },
+
+        getPostersForItems: async function (items) {
+            if (!token || !items || items.length === 0) return {};
+            try {
+                const response = await fetch('/api/tmdb/posters', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items }),
+                });
+                if (!response.ok) return {};
+                const data = await response.json();
+                return data.posters || {};
+            } catch (error) {
+                console.error("Error fetching posters:", error);
+                return {};
+            }
+        },
         //ADD MORE FUNCTIONS HERE TO FETCH DATA FROM THE SERVER
         //AND SEND DATA TO THE SERVER AS NEEDED
     };

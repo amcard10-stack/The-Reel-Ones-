@@ -97,11 +97,65 @@ body {
     box-sizing: border-box;
 }
 
-.quick-add {
+.quick-add,
+.add-section {
     display: flex;
     gap: 10px;
     margin-bottom: 16px;
     flex-wrap: wrap;
+}
+
+.tmdb-search-input {
+    min-width: 220px;
+}
+
+.tmdb-results-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 12px 0 20px 0;
+    min-height: 0;
+}
+
+.tmdb-result-card {
+    flex: 0 0 auto;
+    width: 100px;
+    text-align: center;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: all 0.2s ease;
+}
+
+.tmdb-result-card:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.2);
+    transform: scale(1.03);
+}
+
+.tmdb-result-card img {
+    width: 100px;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+    margin: 0 auto;
+}
+
+.tmdb-result-card p {
+    margin: 6px 0 2px 0;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tmdb-result-card .add-hint {
+    font-size: 10px;
+    opacity: 0.7;
 }
 
 .quick-add input,
@@ -202,6 +256,37 @@ body {
 .list-item:last-child {
     border-bottom: none;
 }
+
+.list-items-posters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.list-item-poster {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 80px;
+    flex: 0 0 auto;
+}
+
+.list-item-poster img {
+    width: 80px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.list-item-poster span {
+    margin-top: 6px;
+    font-size: 11px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 80px;
+}
 .status-grid{
   display:grid;
   grid-template-columns: repeat(3, 1fr);
@@ -222,8 +307,34 @@ body {
 }
 .status-list{
   display:flex;
-  flex-direction:column;
-  gap:10px;
+  flex-direction:row;
+  flex-wrap:wrap;
+  gap:12px;
+}
+.poster-card-small {
+  flex: 0 0 auto;
+  width: 80px;
+  text-align: center;
+}
+.poster-card-small img,
+.poster-placeholder {
+  width: 80px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+}
+.poster-placeholder {
+  background: rgba(255,255,255,0.08);
+}
+.poster-card-small p {
+  margin: 6px 0 0 0;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
 }
 .status-card{
   display:flex;

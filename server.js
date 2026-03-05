@@ -496,6 +496,48 @@ app.post('/api/friends', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error adding friend.' });
     }
 });
+// TMDB: Batch poster lookup for titles
+app.post('/api/tmdb/posters', authenticateToken, async (req, res) => {
+    const items = req.body.items || [];
+    if (!Array.isArray(items) || items.length === 0) {
+        return res.status(200).json({ posters: {} });
+    }
+    if (items.length > 50) {
+        return res.status(400).json({ message: 'Max 50 items per request.' });
+    }
+    if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+        return res.status(503).json({ message: 'TMDB API key not configured.' });
+    }
+    const key = process.env.TMDB_API_KEY;
+    const base = 'https://api.themoviedb.org/3';
+    const posters = {};
+    const seen = new Set();
+    const unique = items.filter(({ title, type }) => {
+        const k = `${(title || '').toLowerCase()}|${type || 'movie'}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return (title || '').trim().length >= 2;
+    });
+    try {
+        await Promise.all(unique.map(async ({ title, type }) => {
+            const endpoint = type === 'tv' ? 'search/tv' : 'search/movie';
+            const url = `${base}/${endpoint}?api_key=${key}&query=${encodeURIComponent(title.trim())}&language=en-US&include_adult=false`;
+            const tmdbRes = await fetch(url);
+            if (!tmdbRes.ok) return;
+            const data = await tmdbRes.json();
+            const results = data.results || [];
+            const first = results[0];
+            if (first && first.poster_path) {
+                posters[`${title}|${type || 'movie'}`] = first.poster_path;
+            }
+        }));
+        res.status(200).json({ posters });
+    } catch (error) {
+        console.error('TMDB posters error:', error);
+        res.status(500).json({ message: 'Error fetching posters.' });
+    }
+});
+
 // TMDB: Search movies or TV (type=movie or type=tv)
 app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
     const q = (req.query.q || '').trim();
