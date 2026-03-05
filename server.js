@@ -190,6 +190,53 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// Route: Get current user's profile
+app.get('/api/profile', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            'SELECT email, first_name, last_name FROM user WHERE email = ?',
+            [req.user.email]
+        );
+        await connection.end();
+        if (rows.length === 0) return res.status(404).json({ message: 'User not found.' });
+        const u = rows[0];
+        res.status(200).json({
+            email: u.email,
+            firstName: u.first_name || '',
+            lastName: u.last_name || ''
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error fetching profile.' });
+    }
+});
+
+// Route: Update current user's profile
+app.put('/api/profile', authenticateToken, async (req, res) => {
+    const { firstName, lastName, newPassword } = req.body;
+    try {
+        const connection = await createConnection();
+        if (newPassword && newPassword.length >= 6) {
+            const hashed = await bcrypt.hash(newPassword, 10);
+            await connection.execute(
+                'UPDATE user SET first_name = ?, last_name = ?, password = ? WHERE email = ?',
+                [firstName || null, lastName || null, hashed, req.user.email]
+            );
+        } else {
+            await connection.execute(
+                'UPDATE user SET first_name = ?, last_name = ? WHERE email = ?',
+                [firstName || null, lastName || null, req.user.email]
+            );
+        }
+        await connection.end();
+        res.status(200).json({ message: 'Profile updated.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error updating profile.' });
+    }
+});
+
 // Route: Get current user's watch history
 app.get('/api/dashboard/watch-history', authenticateToken, async (req, res) => {
     try {
@@ -377,20 +424,76 @@ app.get('/api/suggestions', authenticateToken, async (req, res) => {
     }
 });
 
-// Route: Get All Email Addresses
+// Route: Get All Email Addresses (optional ?q= for search)
 app.get('/api/users', authenticateToken, async (req, res) => {
+    const q = (req.query.q || '').trim();
     try {
         const connection = await createConnection();
-
-        const [rows] = await connection.execute('SELECT email FROM user');
-
-        await connection.end();  // Close connection
-
+        let rows;
+        if (q.length >= 1) {
+            const pattern = '%' + q + '%';
+            [rows] = await connection.execute(
+                'SELECT email FROM user WHERE email LIKE ? AND email != ?',
+                [pattern, req.user.email]
+            );
+        } else {
+            [rows] = await connection.execute(
+                'SELECT email FROM user WHERE email != ?',
+                [req.user.email]
+            );
+        }
+        await connection.end();
         const emailList = rows.map((row) => row.email);
         res.status(200).json({ emails: emailList });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Error retrieving email addresses.' });
+        res.status(500).json({ message: 'Error retrieving users.' });
+    }
+});
+
+// Route: Get current user's friends
+app.get('/api/friends', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            'SELECT friend_email FROM friend WHERE user_email = ? ORDER BY created_at DESC',
+            [req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ friends: rows.map(r => r.friend_email) });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error fetching friends.' });
+    }
+});
+
+// Route: Add friend
+app.post('/api/friends', authenticateToken, async (req, res) => {
+    const { friendEmail } = req.body;
+    const friend = (friendEmail || '').trim().toLowerCase();
+    if (!friend) return res.status(400).json({ message: 'Friend email required.' });
+    if (friend === req.user.email.toLowerCase()) {
+        return res.status(400).json({ message: 'Cannot add yourself.' });
+    }
+    try {
+        const connection = await createConnection();
+        const [users] = await connection.execute('SELECT email FROM user WHERE email = ?', [friend]);
+        if (users.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'User not found.' });
+        }
+        await connection.execute(
+            'INSERT INTO friend (user_email, friend_email) VALUES (?, ?)',
+            [req.user.email, users[0].email]
+        );
+        await connection.end();
+        res.status(201).json({ message: 'Friend added.' });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ message: 'Already friends.' });
+        }
+        console.error(error);
+        res.status(500).json({ message: 'Error adding friend.' });
     }
 });
 // TMDB: Search movies or TV (type=movie or type=tv)
@@ -454,6 +557,22 @@ app.get('/api/trending/shows', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error calling TMDB.' });
+    }
+});
+
+// Route: Get Watch Statuses
+app.get('/api/dashboard/status', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            'SELECT title, type, status FROM watch_status WHERE user_email = ? ORDER BY updated_at DESC',
+            [req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ statuses: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error fetching statuses.' });
     }
 });
 

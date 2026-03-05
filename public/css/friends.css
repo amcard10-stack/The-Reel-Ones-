@@ -40,3 +40,38 @@ input {
 .friends-list {
     margin-top: 15px;
 }
+
+.friend-item {
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    background: #f8f9fa;
+    border-radius: 5px;
+}
+
+.search-results {
+    margin-top: 10px;
+}
+
+.search-result-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    background: #f8f9fa;
+    border-radius: 5px;
+}
+
+.add-friend-btn {
+    padding: 4px 12px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.empty-message {
+    color: #6c757d;
+    font-style: italic;
+}

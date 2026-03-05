@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const addWatchHistoryBtn = document.getElementById('addWatchHistoryBtn');
     const createListBtn = document.getElementById('createListBtn');
     const addToListBtn = document.getElementById('addToListBtn');
+    const setStatusBtn = document.getElementById('setStatusBtn');
     //////////////////////////////////////////
     //END ELEMENTS TO ATTACH EVENT LISTENERS
     //////////////////////////////////////////
@@ -78,6 +79,20 @@ document.addEventListener('DOMContentLoaded', () => {
             filterBySearch();
         }
     });
+
+    if (setStatusBtn) {
+        setStatusBtn.addEventListener('click', async () => {
+            const title = document.getElementById('statusTitle')?.value?.trim();
+            const type = document.getElementById('statusType')?.value || 'movie';
+            const status = document.getElementById('statusValue')?.value;
+            if (!title || !status) return;
+            const result = await DataModel.setStatus(title, type, status);
+            if (result.ok) {
+                document.getElementById('statusTitle').value = '';
+                renderDashboard();
+            }
+        });
+    }
     //////////////////////////////////////////
     //END EVENT LISTENERS
     //////////////////////////////////////////
@@ -106,11 +121,51 @@ document.addEventListener('DOMContentLoaded', () => {
 //////////////////////////////////////////
 let cachedWatchHistory = [];
 let cachedLists = [];
+let cachedStatuses = [];
 
 async function renderDashboard() {
     cachedWatchHistory = await DataModel.getWatchHistory();
     cachedLists = await DataModel.getLists();
+    cachedStatuses = await DataModel.getStatuses();
     filterBySearch();
+    renderStatuses();
+}
+
+function renderStatuses() {
+    const watching = document.getElementById('statusWatching');
+    const completed = document.getElementById('statusCompleted');
+    const want = document.getElementById('statusWant');
+    if (!watching || !completed || !want) return;
+
+    const byStatus = {
+        watching: cachedStatuses.filter(s => s.status === 'watching'),
+        completed: cachedStatuses.filter(s => s.status === 'completed'),
+        want_to_watch: cachedStatuses.filter(s => s.status === 'want_to_watch')
+    };
+
+    [watching, completed, want].forEach(el => el.innerHTML = '');
+    byStatus.watching.forEach(s => {
+        const div = document.createElement('div');
+        div.classList.add('dashboard-item');
+        div.textContent = `${s.title} (${s.type})`;
+        watching.appendChild(div);
+    });
+    byStatus.completed.forEach(s => {
+        const div = document.createElement('div');
+        div.classList.add('dashboard-item');
+        div.textContent = `${s.title} (${s.type})`;
+        completed.appendChild(div);
+    });
+    byStatus.want_to_watch.forEach(s => {
+        const div = document.createElement('div');
+        div.classList.add('dashboard-item');
+        div.textContent = `${s.title} (${s.type})`;
+        want.appendChild(div);
+    });
+
+    if (byStatus.watching.length === 0) watching.innerHTML = '<p class="empty-message">None</p>';
+    if (byStatus.completed.length === 0) completed.innerHTML = '<p class="empty-message">None</p>';
+    if (byStatus.want_to_watch.length === 0) want.innerHTML = '<p class="empty-message">None</p>';
 }
 
 function filterBySearch() {
