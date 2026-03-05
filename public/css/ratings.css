@@ -121,3 +121,61 @@ input, select, textarea {
     padding: 8px 12px;
     border-radius: 5px;
 }
+
+.tmdb-search-input {
+    min-width: 200px;
+}
+
+.tmdb-results-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 12px 0 20px 0;
+}
+
+.tmdb-result-card {
+    flex: 0 0 auto;
+    width: 100px;
+    text-align: center;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 10px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    transition: all 0.2s ease;
+}
+
+.tmdb-result-card:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+    transform: scale(1.03);
+}
+
+.tmdb-result-card img {
+    width: 100px;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+    margin: 0 auto;
+}
+
+.tmdb-result-card p {
+    margin: 6px 0 2px 0;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tmdb-result-card .add-hint {
+    font-size: 10px;
+    color: #6c757d;
+}
+
+.loading-msg {
+    color: #6c757d;
+    font-style: italic;
+    padding: 12px;
+}

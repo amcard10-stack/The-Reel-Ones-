@@ -237,16 +237,47 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
     }
 });
 
-// Route: Get current user's watch history
+// Route: Get current user's watch history (with ratings, includes rated-only items)
 app.get('/api/dashboard/watch-history', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
-        const [rows] = await connection.execute(
-            'SELECT id, title, type, watched_at FROM watch_history WHERE user_email = ? ORDER BY watched_at DESC LIMIT 20',
+        const [whRows] = await connection.execute(
+            `SELECT wh.id, wh.title, wh.type, wh.watched_at, r.rating, r.review
+             FROM watch_history wh
+             LEFT JOIN rating r ON r.user_email = wh.user_email AND r.title = wh.title AND r.type = wh.type
+             WHERE wh.user_email = ?
+             ORDER BY wh.watched_at DESC`,
+            [req.user.email]
+        );
+        const [ratingOnlyRows] = await connection.execute(
+            `SELECT r.id, r.title, r.type, r.rated_at, r.rating, r.review
+             FROM rating r
+             WHERE r.user_email = ?
+             AND NOT EXISTS (SELECT 1 FROM watch_history wh WHERE wh.user_email = r.user_email AND wh.title = r.title AND wh.type = r.type)
+             ORDER BY r.rated_at DESC`,
             [req.user.email]
         );
         await connection.end();
-        res.status(200).json({ watchHistory: rows });
+        const fromWh = whRows.map(r => ({
+            id: r.id,
+            title: r.title,
+            type: r.type,
+            watched_at: r.watched_at,
+            rating: r.rating,
+            review: r.review
+        }));
+        const fromRatings = ratingOnlyRows.map(r => ({
+            id: r.id + 1000000,
+            title: r.title,
+            type: r.type,
+            watched_at: r.rated_at,
+            rating: r.rating,
+            review: r.review
+        }));
+        const watchHistory = [...fromWh, ...fromRatings]
+            .sort((a, b) => new Date(b.watched_at) - new Date(a.watched_at))
+            .slice(0, 50);
+        res.status(200).json({ watchHistory });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error retrieving watch history.' });
@@ -287,10 +318,11 @@ app.post('/api/dashboard/watch-history', authenticateToken, async (req, res) => 
     }
 });
 
-// Route: Add rating
+// Route: Add rating (also adds to watch history + marks as completed in status)
 app.post('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     const { title, type, rating, review } = req.body;
-    if (!title || !rating) return res.status(400).json({ message: 'Title and rating are required.' });
+    const titleTrim = (title || '').trim();
+    if (!titleTrim || !rating) return res.status(400).json({ message: 'Title and rating are required.' });
     const r = parseInt(rating, 10);
     if (isNaN(r) || r < 1 || r > 5) return res.status(400).json({ message: 'Rating must be 1-5.' });
     const contentType = type === 'show' ? 'show' : 'movie';
@@ -298,10 +330,30 @@ app.post('/api/dashboard/ratings', authenticateToken, async (req, res) => {
         const connection = await createConnection();
         await connection.execute(
             'INSERT INTO rating (user_email, title, type, rating, review) VALUES (?, ?, ?, ?, ?)',
-            [req.user.email, title, contentType, r, review || null]
+            [req.user.email, titleTrim, contentType, r, review || null]
         );
+        const [existingWh] = await connection.execute(
+            'SELECT 1 FROM watch_history WHERE user_email = ? AND title = ? AND type = ? LIMIT 1',
+            [req.user.email, titleTrim, contentType]
+        );
+        if (existingWh.length === 0) {
+            await connection.execute(
+                'INSERT INTO watch_history (user_email, title, type) VALUES (?, ?, ?)',
+                [req.user.email, titleTrim, contentType]
+            );
+        }
+        try {
+            await connection.execute(
+                `INSERT INTO watch_status (user_email, title, type, status)
+                 VALUES (?, ?, ?, 'completed')
+                 ON DUPLICATE KEY UPDATE status = 'completed'`,
+                [req.user.email, titleTrim, contentType]
+            );
+        } catch (statusErr) {
+            console.error('watch_status insert failed (table may not exist):', statusErr.message);
+        }
         await connection.end();
-        res.status(201).json({ message: 'Rating added.' });
+        res.status(201).json({ message: 'Rating added. Added to watch history and marked as completed.' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error adding rating.' });
@@ -613,6 +665,9 @@ app.get('/api/dashboard/status', authenticateToken, async (req, res) => {
         await connection.end();
         res.status(200).json({ statuses: rows });
     } catch (error) {
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            return res.status(200).json({ statuses: [] });
+        }
         console.error(error);
         res.status(500).json({ message: 'Error fetching statuses.' });
     }

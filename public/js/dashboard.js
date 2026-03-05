@@ -246,6 +246,7 @@ async function renderDashboard() {
     cachedStatuses = await DataModel.getStatuses();
 
     const posterItems = [
+        ...cachedWatchHistory.map(w => ({ title: w.title, type: w.type || 'movie' })),
         ...cachedStatuses.map(s => ({ title: s.title, type: s.type || 'movie' })),
         ...cachedLists.flatMap(list => (list.items || []).map(i => ({ title: i.title, type: 'movie' })))
     ];
@@ -320,9 +321,24 @@ function renderWatchHistory(searchTerm) {
     }
     items.forEach(item => {
         const div = document.createElement('div');
-        div.classList.add('dashboard-item');
+        div.classList.add('dashboard-item', 'watch-history-item');
         const date = new Date(item.watched_at).toLocaleDateString();
-        div.innerHTML = `<strong>${item.title}</strong> <span class="meta">(${item.type}) · ${date}</span>`;
+        const ratingStars = item.rating
+            ? `<span class="rating-stars">${'★'.repeat(item.rating)}${'☆'.repeat(5 - item.rating)}</span>`
+            : '';
+        const poster = posterUrl(item);
+        const name = item.title || 'Untitled';
+        const posterHtml = poster
+            ? `<img src="${poster}" alt="${name}" class="wh-poster">`
+            : '<div class="poster-placeholder wh-poster"></div>';
+        div.innerHTML = `
+            <div class="wh-poster-wrap">${posterHtml}</div>
+            <div class="wh-details">
+                <strong>${item.title}</strong>
+                <span class="meta">(${item.type}) · ${date}${ratingStars ? ' · ' + ratingStars : ''}</span>
+                ${item.review ? `<p class="review-text">${item.review}</p>` : ''}
+            </div>
+        `;
         el.appendChild(div);
     });
 }

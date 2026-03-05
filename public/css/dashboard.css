@@ -204,6 +204,33 @@ body {
     margin-bottom: 10px;
 }
 
+.watch-history-item {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.wh-poster-wrap {
+    flex-shrink: 0;
+}
+
+.wh-poster {
+    width: 50px;
+    height: 75px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.wh-poster-wrap .poster-placeholder {
+    width: 50px;
+    height: 75px;
+}
+
+.wh-details {
+    flex: 1;
+    min-width: 0;
+}
+
 .dashboard-item .meta {
     color: #D9DEE4;
     font-size: 0.9em;
