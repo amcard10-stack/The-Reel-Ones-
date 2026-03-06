@@ -85,7 +85,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 })
             });
 
-            if (response.ok) {
+             if (response.ok) {
                 alert("Profile updated successfully!");
             } else {
                 alert("Error updating profile.");

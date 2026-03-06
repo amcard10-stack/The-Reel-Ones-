@@ -212,28 +212,37 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
     }
 });
 
-// Route: Update current user's profile
 app.put('/api/profile', authenticateToken, async (req, res) => {
     const { firstName, lastName, newPassword } = req.body;
+
     try {
         const connection = await createConnection();
+
         if (newPassword && newPassword.length >= 6) {
             const hashed = await bcrypt.hash(newPassword, 10);
+
             await connection.execute(
                 'UPDATE user SET first_name = ?, last_name = ?, password = ? WHERE email = ?',
                 [firstName || null, lastName || null, hashed, req.user.email]
             );
+
         } else {
+
             await connection.execute(
                 'UPDATE user SET first_name = ?, last_name = ? WHERE email = ?',
                 [firstName || null, lastName || null, req.user.email]
             );
+
         }
+
         await connection.end();
         res.status(200).json({ message: 'Profile updated.' });
+
     } catch (error) {
+
         console.error(error);
         res.status(500).json({ message: 'Error updating profile.' });
+
     }
 });
 
