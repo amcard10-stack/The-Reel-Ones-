@@ -1,46 +1,45 @@
 body {
-    font-family: Arial;
-    background-color: #f4f4f9;
+    font-family: Arial, sans-serif;
+    background-color: #0A1A2F;
     margin: 0;
+    color: #F2F4F7;
 }
 
 .container {
     width: 85%;
-    margin: 30px auto;
-    background: white;
+    margin: 40px auto;
     padding: 30px;
-    border-radius: 10px;
 }
 
 .header {
     display: flex;
     justify-content: space-between;
+    align-items: center;
 }
 
 .header-right button {
-    margin-left: 8px;
-    padding: 6px 12px;
-    background-color: #007bff;
-    color: white;
+    padding: 8px 14px;
+    border-radius: 10px;
     border: none;
-    border-radius: 5px;
     cursor: pointer;
+    background-color: #3A6EA5;
+    color: #F2F4F7;
+}
+
+.header-right button:hover {
+    background-color: #A7D3F5;
+    color: #0A1A2F;
 }
 
 .section {
-    margin-top: 30px;
-}
-
-input, select, textarea {
-    width: 100%;
-    margin-bottom: 15px;
-    padding: 8px;
-    border-radius: 5px;
-    border: 1px solid #ccc;
+    margin-top: 35px;
+    background-color: #1E3A5F;
+    padding: 25px;
+    border-radius: 18px;
 }
 
 .scale-legend {
-    color: #555;
+    color: #D9DEE4;
     font-size: 0.95em;
     margin-bottom: 20px;
 }
@@ -49,17 +48,44 @@ input, select, textarea {
     display: flex;
     gap: 12px;
     margin-bottom: 15px;
+    flex-wrap: wrap;
 }
 
 .form-row input {
     flex: 2;
+    min-width: 200px;
     margin-bottom: 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #2B2F36;
+    background-color: #1A1C20;
+    color: #F2F4F7;
+    box-sizing: border-box;
 }
 
 .form-row select {
     flex: 1;
     min-width: 120px;
     margin-bottom: 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #2B2F36;
+    background-color: #1A1C20;
+    color: #F2F4F7;
+    box-sizing: border-box;
+}
+
+textarea {
+    width: 100%;
+    margin-bottom: 15px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #2B2F36;
+    background-color: #1A1C20;
+    color: #F2F4F7;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 80px;
 }
 
 .rating-scale {
@@ -70,6 +96,7 @@ input, select, textarea {
     display: block;
     margin-bottom: 8px;
     font-weight: 500;
+    color: #D9DEE4;
 }
 
 .star-rating {
@@ -80,7 +107,7 @@ input, select, textarea {
 }
 
 .star-rating .star {
-    color: #ddd;
+    color: #2B2F36;
     transition: color 0.2s;
 }
 
@@ -93,20 +120,46 @@ input, select, textarea {
     display: block;
     margin-top: 6px;
     font-size: 0.9em;
-    color: #666;
+    color: #D9DEE4;
+}
+
+.primary {
+    background-color: #3A6EA5;
+    color: #F2F4F7;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.primary:hover {
+    background-color: #A7D3F5;
+    color: #0A1A2F;
+}
+
+#ratingMessage {
+    margin-top: 12px;
+    font-size: 0.95em;
 }
 
 .type-badge {
     font-size: 0.75em;
-    background: #e9ecef;
+    background: rgba(255,255,255,0.1);
     padding: 2px 8px;
     border-radius: 4px;
     font-weight: normal;
 }
 
+.rating-item {
+    padding: 14px;
+    background: #2B2F36;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
 .rating-item .review-text {
     margin-top: 8px;
-    color: #555;
+    color: #D9DEE4;
     font-size: 0.95em;
 }
 
@@ -114,10 +167,60 @@ input, select, textarea {
     margin-top: 15px;
 }
 
-.primary {
-    background-color: #28a745;
-    color: white;
-    border: none;
-    padding: 8px 12px;
-    border-radius: 5px;
+.tmdb-search-input {
+    min-width: 220px;
+}
+
+.tmdb-results-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 12px 0 20px 0;
+}
+
+.tmdb-result-card {
+    flex: 0 0 auto;
+    width: 100px;
+    text-align: center;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: all 0.2s ease;
+}
+
+.tmdb-result-card:hover {
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.2);
+    transform: scale(1.03);
+}
+
+.tmdb-result-card img {
+    width: 100px;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+    margin: 0 auto;
+}
+
+.tmdb-result-card p {
+    margin: 6px 0 2px 0;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tmdb-result-card .add-hint {
+    font-size: 10px;
+    opacity: 0.7;
+}
+
+.loading-msg {
+    color: #D9DEE4;
+    font-style: italic;
+    padding: 12px;
 }

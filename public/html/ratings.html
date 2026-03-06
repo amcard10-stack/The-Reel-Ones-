@@ -21,12 +21,13 @@
         <p class="scale-legend">Use our standardized 1–5 scale to rate titles. Your ratings help improve your recommendations.</p>
 
         <div class="form-row">
-            <input type="text" id="ratingTitle" placeholder="Movie or show title">
+            <input type="text" id="ratingTitle" placeholder="Search movies or shows..." class="tmdb-search-input">
             <select id="ratingType">
                 <option value="movie">Movie</option>
                 <option value="show">TV Show</option>
             </select>
         </div>
+        <div id="ratingSearchResults" class="tmdb-results-grid"></div>
 
         <div class="rating-scale">
             <label>Your rating:</label>

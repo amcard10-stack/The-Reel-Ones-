@@ -16,10 +16,102 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutButton = document.getElementById('logoutButton');
     const submitBtn = document.getElementById('submitRatingBtn');
     const ratingList = document.getElementById('ratingList');
+    const ratingTitle = document.getElementById('ratingTitle');
+    const ratingType = document.getElementById('ratingType');
+    const ratingSearchResults = document.getElementById('ratingSearchResults');
 
     logoutButton.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
         window.location.href = '/';
+    });
+
+    // TMDB search for rating title
+    let debounceTimer = null;
+    const DEBOUNCE_MS = 400;
+    const MIN_CHARS = 2;
+
+    ratingTitle.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(loadRatingSearch, DEBOUNCE_MS);
+    });
+    ratingTitle.addEventListener('focus', () => {
+        const q = ratingTitle.value?.trim();
+        if (!q || q.length < MIN_CHARS) loadRatingSearch(true);
+    });
+
+    async function loadRatingSearch(showTrending = false) {
+        if (!ratingSearchResults) return;
+        const query = ratingTitle.value?.trim();
+        const type = ratingType.value;
+        const tmdbType = type === 'show' ? 'tv' : 'movie';
+
+        if (showTrending || !query || query.length < MIN_CHARS) {
+            ratingSearchResults.innerHTML = '<p class="loading-msg">Loading...</p>';
+            try {
+                const res = await fetch(`/api/trending/${type === 'show' ? 'shows' : 'movies'}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error('Failed to load');
+                const results = (data.results || []).map(r => ({
+                    ...r,
+                    _type: type,
+                    _title: type === 'show' ? r.name : r.title
+                }));
+                renderRatingSearchResults(results);
+            } catch (err) {
+                console.error(err);
+                ratingSearchResults.innerHTML = '<p class="loading-msg">Failed to load.</p>';
+            }
+            return;
+        }
+
+        ratingSearchResults.innerHTML = '<p class="loading-msg">Searching...</p>';
+        try {
+            const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=${tmdbType}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Search failed');
+            const results = (data.results || []).map(r => ({
+                ...r,
+                _type: type,
+                _title: type === 'show' ? r.name : r.title
+            }));
+            renderRatingSearchResults(results);
+        } catch (err) {
+            console.error(err);
+            ratingSearchResults.innerHTML = '<p class="loading-msg">Search failed.</p>';
+        }
+    }
+
+    function renderRatingSearchResults(results) {
+        ratingSearchResults.innerHTML = '';
+        const withPoster = results.filter(r => r.poster_path);
+        if (withPoster.length === 0) {
+            ratingSearchResults.innerHTML = '<p class="loading-msg">No results. Try a different search.</p>';
+            return;
+        }
+        withPoster.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'tmdb-result-card';
+            card.innerHTML = `
+                <img src="https://image.tmdb.org/t/p/w154${item.poster_path}" alt="${item._title || ''}">
+                <p>${item._title || 'Untitled'}</p>
+                <span class="add-hint">Click to select</span>
+            `;
+            card.addEventListener('click', () => {
+                ratingTitle.value = item._title;
+                ratingType.value = item._type;
+                ratingSearchResults.innerHTML = '';
+            });
+            ratingSearchResults.appendChild(card);
+        });
+    }
+
+    ratingType.addEventListener('change', () => {
+        const q = ratingTitle.value?.trim();
+        if (q && q.length >= MIN_CHARS) loadRatingSearch();
     });
 
     // Star rating click handler
@@ -52,13 +144,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const result = await DataModel.addRating(title, type, selectedRating, review || null);
         if (result.ok) {
-            messageEl.textContent = 'Rating added! Your recommendations will improve.';
+            messageEl.textContent = 'Rating added! Added to watch history and marked as completed.';
             messageEl.style.color = '#28a745';
-            document.getElementById('ratingTitle').value = '';
+            ratingTitle.value = '';
             document.getElementById('ratingReview').value = '';
             selectedRating = 0;
             starRating.querySelectorAll('.star').forEach(s => s.classList.remove('selected'));
             scaleLabel.textContent = 'Select a rating';
+            if (ratingSearchResults) ratingSearchResults.innerHTML = '';
             renderRatings();
         } else {
             messageEl.textContent = result.data?.message || 'Error adding rating.';

@@ -129,6 +129,21 @@ const DataModel = (function () {
             }
         },
 
+        updateRating: async function (title, type, rating, review) {
+            if (!token) return { ok: false };
+            try {
+                const response = await fetch('/api/dashboard/ratings', {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, type: type || 'movie', rating, review }),
+                });
+                return { ok: response.ok, data: await response.json() };
+            } catch (error) {
+                console.error("Error updating rating:", error);
+                return { ok: false };
+            }
+        },
+
         addWatchHistory: async function (title, type) {
             if (!token) return { ok: false };
             try {
@@ -267,6 +282,23 @@ setStatus: async function (title, type, status) {
             } catch (error) {
                 console.error("Error adding friend:", error);
                 return { ok: false };
+            }
+        },
+
+        getPostersForItems: async function (items) {
+            if (!token || !items || items.length === 0) return {};
+            try {
+                const response = await fetch('/api/tmdb/posters', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items }),
+                });
+                if (!response.ok) return {};
+                const data = await response.json();
+                return data.posters || {};
+            } catch (error) {
+                console.error("Error fetching posters:", error);
+                return {};
             }
         },
         //ADD MORE FUNCTIONS HERE TO FETCH DATA FROM THE SERVER
