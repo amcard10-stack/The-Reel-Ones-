@@ -9,7 +9,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     DataModel.setToken(token);
 
-    /* Load profile data */
+    /* Get profile elements */
+    const profilePicInput = document.getElementById("profilePicInput");
+    const profilePic = document.getElementById("profilePic");
+    const placeholder = document.querySelector(".profile-placeholder");
+
+    /* =========================
+       LOAD PROFILE DATA
+    ==========================*/
     try {
         const response = await fetch("/api/profile", {
             method: "GET",
@@ -20,18 +27,27 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.getElementById("firstNameInput").value = data.firstName || "";
             document.getElementById("lastNameInput").value = data.lastName || "";
             document.getElementById("emailInput").value = data.email || "";
+            document.getElementById("bioInput").value = data.bio || "";
+            if (data.profilePicture) {
+                profilePic.src = data.profilePicture;
+                if (placeholder) placeholder.style.display = "none";
+            }
         }
     } catch (err) {
         console.error("Error loading profile:", err);
     }
 
-    /* Logout */
+    /* =========================
+       LOGOUT
+    ==========================*/
     document.getElementById("logoutButton").addEventListener("click", () => {
         localStorage.removeItem("jwtToken");
         window.location.href = "/";
     });
 
-    /* Toggle Password Section */
+    /* =========================
+       TOGGLE PASSWORD SECTION
+    ==========================*/
     const changePasswordBtn = document.getElementById("changePasswordBtn");
     const passwordSection = document.getElementById("passwordSection");
 
@@ -39,53 +55,62 @@ document.addEventListener("DOMContentLoaded", async () => {
         passwordSection.classList.toggle("hidden");
     });
 
-    /* Profile Picture Preview */
-    const profilePicInput = document.getElementById("profilePicInput");
-    const profilePic = document.getElementById("profilePic");
-    const placeholder = document.querySelector(".profile-placeholder"); // may be null
-
+    /* =========================
+       PROFILE PICTURE PREVIEW
+    ==========================*/
     profilePicInput.addEventListener("change", function () {
         const file = this.files[0];
         if (file) {
             const reader = new FileReader();
             reader.onload = function (e) {
                 profilePic.src = e.target.result;
-                if (placeholder) placeholder.style.display = "none";
+                if (placeholder) {
+                    placeholder.style.display = "none";
+                }
             };
             reader.readAsDataURL(file);
         }
     });
 
-    /* Save Changes */
+    /* =========================
+       SAVE PROFILE CHANGES
+    ==========================*/
     document.getElementById("saveChangesBtn").addEventListener("click", async () => {
-
+        const bio = document.getElementById("bioInput").value;
         const firstName = document.getElementById("firstNameInput").value;
         const lastName = document.getElementById("lastNameInput").value;
-        const email = document.getElementById("emailInput").value;
         const newPassword = document.getElementById("newPasswordInput").value;
         const confirmPassword = document.getElementById("confirmPasswordInput").value;
+
+        if (newPassword && newPassword.length < 6) {
+            alert("Password must be at least 6 characters long.");
+            return;
+        }
 
         if (newPassword && newPassword !== confirmPassword) {
             alert("Passwords do not match.");
             return;
+        }
+        const formData = new FormData();
+        formData.append("bio", bio);
+        formData.append("firstName", firstName);
+        formData.append("lastName", lastName);
+        formData.append("newPassword", newPassword);
+        const file = document.getElementById("profilePicInput").files[0];
+
+        if (file) {
+            formData.append("profilePicture", file);
         }
 
         try {
             const response = await fetch("/api/profile", {
                 method: "PUT",
                 headers: {
-                    "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`
                 },
-                body: JSON.stringify({
-                    firstName,
-                    lastName,
-                    email,
-                    newPassword
-                })
+                body: formData
             });
-
-             if (response.ok) {
+            if (response.ok) {
                 alert("Profile updated successfully!");
             } else {
                 alert("Error updating profile.");
@@ -94,7 +119,5 @@ document.addEventListener("DOMContentLoaded", async () => {
             console.error(error);
             alert("Something went wrong.");
         }
-
     });
-
 });

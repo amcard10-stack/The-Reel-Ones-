@@ -97,7 +97,7 @@ label {
     display: block;
     margin-bottom: 6px;
     color: #D9DEE4;
-    font-size: 14px;
+    font-size: 15px;
 }
 
 input {
@@ -164,4 +164,34 @@ input:disabled {
 .primary-btn:hover {
     background-color: #A7D3F5;
     color: #0A1A2F;
+}
+
+.bio-card {
+    background-color: #1E3A5F;
+    padding:  25px 40px;        
+    border-radius: 16px;
+    margin: 20px 0 28px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+}
+
+.input-group {
+  margin-bottom: 18px;    
+}
+
+.bio-card textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 120px;       
+  resize: vertical;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #2B2F36;
+  background-color: #1A1C20;
+  color: #F2F4F7;
+  font-size: 14px;
+}
+
+.bio-card textarea:focus {
+  outline: none;
+  border-color: #3A6EA5;
 }

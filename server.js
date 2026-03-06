@@ -3,9 +3,23 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const path = require('path');
 
 const app = express();
 const port = 3000;
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'public/images/profiles/');
+    },
+    filename: function (req, file, cb) {
+        const uniqueName = Date.now() + path.extname(file.originalname);
+        cb(null, uniqueName);
+    }
+});
+
+const upload = multer({ storage });
 
 // Middleware to parse JSON bodies
 app.use(express.json());
@@ -195,16 +209,22 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
         const [rows] = await connection.execute(
-            'SELECT email, first_name, last_name FROM user WHERE email = ?',
+            `SELECT email, first_name, last_name, bio, profile_picture
+             FROM user
+             WHERE email = ?`,
             [req.user.email]
         );
         await connection.end();
-        if (rows.length === 0) return res.status(404).json({ message: 'User not found.' });
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
         const u = rows[0];
         res.status(200).json({
             email: u.email,
-            firstName: u.first_name || '',
-            lastName: u.last_name || ''
+            firstName: u.first_name || "",
+            lastName: u.last_name || "",
+            bio: u.bio || "",
+            profilePicture: u.profile_picture || ""
         });
     } catch (error) {
         console.error(error);
@@ -212,37 +232,54 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
     }
 });
 
-app.put('/api/profile', authenticateToken, async (req, res) => {
-    const { firstName, lastName, newPassword } = req.body;
-
+app.put('/api/profile', authenticateToken, upload.single('profilePicture'), async (req, res) => {
+    const { firstName, lastName, bio, newPassword } = req.body;
+    let profilePicture = null;
+    if (req.file) {
+        profilePicture = "/images/profiles/" + req.file.filename;
+    }
     try {
         const connection = await createConnection();
-
+        // If user is changing password
         if (newPassword && newPassword.length >= 6) {
-            const hashed = await bcrypt.hash(newPassword, 10);
-
-            await connection.execute(
-                'UPDATE user SET first_name = ?, last_name = ?, password = ? WHERE email = ?',
-                [firstName || null, lastName || null, hashed, req.user.email]
-            );
-
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+            if (profilePicture) {
+                await connection.execute(
+                    `UPDATE user
+                     SET first_name=?, last_name=?, bio=?, profile_picture=?, password=?
+                     WHERE email=?`,
+                    [firstName || null, lastName || null, bio || null, profilePicture, hashedPassword, req.user.email]
+                );
+            } else {
+                await connection.execute(
+                    `UPDATE user
+                     SET first_name=?, last_name=?, bio=?, password=?
+                     WHERE email=?`,
+                    [firstName || null, lastName || null, bio || null, hashedPassword, req.user.email]
+                );
+            }
         } else {
-
-            await connection.execute(
-                'UPDATE user SET first_name = ?, last_name = ? WHERE email = ?',
-                [firstName || null, lastName || null, req.user.email]
-            );
-
+            if (profilePicture) {
+                await connection.execute(
+                    `UPDATE user
+                     SET first_name=?, last_name=?, bio=?, profile_picture=?
+                     WHERE email=?`,
+                    [firstName || null, lastName || null, bio || null, profilePicture, req.user.email]
+                );
+            } else {
+                await connection.execute(
+                    `UPDATE user
+                     SET first_name=?, last_name=?, bio=?
+                     WHERE email=?`,
+                    [firstName || null, lastName || null, bio || null, req.user.email]
+                );
+            }
         }
-
         await connection.end();
-        res.status(200).json({ message: 'Profile updated.' });
-
+        res.status(200).json({ message: "Profile updated." });
     } catch (error) {
-
         console.error(error);
-        res.status(500).json({ message: 'Error updating profile.' });
-
+        res.status(500).json({ message: "Error updating profile." });
     }
 });
 
