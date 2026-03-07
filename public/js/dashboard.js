@@ -322,9 +322,11 @@ function showItemPopup(item) {
 }
 
 async function renderDashboard() {
-    cachedWatchHistory = await DataModel.getWatchHistory();
-    cachedLists = await DataModel.getLists();
-    cachedStatuses = await DataModel.getStatuses();
+    [cachedWatchHistory, cachedLists, cachedStatuses] = await Promise.all([
+        DataModel.getWatchHistory(),
+        DataModel.getLists(),
+        DataModel.getStatuses()
+    ]);
 
     const posterItems = [
         ...cachedWatchHistory.map(w => ({ title: w.title, type: w.type || 'movie' })),

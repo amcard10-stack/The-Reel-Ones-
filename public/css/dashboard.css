@@ -15,31 +15,31 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 40px;    
+}
+
+.header-logo {
+    height: 120px;
+    width: auto;
 }
 
 .title-group {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px
 }
 
-.title-group h1 {
-    margin: 0;
-    font-size: 28px;
-}
-
-.title-group h2 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: normal;
-    color: #D9DEE4; 
+.page-title {
+    margin: 4px 0 0 0;
+    font-size: 42px;
+    color: #F2F4F7;
 }
 
 .header-right {
     display: flex;
     align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .header-right button {

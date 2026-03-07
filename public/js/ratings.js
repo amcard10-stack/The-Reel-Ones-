@@ -163,17 +163,33 @@ document.addEventListener('DOMContentLoaded', () => {
         ratingList.innerHTML = '<p>Loading...</p>';
         const ratings = await DataModel.getRatings();
         ratingList.innerHTML = '';
+
         if (ratings.length === 0) {
             ratingList.innerHTML = '<p>No ratings yet.</p>';
             return;
         }
+        const posterItems = ratings.map(r => ({ title: r.title, type: r.type || 'movie' }));
+        const posters = await DataModel.getPostersForItems(posterItems);
+
         ratings.forEach(item => {
             const div = document.createElement('div');
             div.classList.add('rating-item');
             const date = new Date(item.rated_at).toLocaleDateString();
             const typeLabel = item.type === 'show' ? 'TV Show' : 'Movie';
-            div.innerHTML = `<strong>${item.title}</strong> <span class="type-badge">${typeLabel}</span> ${'★'.repeat(item.rating)}${'☆'.repeat(5 - item.rating)} · ${date}`;
-            if (item.review) div.innerHTML += `<p class="review-text">${item.review}</p>`;
+            const key = `${item.title}|${item.type || 'movie'}`;
+            const posterPath = posters[key];
+            const posterHtml = posterPath
+                ? `<img src="https://image.tmdb.org/t/p/w154${posterPath}" alt="${item.title}" class="rating-poster">`
+                : '<div class="rating-poster poster-placeholder"></div>';
+
+            div.innerHTML = `
+                ${posterHtml}
+                <div class="rating-details">
+                    <strong>${item.title}</strong> <span class="type-badge">${typeLabel}</span>
+                    ${'★'.repeat(item.rating)}${'☆'.repeat(5 - item.rating)} · ${date}
+                    ${item.review ? `<p class="review-text">${item.review}</p>` : ''}
+                </div>
+            `;
             ratingList.appendChild(div);
         });
     }

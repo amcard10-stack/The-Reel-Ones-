@@ -5,32 +5,35 @@ body {
     color: #F2F4F7;
 }
 
-.top-nav {
-    position: absolute;
-    top: 20px;
-    right: 40px;
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.header-right {
     display: flex;
     gap: 12px;
 }
 
 .nav-btn {
-    padding: 8px 16px;
-    border-radius: 8px;
+    padding: 8px 14px;
+    border-radius: 10px;
     border: none;
-    background-color: #3A6EA5; 
-    color: #F2F4F7;
     cursor: pointer;
-    font-size: 14px;
+    background-color: #3A6EA5;
+    color: #F2F4F7;
 }
 
 .nav-btn:hover {
-    background-color: #A7D3F5; 
+    background-color: #A7D3F5;
     color: #0A1A2F;
 }
 
 .settings-container {
-    width: 60%;
-    margin: 120px auto 60px auto;
+    width: 85%;
+    margin: 20px auto 60px auto;
 }
 
 .page-title {

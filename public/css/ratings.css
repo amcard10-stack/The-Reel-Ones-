@@ -224,3 +224,29 @@ textarea {
     font-style: italic;
     padding: 12px;
 }
+
+.rating-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.rating-poster {
+    width: 60px;
+    min-width: 60px;
+    height: 90px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.poster-placeholder {
+    width: 60px;
+    min-width: 60px;
+    height: 90px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 6px;
+}
+
+.rating-details {
+    flex: 1;
+}
