@@ -530,3 +530,19 @@ body {
 .popup-btn:not(.primary):hover { background: rgba(255,255,255,0.15); }
 .poster-card-small, .watch-history-item { cursor: pointer; }
 .poster-card-small:hover, .watch-history-item:hover { opacity: 0.9; }
+
+.add-section input,
+.add-section select {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #2B2F36;
+    background-color: #1A1C20;
+    color: #F2F4F7;
+    box-sizing: border-box;
+}
+
+.add-section input:focus,
+.add-section select:focus {
+    outline: none;
+    border-color: #3A6EA5;
+}
