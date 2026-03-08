@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const popupClose = document.getElementById('popupClose');
     const popupCancel = document.getElementById('popupCancel');
     const popupSave = document.getElementById('popupSave');
+    const popupDelete = document.getElementById('popupDelete');
     const popupStars = document.getElementById('popupStars');
     const popupStatusSection = document.getElementById('popupStatusSection');
     const popupStatusSelect = document.getElementById('popupStatusSelect');
@@ -99,7 +100,24 @@ document.addEventListener('DOMContentLoaded', () => {
         popup.style.display = 'none';
         renderDashboard();
     });
+popupDelete?.addEventListener('click', async () => {
 
+    if (!currentPopupItem) return;
+
+    console.log("Deleting:", currentPopupItem);
+
+    const ratingResult = await DataModel.deleteRating(currentPopupItem.title, currentPopupItem.type);
+    const statusResult = await DataModel.deleteStatus(currentPopupItem.title, currentPopupItem.type);
+    const historyResult = await DataModel.deleteWatchHistory(currentPopupItem.title, currentPopupItem.type);
+
+    console.log("Rating delete:", ratingResult);
+    console.log("Status delete:", statusResult);
+    console.log("History delete:", historyResult);
+
+    popup.style.display = 'none';
+    renderDashboard();
+
+});
     // TMDB search for Watch History add
     setupTMDBSearch(watchHistoryTitle, watchHistoryType, 'watchHistoryResults', async (item) => {
         const result = await DataModel.addWatchHistory(item.title, item.type);

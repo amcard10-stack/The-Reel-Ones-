@@ -158,6 +158,68 @@ const DataModel = (function () {
                 return { ok: false };
             }
         },
+        deleteWatchHistory: async function (title, type) {
+    if (!token) return { ok: false };
+
+    try {
+        const response = await fetch('/api/dashboard/watch-history', {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title, type: type || 'movie' })
+        });
+
+        return { ok: response.ok, data: await response.json() };
+
+    } catch (error) {
+        console.error("Error deleting watch history:", error);
+        return { ok: false };
+    }
+},
+
+deleteRating: async function (title, type) {
+    if (!token) return { ok: false };
+
+    try {
+        const response = await fetch('/api/dashboard/ratings', {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title, type: type || 'movie' })
+        });
+
+        return { ok: response.ok, data: await response.json() };
+
+    } catch (error) {
+        console.error("Error deleting rating:", error);
+        return { ok: false };
+    }
+},
+
+deleteStatus: async function (title, type) {
+    if (!token) return { ok: false };
+
+    try {
+        const response = await fetch('/api/dashboard/status', {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title, type: type || 'movie' })
+        });
+
+        return { ok: response.ok, data: await response.json() };
+
+    } catch (error) {
+        console.error("Error deleting status:", error);
+        return { ok: false };
+    }
+},
 
         createList: async function (name) {
             if (!token) return { ok: false };

@@ -546,3 +546,11 @@ body {
     outline: none;
     border-color: #3A6EA5;
 }
+.popup-btn.danger{
+    background:#e63946;
+    color:white;
+}
+
+.popup-btn.danger:hover{
+    background:#c1121f;
+}
