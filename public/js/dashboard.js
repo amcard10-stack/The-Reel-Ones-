@@ -104,18 +104,13 @@ popupDelete?.addEventListener('click', async () => {
 
     if (!currentPopupItem) return;
 
-    console.log("Deleting:", currentPopupItem);
-
-    const ratingResult = await DataModel.deleteRating(currentPopupItem.title, currentPopupItem.type);
-    const statusResult = await DataModel.deleteStatus(currentPopupItem.title, currentPopupItem.type);
-    const historyResult = await DataModel.deleteWatchHistory(currentPopupItem.title, currentPopupItem.type);
-
-    console.log("Rating delete:", ratingResult);
-    console.log("Status delete:", statusResult);
-    console.log("History delete:", historyResult);
+    await DataModel.deleteStatus(currentPopupItem.title, currentPopupItem.type);
+    await DataModel.deleteWatchHistory(currentPopupItem.title, currentPopupItem.type);
 
     popup.style.display = 'none';
     renderDashboard();
+
+
 
 });
     // TMDB search for Watch History add
@@ -173,7 +168,7 @@ popupDelete?.addEventListener('click', async () => {
     //////////////////////////////////////////
     //END CODE THAT NEEDS TO RUN IMMEDIATELY AFTER PAGE LOADS
     //////////////////////////////////////////
-});
+;
 //END OF DOMCONTENTLOADED
 
 
@@ -487,3 +482,4 @@ function renderLists(searchTerm) {
 //////////////////////////////////////////
 //END FUNCTIONS TO MANIPULATE THE DOM
 //////////////////////////////////////////
+});

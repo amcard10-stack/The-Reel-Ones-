@@ -806,17 +806,23 @@ app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error updating status.' });
     }
 });
+
 app.delete('/api/dashboard/status', authenticateToken, async (req, res) => {
     const { title, type } = req.body;
     const email = req.user.email;
 
     try {
-    const connection = await createConnection(   
-        await         
-    'DELETE FROM watch_status WHERE user_email = ? AND title = ? AND type = ?',
+        const connection = await createConnection();
+
+        await connection.execute(
+            'DELETE FROM watch_status WHERE user_email = ? AND title = ? AND type = ?',
             [email, title, type || 'movie']
         );
+
+        await connection.end();
+
         res.status(200).json({ message: 'Status removed.' });
+
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error removing status.' });
