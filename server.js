@@ -476,6 +476,16 @@ app.post('/api/dashboard/lists/:listId/items', authenticateToken, async (req, re
             await connection.end();
             return res.status(404).json({ message: 'List not found.' });
         }
+         // avoids duplicates //
+    const [existing] = await connection.execute(
+    'SELECT id FROM list_item WHERE list_id = ? AND title = ?',
+    [listId, title]
+    );
+
+    if (existing.length > 0) {
+    await connection.end();
+    return res.status(409).json({ message: 'Item already in list.' });
+    }
         await connection.execute('INSERT INTO list_item (list_id, title) VALUES (?, ?)', [listId, title]);
         await connection.end();
         res.status(201).json({ message: 'Item added to list.' });
@@ -863,6 +873,30 @@ app.delete('/api/dashboard/watch-history', authenticateToken, async (req, res) =
         console.error(err);
         res.status(500).json({ error: 'Failed to delete watch history' });
     }
+    app.delete('/api/dashboard/lists/items', authenticateToken, async (req, res) => {
+
+    const { title } = req.body;
+
+    try {
+        const connection = await createConnection();
+
+        await connection.execute(
+            `DELETE li
+             FROM list_item li
+             JOIN list l ON li.list_id = l.id
+             WHERE l.user_email = ? AND li.title = ?`,
+            [req.user.email, title]
+        );
+
+        await connection.end();
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error deleting list item.' });
+    }
+});
 });
 
 

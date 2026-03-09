@@ -106,6 +106,7 @@ popupDelete?.addEventListener('click', async () => {
 
     await DataModel.deleteStatus(currentPopupItem.title, currentPopupItem.type);
     await DataModel.deleteWatchHistory(currentPopupItem.title, currentPopupItem.type);
+    await DataModel.deleteFromLists(currentPopupItem.title);
 
     popup.style.display = 'none';
     renderDashboard();
@@ -469,14 +470,32 @@ function renderLists(searchTerm) {
                 const url = posterUrl(itemForPoster);
                 const name = i.title || 'Untitled';
                 return url
-                    ? `<div class="list-item-poster"><img src="${url}" alt="${name}"><span>${name}</span></div>`
-                    : `<div class="list-item">${name}</div>`;
+                ? `<div class="list-item-poster" data-title="${name}" data-type="movie">
+                <img src="${url}" alt="${name}">
+                <span>${name}</span>
+                </div>`
+                : `<div class="list-item" data-title="${name}" data-type="movie">
+                ${name}
+            </div>`;
             }).join('');
         } else {
             itemsHtml = '<p class="empty-message">' + (searchTerm ? 'No matching items.' : 'Empty list') + '</p>';
         }
         listDiv.innerHTML = `<h3 class="list-name">${list.name}</h3><div class="list-items list-items-posters">${itemsHtml}</div>`;
         el.appendChild(listDiv);
+        
+        listDiv.querySelectorAll('.list-item-poster, .list-item').forEach(item => {
+
+    item.addEventListener('click', () => {
+
+        const title = item.dataset.title;
+        const type = item.dataset.type;
+
+        showItemPopup({ title, type });
+
+    });
+
+});
     });
 }
 //////////////////////////////////////////

@@ -363,6 +363,19 @@ setStatus: async function (title, type, status) {
                 return {};
             }
         },
+        async deleteFromLists(title) {
+
+        const response = await fetch('/api/dashboard/lists/items', {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ title })
+    });
+
+    return response.json();
+}
         //ADD MORE FUNCTIONS HERE TO FETCH DATA FROM THE SERVER
         //AND SEND DATA TO THE SERVER AS NEEDED
     };
