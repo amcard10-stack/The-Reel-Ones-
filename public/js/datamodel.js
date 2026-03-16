@@ -319,5 +319,29 @@ setStatus: async function (title, type, status) {
 },
         //ADD MORE FUNCTIONS HERE TO FETCH DATA FROM THE SERVER
         //AND SEND DATA TO THE SERVER AS NEEDED
+getPostersForItems: async function (items) {
+    if (!token || !items || items.length === 0) return {};
+    const posters = {};
+    await Promise.all(items.map(async ({ title, type }) => {
+        try {
+            const tmdbType = type === 'show' ? 'tv' : 'movie';
+            const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(title)}&type=${tmdbType}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const match = (data.results || []).find(r => {
+                const t = type === 'show' ? r.name : r.title;
+                return t?.toLowerCase() === title.toLowerCase();
+            });
+            if (match?.poster_path) {
+                posters[`${title}|${type || 'movie'}`] = match.poster_path;
+            }
+        } catch (err) {
+            console.error(`Poster fetch failed for ${title}:`, err);
+        }
+    }));
+    return posters;
+},
+
     };
 })();
