@@ -11,7 +11,7 @@ const port = 3000;
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, 'public/images/profiles/');
+        cb(null, 'public/images/');
     },
     filename: function (req, file, cb) {
         const uniqueName = Date.now() + path.extname(file.originalname);
@@ -453,6 +453,62 @@ app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
   }
 });
 
+// GET profile
+app.get('/api/profile', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            'SELECT email, first_name AS firstName, last_name AS lastName, bio, profile_picture AS profilePicture FROM user WHERE email = ?',
+            [req.user.email]
+        );
+        await connection.end();
+        if (rows.length === 0) return res.status(404).json({ message: 'User not found.' });
+        res.status(200).json(rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving profile.' });
+    }
+});
+
+// PUT profile (update name, bio, password, profile picture)
+app.put('/api/profile', authenticateToken, upload.single('profilePicture'), async (req, res) => {
+    const { firstName, lastName, bio, newPassword } = req.body;
+
+    try {
+        const connection = await createConnection();
+
+        // Handle optional password update
+        let passwordClause = '';
+        const params = [firstName, lastName, bio];
+
+        if (newPassword && newPassword.trim().length >= 6) {
+            const hashed = await bcrypt.hash(newPassword, 10);
+            passwordClause = ', password = ?';
+            params.push(hashed);
+        }
+
+        // Handle optional profile picture
+        let picClause = '';
+        if (req.file) {
+            const picPath = `/images/${req.file.filename}`;
+            picClause = ', profile_picture = ?';
+            params.push(picPath);
+        }
+
+        params.push(req.user.email);
+
+        await connection.execute(
+            `UPDATE user SET first_name = ?, last_name = ?, bio = ?${passwordClause}${picClause} WHERE email = ?`,
+            params
+        );
+
+        await connection.end();
+        res.status(200).json({ message: 'Profile updated successfully.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error updating profile.' });
+    }
+});
 //////////////////////////////////////////////////////
 // SUGGESTIONS (keep after status routes is OK)
 //////////////////////////////////////////////////////
