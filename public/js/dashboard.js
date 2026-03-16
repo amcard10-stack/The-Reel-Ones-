@@ -126,11 +126,41 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     popupDelete?.addEventListener('click', async () => {
         if (!currentPopupItem) return;
-        if (!confirm('Remove this from watch history and status?')) return;
+        if (!confirm('Remove this from watch history, status, and all lists?')) return;
         if (DataModel.deleteWatchHistory) await DataModel.deleteWatchHistory(currentPopupItem.title, currentPopupItem.type);
         if (DataModel.deleteStatus) await DataModel.deleteStatus(currentPopupItem.title, currentPopupItem.type);
+        if (DataModel.deleteRating) await DataModel.deleteRating(currentPopupItem.title, currentPopupItem.type);
+        const listsWithItem = (cachedLists || []).map(l => {
+            const item = (l.items || []).find(i => (i.title || '').trim().toLowerCase() === (currentPopupItem.title || '').trim().toLowerCase());
+            return item ? { listId: l.id, itemTitle: item.title } : null;
+        }).filter(Boolean);
+        for (const { listId, itemTitle } of listsWithItem) {
+            if (DataModel.removeFromList) await DataModel.removeFromList(listId, itemTitle);
+        }
         popup.style.display = 'none';
         renderDashboard();
+    });
+
+    document.getElementById('listsContainer')?.addEventListener('click', (e) => {
+        const itemEl = e.target.closest('.list-item-poster, .list-item');
+        if (!itemEl) return;
+        const title = itemEl.dataset.title;
+        if (!title) return;
+        showItemPopup({ title, type: 'movie' });
+    });
+
+    document.getElementById('popupListsContainer')?.addEventListener('click', async (e) => {
+        const btn = e.target.closest('.popup-remove-from-list');
+        if (!btn || !currentPopupItem) return;
+        const listId = btn.dataset.listId;
+        const itemTitle = btn.dataset.itemTitle;
+        if (!listId || !itemTitle) return;
+        const result = await DataModel.removeFromList?.(listId, itemTitle);
+        if (result?.ok) {
+            cachedLists = await DataModel.getLists();
+            showItemPopup(currentPopupItem);
+            renderDashboard();
+        }
     });
 
     const token = localStorage.getItem('jwtToken');
@@ -294,6 +324,10 @@ let currentPopupItem = null;
 function showItemPopup(item) {
     const whItem = cachedWatchHistory.find(w => w.title === item.title && (w.type || 'movie') === (item.type || 'movie'));
     const merged = whItem ? { ...item, rating: whItem.rating, review: whItem.review, watched_at: whItem.watched_at } : item;
+    if (!merged.status && cachedStatuses?.length) {
+        const statusItem = cachedStatuses.find(s => s.title === merged.title);
+        if (statusItem) merged.status = statusItem.status;
+    }
     currentPopupItem = { ...merged, _rating: merged.rating || 0 };
     const popup = document.getElementById('itemPopup');
     const posterEl = document.getElementById('popupPoster');
@@ -305,6 +339,8 @@ function showItemPopup(item) {
     const statusSection = document.getElementById('popupStatusSection');
     const statusSelect = document.getElementById('popupStatusSelect');
     const placeholderEl = document.getElementById('popupPosterPlaceholder');
+    const listsSection = document.getElementById('popupListsSection');
+    const listsContainer = document.getElementById('popupListsContainer');
 
     const url = posterUrl(merged);
     if (posterEl) {
@@ -328,6 +364,23 @@ function showItemPopup(item) {
     }
     if (statusSection) statusSection.style.display = 'block';
     if (statusSelect) statusSelect.value = merged.status || 'completed';
+
+    const listsWithExactItem = (cachedLists || []).map(l => {
+        const item = (l.items || []).find(i => (i.title || '').trim().toLowerCase() === (merged.title || '').trim().toLowerCase());
+        return item ? { list: l, itemTitle: item.title } : null;
+    }).filter(Boolean);
+    if (listsSection && listsContainer) {
+        if (listsWithExactItem.length > 0) {
+            listsSection.style.display = 'block';
+            listsContainer.innerHTML = listsWithExactItem.map(({ list, itemTitle }) =>
+                `<button type="button" class="popup-btn popup-remove-from-list" data-list-id="${list.id}" data-item-title="${(itemTitle || '').replace(/"/g, '&quot;')}">Remove from ${list.name || 'list'}</button>`
+            ).join('');
+        } else {
+            listsSection.style.display = 'none';
+            listsContainer.innerHTML = '';
+        }
+    }
+
     if (popup) popup.style.display = 'flex';
 }
 
@@ -463,9 +516,10 @@ function renderLists(searchTerm) {
                 const itemForPoster = { title: i.title, type: 'movie' };
                 const url = posterUrl(itemForPoster);
                 const name = i.title || 'Untitled';
+                const dataAttrs = `data-title="${(i.title || '').replace(/"/g, '&quot;')}" data-list-id="${list.id}"`;
                 return url
-                    ? `<div class="list-item-poster"><img src="${url}" alt="${name}"><span>${name}</span></div>`
-                    : `<div class="list-item">${name}</div>`;
+                    ? `<div class="list-item-poster list-item-clickable" ${dataAttrs}><img src="${url}" alt="${name}"><span>${name}</span></div>`
+                    : `<div class="list-item list-item-clickable" ${dataAttrs}>${name}</div>`;
             }).join('');
         } else {
             itemsHtml = '<p class="empty-message">' + (searchTerm ? 'No matching items.' : 'Empty list') + '</p>';

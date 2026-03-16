@@ -267,6 +267,26 @@ app.post('/api/dashboard/watch-history', authenticateToken, async (req, res) => 
     }
 });
 
+// Route: Delete from watch history
+app.delete('/api/dashboard/watch-history', authenticateToken, async (req, res) => {
+    const { title, type } = req.body;
+    const titleTrim = (title || '').trim();
+    if (!titleTrim) return res.status(400).json({ message: 'Title is required.' });
+    const contentType = type === 'show' ? 'show' : 'movie';
+    try {
+        const connection = await createConnection();
+        const [result] = await connection.execute(
+            'DELETE FROM watch_history WHERE user_email = ? AND title = ? AND type = ?',
+            [req.user.email, titleTrim, contentType]
+        );
+        await connection.end();
+        res.status(200).json({ message: 'Removed from watch history.', deleted: result.affectedRows > 0 });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error deleting from watch history.' });
+    }
+});
+
 // Route: Add rating
 app.post('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     const { title, type, rating, review } = req.body;
@@ -316,6 +336,26 @@ app.put('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     }
 });
 
+// Route: Delete rating
+app.delete('/api/dashboard/ratings', authenticateToken, async (req, res) => {
+    const { title, type } = req.body;
+    const titleTrim = (title || '').trim();
+    if (!titleTrim) return res.status(400).json({ message: 'Title is required.' });
+    const contentType = type === 'show' ? 'show' : 'movie';
+    try {
+        const connection = await createConnection();
+        const [result] = await connection.execute(
+            'DELETE FROM rating WHERE user_email = ? AND title = ? AND type = ?',
+            [req.user.email, titleTrim, contentType]
+        );
+        await connection.end();
+        res.status(200).json({ message: 'Rating removed.', deleted: result.affectedRows > 0 });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error deleting rating.' });
+    }
+});
+
 // Create list
 app.post('/api/dashboard/lists', authenticateToken, async (req, res) => {
   const { name } = req.body;
@@ -353,6 +393,31 @@ app.post('/api/dashboard/lists/:listId/items', authenticateToken, async (req, re
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error adding to list.' });
+    }
+});
+
+// Remove item from list
+app.delete('/api/dashboard/lists/:listId/items', authenticateToken, async (req, res) => {
+    const { listId } = req.params;
+    const { title } = req.body;
+    const titleTrim = (title || '').trim();
+    if (!titleTrim) return res.status(400).json({ message: 'Title is required.' });
+    try {
+        const connection = await createConnection();
+        const [lists] = await connection.execute('SELECT id FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
+        if (lists.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'List not found.' });
+        }
+        const [result] = await connection.execute(
+            'DELETE FROM list_item WHERE list_id = ? AND TRIM(title) = ?',
+            [listId, titleTrim]
+        );
+        await connection.end();
+        res.status(200).json({ message: 'Item removed from list.', deleted: result.affectedRows > 0 });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error removing from list.' });
     }
 });
 
@@ -450,6 +515,25 @@ app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: 'Error saving status.' });
+  }
+});
+
+// DELETE status
+app.delete('/api/dashboard/status', authenticateToken, async (req, res) => {
+  const { title } = req.body;
+  const titleTrim = (title || '').trim();
+  if (!titleTrim) return res.status(400).json({ message: 'Title is required.' });
+  try {
+    const connection = await createConnection();
+    const [result] = await connection.execute(
+      'DELETE FROM watch_status WHERE user_email = ? AND title = ?',
+      [req.user.email, titleTrim]
+    );
+    await connection.end();
+    return res.status(200).json({ message: 'Status removed.', deleted: result.affectedRows > 0 });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Error deleting status.' });
   }
 });
 
