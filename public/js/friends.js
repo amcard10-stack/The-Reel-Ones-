@@ -1,16 +1,14 @@
 //////////////////////////////////////////////////////////////
-// FRIENDS.JS
+// FRIENDS.JS - Basic friends tab (foundation for future features)
+// Future: view profiles, activity feed, compare ratings, notifications
 //////////////////////////////////////////////////////////////
 
 document.addEventListener('DOMContentLoaded', async () => {
-
     const token = localStorage.getItem('jwtToken');
-
     if (!token) {
         window.location.href = '/';
         return;
     }
-
     DataModel.setToken(token);
 
     const logoutButton = document.getElementById('logoutButton');
@@ -19,7 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const searchResults = document.getElementById('searchResults');
     const friendsList = document.getElementById('friendsList');
 
-    logoutButton.addEventListener('click', () => {
+    logoutButton?.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
         window.location.href = '/';
     });
@@ -32,7 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!friendsList) return;
         friendsList.innerHTML = '';
         if (friends.length === 0) {
-            friendsList.innerHTML = '<p>No friends added yet.</p>';
+            friendsList.innerHTML = '<p class="empty-message">No friends yet. Search for users to add.</p>';
             return;
         }
         friends.forEach(email => {
@@ -75,15 +73,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    friendSearch.addEventListener('input', () => {
+    friendSearch?.addEventListener('input', () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(runSearch, DEBOUNCE_MS);
     });
-    friendSearch.addEventListener('keypress', (e) => {
+    friendSearch?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') runSearch();
     });
-
-    addFriendBtn.addEventListener('click', () => runSearch());
+    addFriendBtn?.addEventListener('click', () => runSearch());
 
     loadFriends();
 });
