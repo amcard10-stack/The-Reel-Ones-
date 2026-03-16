@@ -77,7 +77,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/watch-history', {
                     method: 'GET',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 });
                 if (!response.ok) {
                     // Helpful debug
@@ -97,7 +97,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/ratings', {
                     method: 'GET',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 });
                 if (!response.ok) {
                     // console.error("getRatings failed:", response.status, await response.text());
@@ -116,7 +116,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/lists', {
                     method: 'GET',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 });
                 if (!response.ok) {
                     // console.error("getLists failed:", response.status, await response.text());
@@ -135,7 +135,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/ratings', {
                     method: 'POST',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, type: type || 'movie', rating, review }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -165,7 +165,7 @@ const DataModel = (function () {
             try {
                 const response = await fetch('/api/dashboard/watch-history', {
                     method: 'POST',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, type: type || 'movie' }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -242,7 +242,7 @@ deleteStatus: async function (title, type) {
             try {
                 const response = await fetch('/api/dashboard/lists', {
                     method: 'POST',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -257,7 +257,7 @@ deleteStatus: async function (title, type) {
             try {
                 const response = await fetch('/api/suggestions', {
                     method: 'GET',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 });
                 if (!response.ok) return null;
                 return await response.json();
@@ -272,7 +272,7 @@ deleteStatus: async function (title, type) {
             try {
                 const response = await fetch(`/api/dashboard/lists/${listId}/items`, {
                     method: 'POST',
-                    headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title }),
                 });
                 return { ok: response.ok, data: await response.json() };
@@ -286,7 +286,7 @@ getStatuses: async function () {
     try {
         const response = await fetch('/api/dashboard/status', {
             method: 'GET',
-            headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         });
 
                 if (!response.ok) {
@@ -307,7 +307,7 @@ setStatus: async function (title, type, status) {
     try {
         const response = await fetch('/api/dashboard/status', {
             method: 'POST',
-            headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, type, status }),
         });
 
