@@ -4,36 +4,27 @@
 // BETWEEN THE MODEL (datamodel.js) AND THE VIEW (dashboard.html)
 ////////////////////////////////////////////////////////////////
 
-//ADD ALL EVENT LISTENERS INSIDE DOMCONTENTLOADED
-//AT THE BOTTOM OF DOMCONTENTLOADED, ADD ANY CODE THAT NEEDS TO RUN IMMEDIATELY
 document.addEventListener('DOMContentLoaded', () => {
 
-    //////////////////////////////////////////
-    //ELEMENTS TO ATTACH EVENT LISTENERS
-    //////////////////////////////////////////
     const logoutButton = document.getElementById('logoutButton');
     const refreshButton = document.getElementById('refreshButton');
     const watchHistorySearch = document.getElementById('watchHistorySearch');
     const listsSearch = document.getElementById('listsSearch');
-    const addWatchHistoryBtn = document.getElementById('addWatchHistoryBtn');
+    const watchHistoryTitle = document.getElementById('watchHistoryTitle');
+    const watchHistoryType = document.getElementById('watchHistoryType');
+    const statusTitle = document.getElementById('statusTitle');
+    const statusType = document.getElementById('statusType');
+    const statusValue = document.getElementById('statusValue');
+    const listItemTitle = document.getElementById('listItemTitle');
+    const listSelect = document.getElementById('listSelect');
     const createListBtn = document.getElementById('createListBtn');
-    const addToListBtn = document.getElementById('addToListBtn');
-    //////////////////////////////////////////
-    //END ELEMENTS TO ATTACH EVENT LISTENERS
-    //////////////////////////////////////////
 
-
-    //////////////////////////////////////////
-    //EVENT LISTENERS
-    //////////////////////////////////////////
-    // Log out and redirect to login
-    logoutButton.addEventListener('click', () => {
+    logoutButton?.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
         window.location.href = '/';
     });
 
-    // Refresh dashboard when the button is clicked
-    refreshButton.addEventListener('click', async () => {
+    refreshButton?.addEventListener('click', async () => {
         renderDashboard();
     });
 
@@ -46,48 +37,102 @@ document.addEventListener('DOMContentLoaded', () => {
         listsSearch.addEventListener('keypress', (e) => { if (e.key === 'Enter') filterBySearch(); });
     }
 
-    addWatchHistoryBtn.addEventListener('click', async () => {
-        const title = document.getElementById('watchHistoryTitle').value.trim();
-        const type = document.getElementById('watchHistoryType').value;
-        if (!title) return;
-        const result = await DataModel.addWatchHistory(title, type);
-        if (result.ok) {
-            document.getElementById('watchHistoryTitle').value = '';
-            filterBySearch();
-        }
-    });
-
     createListBtn?.addEventListener('click', async () => {
         const name = document.getElementById('newListName')?.value?.trim() || '';
         if (!name) return;
-
         const result = await DataModel.createList(name);
         if (result.ok) {
-            const inp = document.getElementById('newListName');
-            if (inp) inp.value = '';
-            await renderDashboard();
+            document.getElementById('newListName').value = '';
+            filterBySearch();
         }
     });
 
-    addToListBtn.addEventListener('click', async () => {
-        const listId = document.getElementById('listSelect').value;
-        const title = document.getElementById('listItemTitle').value.trim();
-        if (!listId || !title) return;
-        const result = await DataModel.addToList(listId, title);
+    // TMDB search for Watch History add
+    setupTMDBSearch(watchHistoryTitle, watchHistoryType, 'watchHistoryResults', async (item) => {
+        const result = await DataModel.addWatchHistory(item.title, item.type);
         if (result.ok) {
-            document.getElementById('listItemTitle').value = '';
-            filterBySearch();
+            watchHistoryTitle.value = '';
+            document.getElementById('watchHistoryResults').innerHTML = '';
+            renderDashboard();
+        }
+    });
+
+    // TMDB search for Status add
+    setupTMDBSearch(statusTitle, statusType, 'statusResults', async (item) => {
+        const status = statusValue?.value;
+        if (!status) return;
+        const result = await DataModel.setStatus(item.title, item.type, status);
+        if (result.ok) {
+            statusTitle.value = '';
+            document.getElementById('statusResults').innerHTML = '';
+            renderDashboard();
+        }
+    });
+
+    // TMDB search for List item add
+    setupTMDBSearch(listItemTitle, null, 'listItemResults', async (item) => {
+        const listId = listSelect?.value;
+        if (!listId) {
+            alert('Please select a list first.');
+            return;
+        }
+        const result = await DataModel.addToList(listId, item.title);
+        if (result.ok) {
+            listItemTitle.value = '';
+            document.getElementById('listItemResults').innerHTML = '';
+            renderDashboard();
         }
     }, true);
-    //////////////////////////////////////////
-    //END EVENT LISTENERS
-    //////////////////////////////////////////
 
+    // Item popup
+    const popup = document.getElementById('itemPopup');
+    const popupClose = document.getElementById('popupClose');
+    const popupCancel = document.getElementById('popupCancel');
+    const popupSave = document.getElementById('popupSave');
+    const popupStars = document.getElementById('popupStars');
+    const popupStatusSection = document.getElementById('popupStatusSection');
+    const popupStatusSelect = document.getElementById('popupStatusSelect');
+    const popupDelete = document.getElementById('popupDelete');
+    popupClose?.addEventListener('click', () => { popup.style.display = 'none'; });
+    popupCancel?.addEventListener('click', () => { popup.style.display = 'none'; });
+    popup?.addEventListener('click', (e) => { if (e.target === popup) popup.style.display = 'none'; });
+    popupStars?.addEventListener('click', (e) => {
+        const span = e.target.closest('span[data-rating]');
+        if (!span) return;
+        const r = parseInt(span.dataset.rating, 10);
+        currentPopupItem._rating = r;
+        [...popupStars.querySelectorAll('span')].forEach((s, i) => {
+            s.textContent = i < r ? '★' : '☆';
+            s.classList.toggle('filled', i < r);
+        });
+    });
+    popupSave?.addEventListener('click', async () => {
+        if (!currentPopupItem) return;
+        const rating = currentPopupItem._rating || 0;
+        const review = document.getElementById('popupReview')?.value?.trim() || '';
+        const status = popupStatusSection?.style.display !== 'none' ? popupStatusSelect?.value : null;
+        if (rating >= 1 && rating <= 5) {
+            const hasExisting = (currentPopupItem.rating != null && currentPopupItem.rating > 0);
+            const result = hasExisting
+                ? await DataModel.updateRating(currentPopupItem.title, currentPopupItem.type, rating, review)
+                : await DataModel.addRating(currentPopupItem.title, currentPopupItem.type, rating, review);
+            if (result.ok) { /* ok */ }
+        }
+        if (status) {
+            await DataModel.setStatus(currentPopupItem.title, currentPopupItem.type, status);
+        }
+        popup.style.display = 'none';
+        renderDashboard();
+    });
+    popupDelete?.addEventListener('click', async () => {
+        if (!currentPopupItem) return;
+        if (!confirm('Remove this from watch history and status?')) return;
+        if (DataModel.deleteWatchHistory) await DataModel.deleteWatchHistory(currentPopupItem.title, currentPopupItem.type);
+        if (DataModel.deleteStatus) await DataModel.deleteStatus(currentPopupItem.title, currentPopupItem.type);
+        popup.style.display = 'none';
+        renderDashboard();
+    });
 
-    //////////////////////////////////////////////////////
-    //CODE THAT NEEDS TO RUN IMMEDIATELY AFTER PAGE LOADS
-    //////////////////////////////////////////////////////
-    // Initial check for the token
     const token = localStorage.getItem('jwtToken');
     if (!token) {
         window.location.href = '/';
@@ -95,12 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         DataModel.setToken(token);
         renderDashboard();
     }
-    //////////////////////////////////////////
-    //END CODE THAT NEEDS TO RUN IMMEDIATELY AFTER PAGE LOADS
-    //////////////////////////////////////////
-;
-//END OF DOMCONTENTLOADED
-
+});
 
 //////////////////////////////////////////
 //TMDB SEARCH HELPERS
@@ -220,11 +260,110 @@ function setupTMDBSearch(inputEl, typeSelectEl, resultsContainerId, onSelect, se
 //////////////////////////////////////////
 let cachedWatchHistory = [];
 let cachedLists = [];
+let cachedStatuses = [];
+let posterCache = {};
+let currentPopupItem = null;
+
+function showItemPopup(item) {
+    const whItem = cachedWatchHistory.find(w => w.title === item.title && (w.type || 'movie') === (item.type || 'movie'));
+    const merged = whItem ? { ...item, rating: whItem.rating, review: whItem.review, watched_at: whItem.watched_at } : item;
+    currentPopupItem = { ...merged, _rating: merged.rating || 0 };
+    const popup = document.getElementById('itemPopup');
+    const posterEl = document.getElementById('popupPoster');
+    const titleEl = document.getElementById('popupTitle');
+    const metaEl = document.getElementById('popupMeta');
+    const statusEl = document.getElementById('popupStatus');
+    const reviewEl = document.getElementById('popupReview');
+    const starsEl = document.getElementById('popupStars');
+    const statusSection = document.getElementById('popupStatusSection');
+    const statusSelect = document.getElementById('popupStatusSelect');
+    const placeholderEl = document.getElementById('popupPosterPlaceholder');
+
+    const url = posterUrl(merged);
+    if (posterEl) {
+        posterEl.src = url || '';
+        posterEl.style.display = url ? 'block' : 'none';
+    }
+    if (placeholderEl) placeholderEl.style.display = url ? 'none' : 'block';
+    if (titleEl) titleEl.textContent = merged.title || 'Untitled';
+    if (metaEl) metaEl.textContent = `${merged.type || 'movie'}${merged.watched_at ? ' · ' + new Date(merged.watched_at).toLocaleDateString() : ''}`;
+    if (statusEl) {
+        statusEl.textContent = merged.status ? `Status: ${merged.status.replace('_', ' ')}` : '';
+        statusEl.style.display = merged.status ? 'block' : 'none';
+    }
+    if (reviewEl) reviewEl.value = merged.review || '';
+    if (starsEl) {
+        const r = merged.rating || 0;
+        [...starsEl.querySelectorAll('span')].forEach((s, i) => {
+            s.textContent = i < r ? '★' : '☆';
+            s.classList.toggle('filled', i < r);
+        });
+    }
+    if (statusSection) statusSection.style.display = 'block';
+    if (statusSelect) statusSelect.value = merged.status || 'completed';
+    if (popup) popup.style.display = 'flex';
+}
 
 async function renderDashboard() {
     cachedWatchHistory = await DataModel.getWatchHistory();
     cachedLists = await DataModel.getLists();
+    cachedStatuses = DataModel.getStatuses ? await DataModel.getStatuses() : [];
+
+    const posterItems = [
+        ...cachedWatchHistory.map(w => ({ title: w.title, type: w.type || 'movie' })),
+        ...cachedStatuses.map(s => ({ title: s.title, type: s.type || 'movie' })),
+        ...cachedLists.flatMap(list => (list.items || []).map(i => ({ title: i.title, type: 'movie' })))
+    ];
+    posterCache = (DataModel.getPostersForItems && posterItems.length > 0) ? await DataModel.getPostersForItems(posterItems) : {};
+
     filterBySearch();
+    renderStatuses();
+}
+
+function posterUrl(item) {
+    const key = `${item.title}|${item.type || 'movie'}`;
+    const path = posterCache[key];
+    return path ? `https://image.tmdb.org/t/p/w154${path}` : null;
+}
+
+function renderStatuses() {
+    const watching = document.getElementById('statusWatching');
+    const completed = document.getElementById('statusCompleted');
+    const want = document.getElementById('statusWant');
+    if (!watching || !completed || !want) return;
+
+    const byStatus = {
+        watching: cachedStatuses.filter(s => s.status === 'watching'),
+        completed: cachedStatuses.filter(s => s.status === 'completed'),
+        want_to_watch: cachedStatuses.filter(s => s.status === 'want_to_watch')
+    };
+
+    [watching, completed, want].forEach(el => el.innerHTML = '');
+    byStatus.watching.forEach(s => {
+        watching.appendChild(createPosterCard(s));
+    });
+    byStatus.completed.forEach(s => {
+        completed.appendChild(createPosterCard(s));
+    });
+    byStatus.want_to_watch.forEach(s => {
+        want.appendChild(createPosterCard(s));
+    });
+
+    if (byStatus.watching.length === 0) watching.innerHTML = '<p class="empty-message">None</p>';
+    if (byStatus.completed.length === 0) completed.innerHTML = '<p class="empty-message">None</p>';
+    if (byStatus.want_to_watch.length === 0) want.innerHTML = '<p class="empty-message">None</p>';
+}
+
+function createPosterCard(item) {
+    const div = document.createElement('div');
+    div.classList.add('poster-card-small');
+    const url = posterUrl(item);
+    const name = item.title || 'Untitled';
+    div.innerHTML = url
+        ? `<img src="${url}" alt="${name}"><p>${name}</p>`
+        : `<div class="poster-placeholder"></div><p>${name}</p>`;
+    div.addEventListener('click', () => showItemPopup(item));
+    return div;
 }
 
 function filterBySearch() {
@@ -236,26 +375,36 @@ function filterBySearch() {
 
 function renderWatchHistory(searchTerm) {
     const el = document.getElementById('watchHistory');
-    if (!el) return;
-
-    let items = cachedWatchHistory || [];
+    let items = cachedWatchHistory;
     if (searchTerm) {
-        items = items.filter(item => (item.title || '').toLowerCase().includes(searchTerm));
+        items = items.filter(item => item.title.toLowerCase().includes(searchTerm));
     }
-
     el.innerHTML = '';
     if (items.length === 0) {
-        el.innerHTML = '<p class="empty-message">' +
-            (searchTerm ? 'No matching items in watch history.' : 'No watch history yet.') +
-            '</p>';
+        el.innerHTML = '<p class="empty-message">' + (searchTerm ? 'No matching items in watch history.' : 'No watch history yet.') + '</p>';
         return;
     }
-
     items.forEach(item => {
         const div = document.createElement('div');
-        div.classList.add('dashboard-item');
+        div.classList.add('dashboard-item', 'watch-history-item');
         const date = new Date(item.watched_at).toLocaleDateString();
-        div.innerHTML = `<strong>${item.title}</strong> <span class="meta">(${item.type}) · ${date}</span>`;
+        const ratingStars = item.rating
+            ? `<span class="rating-stars">${'★'.repeat(item.rating)}${'☆'.repeat(5 - item.rating)}</span>`
+            : '';
+        const poster = posterUrl(item);
+        const name = item.title || 'Untitled';
+        const posterHtml = poster
+            ? `<img src="${poster}" alt="${name}" class="wh-poster">`
+            : '<div class="poster-placeholder wh-poster"></div>';
+        div.innerHTML = `
+            <div class="wh-poster-wrap">${posterHtml}</div>
+            <div class="wh-details">
+                <strong>${item.title}</strong>
+                <span class="meta">(${item.type}) · ${date}${ratingStars ? ' · ' + ratingStars : ''}</span>
+                ${item.review ? `<p class="review-text">${item.review}</p>` : ''}
+            </div>
+        `;
+        div.addEventListener('click', () => showItemPopup({ ...item, status: 'completed' }));
         el.appendChild(div);
     });
 }
@@ -264,31 +413,23 @@ function renderLists(searchTerm) {
     const el = document.getElementById('listsContainer');
     const listSelect = document.getElementById('listSelect');
     const addToListForm = document.getElementById('addToListForm');
-    if (!el || !listSelect || !addToListForm) return;
-
-    const lists = cachedLists || [];
+    const lists = cachedLists;
     el.innerHTML = '';
-
     if (lists.length === 0) {
         el.innerHTML = '<p class="empty-message">No lists yet.</p>';
         addToListForm.style.display = 'none';
         return;
     }
-
     addToListForm.style.display = 'flex';
     listSelect.innerHTML = '<option value="">Select a list</option>';
-
     lists.forEach(list => {
         listSelect.innerHTML += `<option value="${list.id}">${list.name}</option>`;
-
         const listDiv = document.createElement('div');
         listDiv.classList.add('list-card');
-
         let items = list.items || [];
         if (searchTerm) {
-            items = items.filter(i => (i.title || '').toLowerCase().includes(searchTerm));
+            items = items.filter(i => i.title.toLowerCase().includes(searchTerm));
         }
-
         let itemsHtml = '';
         if (items.length > 0) {
             itemsHtml = items.map(i => {
@@ -296,97 +437,13 @@ function renderLists(searchTerm) {
                 const url = posterUrl(itemForPoster);
                 const name = i.title || 'Untitled';
                 return url
-                ? `<div class="list-item-poster" data-title="${name}" data-type="movie">
-                <img src="${url}" alt="${name}">
-                <span>${name}</span>
-                </div>`
-                : `<div class="list-item" data-title="${name}" data-type="movie">
-                ${name}
-            </div>`;
+                    ? `<div class="list-item-poster"><img src="${url}" alt="${name}"><span>${name}</span></div>`
+                    : `<div class="list-item">${name}</div>`;
             }).join('');
         } else {
             itemsHtml = '<p class="empty-message">' + (searchTerm ? 'No matching items.' : 'Empty list') + '</p>';
         }
-        listDiv.innerHTML = `<h3 class="list-name">${list.name}</h3><div class="list-items">${itemsHtml}</div>`;
+        listDiv.innerHTML = `<h3 class="list-name">${list.name}</h3><div class="list-items list-items-posters">${itemsHtml}</div>`;
         el.appendChild(listDiv);
-        
-        listDiv.querySelectorAll('.list-item-poster, .list-item').forEach(item => {
-
-    item.addEventListener('click', () => {
-
-        const title = item.dataset.title;
-        const type = item.dataset.type;
-
-        showItemPopup({ title, type });
-
-    });
-
-});
     });
 }
-
-// NEW: render statuses
-function renderStatuses(searchTerm) {
-    const elW = document.getElementById('statusWatching');
-    const elC = document.getElementById('statusCompleted');
-    const elWT = document.getElementById('statusWant');
-    if (!elW || !elC || !elWT) return;
-
-    const items = (cachedStatuses || []).filter(x =>
-        !searchTerm ? true : ((x.title || '').toLowerCase().includes(searchTerm))
-    );
-
-    const buckets = {
-        watching: [],
-        completed: [],
-        want_to_watch: [],
-    };
-
-    items.forEach(x => {
-        if (buckets[x.status]) buckets[x.status].push(x);
-    });
-
-    function renderInto(el, arr) {
-        el.innerHTML = '';
-        if (arr.length === 0) {
-            el.innerHTML = `<p class="empty-message">Empty</p>`;
-            return;
-        }
-
-        arr.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'status-card';
-            div.innerHTML = `
-        <div class="status-title">
-          <strong>${item.title}</strong>
-          <span class="meta">(${item.type})</span>
-        </div>
-
-        <select data-title="${encodeURIComponent(item.title)}" data-type="${item.type}">
-          <option value="watching" ${item.status === 'watching' ? 'selected' : ''}>watching</option>
-          <option value="completed" ${item.status === 'completed' ? 'selected' : ''}>completed</option>
-          <option value="want_to_watch" ${item.status === 'want_to_watch' ? 'selected' : ''}>want to watch</option>
-        </select>
-      `;
-            el.appendChild(div);
-
-            const select = div.querySelector('select');
-            select.addEventListener('change', async (e) => {
-                const newStatus = e.target.value;
-                const title = decodeURIComponent(e.target.dataset.title);
-                const type = e.target.dataset.type;
-
-                await DataModel.setStatus(title, type, newStatus);
-                await renderDashboard(); // titles move automatically
-            });
-        });
-    }
-
-    renderInto(elW, buckets.watching);
-    renderInto(elC, buckets.completed);
-    renderInto(elWT, buckets.want_to_watch);
-}
-//////////////////////////////////////////
-//END FUNCTIONS TO MANIPULATE THE DOM
-//////////////////////////////////////////
-});

@@ -189,16 +189,32 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Route: Get current user's watch history
+// Route: Get current user's watch history (with ratings when available)
 app.get('/api/dashboard/watch-history', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
         const [rows] = await connection.execute(
-            'SELECT id, title, type, watched_at FROM watch_history WHERE user_email = ? ORDER BY watched_at DESC LIMIT 20',
+            `SELECT wh.id, wh.title, wh.type, wh.watched_at, r.rating, r.review
+             FROM watch_history wh
+             LEFT JOIN rating r ON r.user_email = wh.user_email AND r.title = wh.title AND r.type = wh.type
+             WHERE wh.user_email = ?
+             ORDER BY wh.watched_at DESC
+             LIMIT 50`,
+            [req.user.email]
+        );
+        const [ratingOnlyRows] = await connection.execute(
+            `SELECT r.id, r.title, r.type, r.rated_at as watched_at, r.rating, r.review
+             FROM rating r
+             WHERE r.user_email = ?
+             AND NOT EXISTS (SELECT 1 FROM watch_history wh WHERE wh.user_email = r.user_email AND wh.title = r.title AND wh.type = r.type)
+             ORDER BY r.rated_at DESC`,
             [req.user.email]
         );
         await connection.end();
-        res.status(200).json({ watchHistory: rows });
+        const fromWh = rows.map(r => ({ ...r, watched_at: r.watched_at }));
+        const fromRatings = ratingOnlyRows.map(r => ({ ...r, id: r.id + 1000000 }));
+        const watchHistory = [...fromWh, ...fromRatings].sort((a, b) => new Date(b.watched_at) - new Date(a.watched_at)).slice(0, 50);
+        res.status(200).json({ watchHistory });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error retrieving watch history.' });
@@ -221,18 +237,30 @@ app.get('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     }
 });
 
-// Route: Add to watch history
+// Route: Add to watch history (also marks as completed in watch_status)
 app.post('/api/dashboard/watch-history', authenticateToken, async (req, res) => {
     const { title, type } = req.body;
-    if (!title) return res.status(400).json({ message: 'Title is required.' });
+    const titleTrim = (title || '').trim();
+    if (!titleTrim) return res.status(400).json({ message: 'Title is required.' });
+    const contentType = type === 'show' ? 'show' : 'movie';
     try {
         const connection = await createConnection();
         await connection.execute(
             'INSERT INTO watch_history (user_email, title, type) VALUES (?, ?, ?)',
-            [req.user.email, title, type || 'movie']
+            [req.user.email, titleTrim, contentType]
         );
+        try {
+            await connection.execute(
+                `INSERT INTO watch_status (user_email, title, type, status)
+                 VALUES (?, ?, ?, 'completed')
+                 ON DUPLICATE KEY UPDATE status = 'completed'`,
+                [req.user.email, titleTrim, contentType]
+            );
+        } catch (statusErr) {
+            if (statusErr.code !== 'ER_NO_SUCH_TABLE') console.error('watch_status:', statusErr.message);
+        }
         await connection.end();
-        res.status(201).json({ message: 'Added to watch history.' });
+        res.status(201).json({ message: 'Added to watch history and marked as completed.' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error adding to watch history.' });
@@ -359,16 +387,33 @@ app.get('/api/dashboard/lists', authenticateToken, async (req, res) => {
 // WATCH STATUS (User Story) — GET + POST (UPSERT)
 //////////////////////////////////////////////////////
 
-// GET all statuses for current user
+// GET all statuses for current user (syncs watch_history → completed first)
 app.get('/api/dashboard/status', authenticateToken, async (req, res) => {
   try {
     const connection = await createConnection();
+    const email = req.user.email;
+    try {
+      const [whRows] = await connection.execute(
+        'SELECT title, type FROM watch_history WHERE user_email = ?',
+        [email]
+      );
+      for (const row of whRows) {
+        await connection.execute(
+          `INSERT INTO watch_status (user_email, title, type, status)
+           VALUES (?, ?, ?, 'completed')
+           ON DUPLICATE KEY UPDATE status = 'completed'`,
+          [email, row.title, row.type || 'movie']
+        );
+      }
+    } catch (syncErr) {
+      if (syncErr.code !== 'ER_NO_SUCH_TABLE') console.error('watch_status sync:', syncErr.message);
+    }
     const [rows] = await connection.execute(
       `SELECT id, title, type, status, updated_at
        FROM watch_status
        WHERE user_email = ?
        ORDER BY updated_at DESC`,
-      [req.user.email]
+      [email]
     );
     await connection.end();
     return res.status(200).json({ statuses: rows });
@@ -513,43 +558,26 @@ app.get('/api/trending/shows', authenticateToken, async (req, res) => {
     }
 });
 
-<<<<<<< HEAD
-=======
-//         const data = await tmdbRes.json();
-//         res.status(200).json(data);
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({ message: 'Error calling TMDB.' });
-//     }
-// });
-// Route: Set or Update Watch Status
-app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
-    const { title, type, status } = req.body;
-
-    if (!title || !status) {
-        return res.status(400).json({ message: 'Title and status required.' });
-    }
-
-    try {
-        const connection = await createConnection();
-
-        await connection.execute(
-            `INSERT INTO watch_status (user_email, title, type, status)
-             VALUES (?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE status = VALUES(status)`,
-            [req.user.email, title, type || 'movie', status]
-        );
-
-        await connection.end();
-
-        res.status(200).json({ message: 'Status updated.' });
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error updating status.' });
-    }
+// TMDB: Search movies or TV
+app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
+  const q = (req.query.q || '').trim();
+  const type = req.query.type || 'movie';
+  if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+    return res.status(503).json({ message: 'TMDB API key not configured.' });
+  }
+  try {
+    const tmdbType = type === 'tv' ? 'tv' : 'movie';
+    const url = `https://api.themoviedb.org/3/search/${tmdbType}?api_key=${process.env.TMDB_API_KEY}&query=${encodeURIComponent(q)}`;
+    const tmdbRes = await fetch(url);
+    if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+    const data = await tmdbRes.json();
+    res.status(200).json(data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error searching TMDB.' });
+  }
 });
->>>>>>> 0f561ca (film status)
+
 //////////////////////////////////////
 // END ROUTES TO HANDLE API REQUESTS
 //////////////////////////////////////
