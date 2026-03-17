@@ -82,7 +82,7 @@
         <h2>My Lists</h2>
         <input type="text" id="listsSearch" placeholder="Search lists..." class="section-search">
         <div class="quick-add">
-            <input type="text" id="newListName" placeholder="List name (e.g. Watchlist)">
+            <input type="text" id="newListName" placeholder="List name (e.g. Favorites, Date Night, Horror)">
             <button id="createListBtn">Create List</button>
         </div>
         <div id="addToListForm" class="add-section" style="display:none;">
@@ -128,6 +128,10 @@
           <option value="completed">Completed</option>
           <option value="want_to_watch">Want to Watch</option>
         </select>
+      </div>
+      <div class="popup-section" id="popupListsSection" style="display:none;">
+        <label>In lists</label>
+        <div id="popupListsContainer" class="popup-lists-btns"></div>
       </div>
     </div>
     <div class="popup-actions">
