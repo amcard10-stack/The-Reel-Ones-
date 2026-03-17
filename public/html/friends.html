@@ -67,25 +67,31 @@
         </div>
 
         <!-- TABS -->
-        <div class="popup-tabs">
-            <button class="tab-btn active" data-tab="ratings">Ratings</button>
-            <button class="tab-btn" data-tab="messages">Messages</button>
-        </div>
+    <div class="popup-tabs">
+        <button class="tab-btn active" data-tab="ratings">Ratings</button>
+        <button class="tab-btn" data-tab="watchlists">Watchlists</button>
+        <button class="tab-btn" data-tab="messages">Messages</button>
+    </div>
 
-        <!-- RATINGS TAB -->
-        <div id="tab-ratings" class="tab-content">
-            <div id="friendRatingsList" class="friend-ratings-list"></div>
-        </div>
+<!-- RATINGS TAB -->
+    <div id="tab-ratings" class="tab-content">
+        <div id="friendRatingsList" class="friend-ratings-list"></div>
+    </div>
 
-        <!-- MESSAGES TAB -->
-        <div id="tab-messages" class="tab-content" style="display:none;">
-            <div id="messagesList" class="messages-list"></div>
-            <div class="message-input-row">
-                <input type="text" id="messageInput" placeholder="Send a message about a movie or show...">
-                <button id="sendMessageBtn" class="primary-btn">Send</button>
-            </div>
+<!-- WATCHLISTS TAB -->
+    <div id="tab-watchlists" class="tab-content" style="display:none;">
+        <div id="friendListsList" class="friend-lists-list"></div>
+    </div>
+
+<!-- MESSAGES TAB -->
+    <div id="tab-messages" class="tab-content" style="display:none;">
+        <div id="messagesList" class="messages-list"></div>
+        <div class="message-input-row">
+            <input type="text" id="messageInput" placeholder="Send a message about a movie or show...">
+            <button id="sendMessageBtn" class="primary-btn">Send</button>
         </div>
     </div>
+</div>
 </div>
 
 <script src="/js/datamodel.js"></script>

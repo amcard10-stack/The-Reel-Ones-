@@ -22,9 +22,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentFriendEmail = null;
     let debounceTimer = null;
 
-    // =========================
     // SEARCH
-    // =========================
+  
     async function runSearch() {
         const query = friendSearch?.value?.trim() || '';
         searchResults.innerHTML = '';
@@ -84,9 +83,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     friendSearch?.addEventListener('keypress', (e) => { if (e.key === 'Enter') runSearch(); });
     searchBtn?.addEventListener('click', runSearch);
 
-    // =========================
     // FRIEND REQUESTS
-    // =========================
     async function sendFriendRequest(receiverEmail) {
         try {
             const res = await fetch('/api/friends/request', {
@@ -163,9 +160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // =========================
     // FRIENDS LIST
-    // =========================
     async function loadFriends() {
         try {
             const res = await fetch('/api/friends', {
@@ -208,9 +203,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // =========================
     // FRIEND POPUP
-    // =========================
     async function openFriendPopup(friend) {
         currentFriendEmail = friend.email;
         const popup = document.getElementById('friendPopup');
@@ -248,12 +241,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            switchTab(btn.dataset.tab);
-            if (btn.dataset.tab === 'messages' && currentFriendEmail) {
-                loadMessages(currentFriendEmail);
-            }
-        });
+    btn.addEventListener('click', () => {
+        switchTab(btn.dataset.tab);
+        if (btn.dataset.tab === 'messages' && currentFriendEmail) {
+            loadMessages(currentFriendEmail);
+        }
+        if (btn.dataset.tab === 'watchlists' && currentFriendEmail) {
+            loadFriendLists(currentFriendEmail);
+        }
+    });
     });
 
     function switchTab(tab) {
@@ -263,9 +259,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById(`tab-${tab}`).style.display = 'block';
     }
 
-    // =========================
     // FRIEND RATINGS
-    // =========================
     async function loadFriendRatings(email) {
         const list = document.getElementById('friendRatingsList');
         list.innerHTML = '<p class="empty-message">Loading...</p>';
@@ -300,9 +294,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // =========================
+    //friends watchlists
+    async function loadFriendLists(email) {
+        const container = document.getElementById('friendListsList');
+        ontainer.innerHTML = '<p class="empty-message">Loading...</p>';
+        try {
+            const res = await fetch(`/api/friends/${encodeURIComponent(email)}/lists`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const lists = data.lists || [];
+            container.innerHTML = '';
+            if (lists.length === 0) {
+                container.innerHTML = '<p class="empty-message">No lists yet.</p>';
+                return;
+            }
+            lists.forEach(list => {
+                const div = document.createElement('div');
+                div.classList.add('friend-list-card');
+                const items = list.items || [];
+                const itemsHtml = items.length > 0
+                    ? items.map(i => `<span class="list-item-tag">${i.title}</span>`).join('')
+                    : '<span class="empty-message" style="font-size:12px;">Empty list</span>';
+                div.innerHTML = `
+                    <h4 class="friend-list-name">${list.name}</h4>
+                    <div class="friend-list-items">${itemsHtml}</div>
+                `;
+                container.appendChild(div);
+            });
+        } catch (err) {
+            container.innerHTML = '<p class="empty-message">Failed to load lists.</p>';
+        }
+    }
+
+
     // MESSAGES
-    // =========================
     async function loadMessages(email) {
         const list = document.getElementById('messagesList');
         list.innerHTML = '<p class="empty-message">Loading...</p>';

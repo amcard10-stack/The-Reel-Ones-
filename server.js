@@ -880,6 +880,40 @@ app.get('/api/friends/:email/ratings', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error retrieving friend ratings.' });
     }
 });
+// Get a friend's lists
+app.get('/api/friends/:email/lists', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    try {
+        const connection = await createConnection();
+        const [friendCheck] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, email, email, req.user.email]
+        );
+        if (friendCheck.length === 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'Not friends.' });
+        }
+        const [lists] = await connection.execute(
+            'SELECT id, name, created_at FROM list WHERE user_email = ? ORDER BY created_at ASC',
+            [email]
+        );
+        const listsWithItems = [];
+        for (const list of lists) {
+            const [items] = await connection.execute(
+                'SELECT id, title, added_at FROM list_item WHERE list_id = ? ORDER BY added_at DESC',
+                [list.id]
+            );
+            listsWithItems.push({ ...list, items });
+        }
+        await connection.end();
+        res.status(200).json({ lists: listsWithItems });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving friend lists.' });
+    }
+});
 
 // Send message to friend
 app.post('/api/friends/message', authenticateToken, async (req, res) => {

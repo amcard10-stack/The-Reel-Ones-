@@ -409,3 +409,36 @@ body {
     background: rgba(0,0,0,0.2);
     color: #F2F4F7;
 }
+
+.friend-lists-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.friend-list-card {
+    padding: 12px;
+    margin-bottom: 10px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+
+.friend-list-name {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #F2F4F7;
+}
+
+.friend-list-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.list-item-tag {
+    background: rgba(255,255,255,0.08);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #D9DEE4;
+}
