@@ -139,6 +139,33 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         DataModel.setToken(token);
         renderDashboard();
+
+
+// profile popup
+    async function checkProfileComplete() {
+        try {
+            const res = await fetch('/api/profile', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const isIncomplete = !data.firstName || !data.lastName || !data.profilePicture || !data.username;
+            if (isIncomplete) {
+                document.getElementById('profilePrompt').style.display = 'flex';
+            }
+        } catch (err) {
+            console.error('Profile check failed:', err);
+            }
+        }
+
+        document.getElementById('profilePromptGoNow').addEventListener('click', () => {
+             window.location.href = '/profile';
+        });
+
+        document.getElementById('profilePromptLater').addEventListener('click', () => {
+            document.getElementById('profilePrompt').style.display = 'none';
+}       );
+
+        checkProfileComplete();
     }
 });
 

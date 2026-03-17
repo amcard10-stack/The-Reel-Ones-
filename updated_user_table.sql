@@ -7,5 +7,8 @@ CREATE TABLE `user` (
   `last_name` varchar(100) DEFAULT NULL,
   `display_name` varchar(100) DEFAULT NULL,
   `bio` text DEFAULT NULL,
-   PRIMARY KEY (`email`)
+  `saved_provider` varchar(20) DEFAULT NULL,
+  `username` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`email`),
+  UNIQUE KEY `username` (`username`)
 ) 

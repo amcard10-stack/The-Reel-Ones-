@@ -458,7 +458,7 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
         const [rows] = await connection.execute(
-            'SELECT email, first_name AS firstName, last_name AS lastName, bio, profile_picture AS profilePicture FROM user WHERE email = ?',
+            'SELECT email, username, first_name AS firstName, last_name AS lastName, bio, profile_picture AS profilePicture FROM user WHERE email = ?',
             [req.user.email]
         );
         await connection.end();
@@ -472,14 +472,24 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
 
 // PUT profile (update name, bio, password, profile picture)
 app.put('/api/profile', authenticateToken, upload.single('profilePicture'), async (req, res) => {
-    const { firstName, lastName, bio, newPassword } = req.body;
+    const { firstName, lastName, bio, newPassword, username } = req.body;
 
     try {
         const connection = await createConnection();
 
-        // Handle optional password update
+        if (username && username.trim()) {                      
+            const [existing] = await connection.execute(        
+                'SELECT email FROM user WHERE username = ? AND email != ?', 
+                [username.trim(), req.user.email]               
+            );                                                  
+            if (existing.length > 0) {                         
+                await connection.end();                         
+                return res.status(409).json({ message: 'Username is already taken.' }); 
+            }                                                   
+        }   
+
         let passwordClause = '';
-        const params = [firstName, lastName, bio];
+        const params = [username, firstName, lastName, bio];
 
         if (newPassword && newPassword.trim().length >= 6) {
             const hashed = await bcrypt.hash(newPassword, 10);
@@ -487,7 +497,6 @@ app.put('/api/profile', authenticateToken, upload.single('profilePicture'), asyn
             params.push(hashed);
         }
 
-        // Handle optional profile picture
         let picClause = '';
         if (req.file) {
             const picPath = `/images/${req.file.filename}`;
@@ -498,7 +507,7 @@ app.put('/api/profile', authenticateToken, upload.single('profilePicture'), asyn
         params.push(req.user.email);
 
         await connection.execute(
-            `UPDATE user SET first_name = ?, last_name = ?, bio = ?${passwordClause}${picClause} WHERE email = ?`,
+            `UPDATE user SET username = ?, first_name = ?, last_name = ?, bio = ?${passwordClause}${picClause} WHERE email = ?`,
             params
         );
 

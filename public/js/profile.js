@@ -26,6 +26,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const data = await response.json();
             document.getElementById("firstNameInput").value = data.firstName || "";
             document.getElementById("lastNameInput").value = data.lastName || "";
+            document.getElementById("usernameInput").value = data.username || "";
             document.getElementById("emailInput").value = data.email || "";
             document.getElementById("bioInput").value = data.bio || "";
             if (data.profilePicture) {
@@ -79,6 +80,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const bio = document.getElementById("bioInput").value;
         const firstName = document.getElementById("firstNameInput").value;
         const lastName = document.getElementById("lastNameInput").value;
+        const username = document.getElementById("usernameInput").value;
         const newPassword = document.getElementById("newPasswordInput").value;
         const confirmPassword = document.getElementById("confirmPasswordInput").value;
 
@@ -95,6 +97,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         formData.append("bio", bio);
         formData.append("firstName", firstName);
         formData.append("lastName", lastName);
+        formData.append("username", username);
         formData.append("newPassword", newPassword);
         const file = document.getElementById("profilePicInput").files[0];
 
@@ -110,10 +113,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                 },
                 body: formData
             });
+            const result = await response.json();
             if (response.ok) {
                 alert("Profile updated successfully!");
+            } else if (response.status === 409) {
+                alert("That username is already taken. Please choose a different one.");
             } else {
-                alert("Error updating profile.");
+                alert(result.message || "Error updating profile.");
             }
         } catch (error) {
             console.error(error);
