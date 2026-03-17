@@ -29,18 +29,62 @@
         <button onclick="window.location.href='/suggestions'">Suggestions</button>
     </nav>
 
+    <!-- SEARCH -->
     <div class="section">
-        <h2>Add Friend</h2>
+        <h2>Find Friends</h2>
         <div class="add-friend-row">
-            <input type="text" id="friendSearch" placeholder="Search by email..." class="section-search">
-            <button id="addFriendBtn" class="primary-btn">Search</button>
+            <input type="text" id="friendSearch" placeholder="Search by username or email..." class="section-search">
+            <button id="searchBtn" class="primary-btn">Search</button>
         </div>
         <div id="searchResults" class="search-results"></div>
     </div>
 
+    <!-- PENDING REQUESTS -->
+    <div class="section">
+        <h2>Pending Requests <span id="pendingCount" class="badge"></span></h2>
+        <div id="pendingList" class="friends-list"></div>
+    </div>
+
+    <!-- FRIENDS LIST -->
     <div class="section">
         <h2>My Friends</h2>
         <div id="friendsList" class="friends-list"></div>
+    </div>
+</div>
+
+<!-- Friend detail popup (ratings + messages) -->
+<div id="friendPopup" class="popup-overlay" style="display:none;">
+    <div class="popup-content">
+        <button class="popup-close" id="friendPopupClose">&times;</button>
+        <div class="popup-header">
+            <img id="friendPopupPic" class="popup-poster" src="" alt="" style="display:none; border-radius:50%;">
+            <div id="friendPopupPlaceholder" class="popup-poster-placeholder" style="border-radius:50%;"></div>
+            <div class="popup-info">
+                <h3 id="friendPopupName"></h3>
+                <p id="friendPopupUsername" class="popup-meta"></p>
+                <p id="friendPopupEmail" class="popup-meta"></p>
+            </div>
+        </div>
+
+        <!-- TABS -->
+        <div class="popup-tabs">
+            <button class="tab-btn active" data-tab="ratings">Ratings</button>
+            <button class="tab-btn" data-tab="messages">Messages</button>
+        </div>
+
+        <!-- RATINGS TAB -->
+        <div id="tab-ratings" class="tab-content">
+            <div id="friendRatingsList" class="friend-ratings-list"></div>
+        </div>
+
+        <!-- MESSAGES TAB -->
+        <div id="tab-messages" class="tab-content" style="display:none;">
+            <div id="messagesList" class="messages-list"></div>
+            <div class="message-input-row">
+                <input type="text" id="messageInput" placeholder="Send a message about a movie or show...">
+                <button id="sendMessageBtn" class="primary-btn">Send</button>
+            </div>
+        </div>
     </div>
 </div>
 

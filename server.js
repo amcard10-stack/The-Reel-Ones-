@@ -643,6 +643,209 @@ app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
   }
 });
 
+//friends
+
+// Search users by username or email
+app.get('/api/friends/search', authenticateToken, async (req, res) => {
+    const query = (req.query.q || '').trim();
+    if (!query) return res.status(400).json({ message: 'Query required.' });
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT email, username, first_name AS firstName, last_name AS lastName, profile_picture AS profilePicture
+             FROM user
+             WHERE (username LIKE ? OR email LIKE ?) AND email != ?
+             LIMIT 10`,
+            [`%${query}%`, `%${query}%`, req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ users: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error searching users.' });
+    }
+});
+
+// Send friend request
+app.post('/api/friends/request', authenticateToken, async (req, res) => {
+    const { receiverEmail } = req.body;
+    if (!receiverEmail) return res.status(400).json({ message: 'Receiver email required.' });
+    if (receiverEmail === req.user.email) return res.status(400).json({ message: 'You cannot add yourself.' });
+    try {
+        const connection = await createConnection();
+        // Check if request already exists
+        const [existing] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE sender_email = ? AND receiver_email = ? AND status = 'pending'`,
+            [req.user.email, receiverEmail]
+        );
+        if (existing.length > 0) {
+            await connection.end();
+            return res.status(409).json({ message: 'Friend request already sent.' });
+        }
+        // Check if already friends
+        const [alreadyFriends] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, receiverEmail, receiverEmail, req.user.email]
+        );
+        if (alreadyFriends.length > 0) {
+            await connection.end();
+            return res.status(409).json({ message: 'Already friends.' });
+        }
+        await connection.execute(
+            'INSERT INTO friend_request (sender_email, receiver_email) VALUES (?, ?)',
+            [req.user.email, receiverEmail]
+        );
+        await connection.end();
+        res.status(201).json({ message: 'Friend request sent.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error sending friend request.' });
+    }
+});
+
+// Get pending requests (received by current user)
+app.get('/api/friends/requests', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT fr.id, fr.sender_email, fr.created_at,
+                    u.username, u.first_name AS firstName, u.last_name AS lastName, u.profile_picture AS profilePicture
+             FROM friend_request fr
+             JOIN user u ON u.email = fr.sender_email
+             WHERE fr.receiver_email = ? AND fr.status = 'pending'
+             ORDER BY fr.created_at DESC`,
+            [req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ requests: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving requests.' });
+    }
+});
+
+// Accept or decline friend request
+app.put('/api/friends/request/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!['accepted', 'declined'].includes(status)) return res.status(400).json({ message: 'Invalid status.' });
+    try {
+        const connection = await createConnection();
+        const [result] = await connection.execute(
+            `UPDATE friend_request SET status = ? WHERE id = ? AND receiver_email = ?`,
+            [status, id, req.user.email]
+        );
+        await connection.end();
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Request not found.' });
+        res.status(200).json({ message: `Request ${status}.` });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error updating request.' });
+    }
+});
+
+// Get friends list
+app.get('/api/friends', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT u.email, u.username, u.first_name AS firstName, u.last_name AS lastName, u.profile_picture AS profilePicture
+             FROM friend_request fr
+             JOIN user u ON u.email = CASE
+                 WHEN fr.sender_email = ? THEN fr.receiver_email
+                 ELSE fr.sender_email
+             END
+             WHERE (fr.sender_email = ? OR fr.receiver_email = ?) AND fr.status = 'accepted'`,
+            [req.user.email, req.user.email, req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ friends: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving friends.' });
+    }
+});
+
+// Get a friend's ratings
+app.get('/api/friends/:email/ratings', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    try {
+        const connection = await createConnection();
+        // Verify they are actually friends
+        const [friendCheck] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, email, email, req.user.email]
+        );
+        if (friendCheck.length === 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'Not friends.' });
+        }
+        const [rows] = await connection.execute(
+            'SELECT title, type, rating, review, rated_at FROM rating WHERE user_email = ? ORDER BY rated_at DESC',
+            [email]
+        );
+        await connection.end();
+        res.status(200).json({ ratings: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving friend ratings.' });
+    }
+});
+
+// Send message to friend
+app.post('/api/friends/message', authenticateToken, async (req, res) => {
+    const { receiverEmail, content } = req.body;
+    if (!receiverEmail || !content) return res.status(400).json({ message: 'Receiver and content required.' });
+    try {
+        const connection = await createConnection();
+        // Verify they are friends
+        const [friendCheck] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, receiverEmail, receiverEmail, req.user.email]
+        );
+        if (friendCheck.length === 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'Not friends.' });
+        }
+        await connection.execute(
+            'INSERT INTO message (sender_email, receiver_email, content) VALUES (?, ?, ?)',
+            [req.user.email, receiverEmail, content]
+        );
+        await connection.end();
+        res.status(201).json({ message: 'Message sent.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error sending message.' });
+    }
+});
+
+// Get messages between current user and a friend
+app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT id, sender_email, receiver_email, content, sent_at
+             FROM message
+             WHERE (sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?)
+             ORDER BY sent_at ASC`,
+            [req.user.email, email, email, req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ messages: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving messages.' });
+    }
+});
+
 //////////////////////////////////////
 // END ROUTES TO HANDLE API REQUESTS
 //////////////////////////////////////

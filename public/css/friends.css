@@ -178,3 +178,234 @@ body {
     font-style: italic;
     padding: 16px;
 }
+
+.badge {
+    background: #E26A6A;
+    color: white;
+    border-radius: 50%;
+    padding: 2px 8px;
+    font-size: 12px;
+    margin-left: 8px;
+}
+
+.friend-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+
+.friend-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.friend-avatar-placeholder {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    flex-shrink: 0;
+}
+
+.friend-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.friend-info .meta {
+    font-size: 12px;
+    color: #D9DEE4;
+}
+
+.request-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.accept-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: none;
+    background-color: #28a745;
+    color: white;
+    cursor: pointer;
+}
+
+.accept-btn:hover { background-color: #218838; }
+
+.decline-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: none;
+    background-color: rgba(255,255,255,0.1);
+    color: #F2F4F7;
+    cursor: pointer;
+}
+
+.decline-btn:hover { background-color: rgba(255,255,255,0.2); }
+
+.view-friend-btn {
+    flex-shrink: 0;
+}
+
+/* Popup */
+.popup-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.popup-content {
+    background: #1E3A5F;
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 480px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.popup-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: #D9DEE4;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.popup-header {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    align-items: center;
+}
+
+.popup-poster {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.popup-poster-placeholder {
+    width: 60px;
+    height: 60px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 50%;
+}
+
+.popup-info h3 { margin: 0 0 4px 0; }
+.popup-meta { color: #D9DEE4; font-size: 13px; margin: 0; }
+
+/* Tabs */
+.popup-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 12px;
+}
+
+.tab-btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(255,255,255,0.06);
+    color: #D9DEE4;
+    cursor: pointer;
+}
+
+.tab-btn.active {
+    background: #3A6EA5;
+    color: #F2F4F7;
+}
+
+/* Ratings */
+.friend-ratings-list { max-height: 300px; overflow-y: auto; }
+
+.friend-rating-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+}
+
+.type-badge {
+    font-size: 11px;
+    background: rgba(255,255,255,0.1);
+    padding: 2px 8px;
+    border-radius: 6px;
+    margin: 0 6px;
+}
+
+.rating-stars { color: #E26A6A; }
+.review-text { margin: 6px 0 0 0; font-size: 13px; color: #D9DEE4; }
+
+/* Messages */
+.messages-list {
+    max-height: 250px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 4px;
+}
+
+.message-bubble {
+    max-width: 75%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 14px;
+}
+
+.message-bubble p { margin: 0 0 4px 0; }
+.message-time { font-size: 11px; opacity: 0.6; }
+
+.message-bubble.mine {
+    align-self: flex-end;
+    background: #3A6EA5;
+    color: #F2F4F7;
+    border-bottom-right-radius: 4px;
+}
+
+.message-bubble.theirs {
+    align-self: flex-start;
+    background: rgba(255,255,255,0.08);
+    color: #F2F4F7;
+    border-bottom-left-radius: 4px;
+}
+
+.message-input-row {
+    display: flex;
+    gap: 10px;
+}
+
+.message-input-row input {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.2);
+    color: #F2F4F7;
+}
