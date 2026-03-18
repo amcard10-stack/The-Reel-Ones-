@@ -841,22 +841,6 @@ app.get('/api/friends/requests/count', authenticateToken, async (req, res) => {
     }
 });
 
-// Get unread message count (for notification badge)
-app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res) => {
-    try {
-        const connection = await createConnection();
-        const [[row]] = await connection.execute(
-            'SELECT COUNT(*) AS count FROM message WHERE receiver_email = ? AND read_at IS NULL',
-            [req.user.email]
-        );
-        await connection.end();
-        res.status(200).json({ count: row?.count ?? 0 });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ count: 0 });
-    }
-});
-
 // Accept or decline friend request
 app.put('/api/friends/request/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
@@ -1055,43 +1039,6 @@ app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error retrieving messages.' });
-    }
-});
-
-// Mark a friend's thread as read
-app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res) => {
-    const { email } = req.params;
-    if (!email || email === req.user.email) return res.status(400).json({ message: 'Invalid friend.' });
-
-    try {
-        const connection = await createConnection();
-
-        // Verify they are actually friends (accepted request)
-        const [friendCheck] = await connection.execute(
-            `SELECT id FROM friend_request
-             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
-               AND status = 'accepted'`,
-            [req.user.email, email, email, req.user.email]
-        );
-        if (friendCheck.length === 0) {
-            await connection.end();
-            return res.status(403).json({ message: 'Not friends.' });
-        }
-
-        await connection.execute(
-            `UPDATE message
-             SET read_at = CURRENT_TIMESTAMP
-             WHERE receiver_email = ?
-               AND sender_email = ?
-               AND read_at IS NULL`,
-            [req.user.email, email]
-        );
-
-        await connection.end();
-        return res.status(200).json({ message: 'Thread marked as read.' });
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Error marking thread as read.' });
     }
 });
 
