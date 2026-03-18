@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const friendsList = document.getElementById('friendsList');
     const pendingList = document.getElementById('pendingList');
     const pendingCount = document.getElementById('pendingCount');
+    const friendMessageBadge = document.getElementById('friendMessageBadge');
+    const friendMessageTabBadge = document.getElementById('friendMessageTabBadge');
 
     logoutButton?.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
@@ -186,6 +188,48 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         } catch (err) {
             console.error(err);
+        }
+    }
+
+    async function markThreadRead(friendEmail) {
+        try {
+            await fetch(`/api/friends/${encodeURIComponent(friendEmail)}/messages/read`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+        } catch (e) {
+            // Ignore; message unread notifications may just be slightly delayed.
+        }
+    }
+
+    async function updateUnreadMessageBadges() {
+        if (!friendMessageBadge && !friendMessageTabBadge) return;
+        try {
+            const res = await fetch('/api/friends/messages/unread/count', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const count = data.count ?? 0;
+
+            const label = count > 0 ? (count > 99 ? '99+' : String(count)) : '';
+
+            if (friendMessageBadge) {
+                friendMessageBadge.textContent = label;
+                friendMessageBadge.classList.toggle('has-count', count > 0);
+            }
+            if (friendMessageTabBadge) {
+                friendMessageTabBadge.textContent = label;
+                friendMessageTabBadge.classList.toggle('has-count', count > 0);
+            }
+        } catch (e) {
+            if (friendMessageBadge) {
+                friendMessageBadge.textContent = '';
+                friendMessageBadge.classList.remove('has-count');
+            }
+            if (friendMessageTabBadge) {
+                friendMessageTabBadge.textContent = '';
+                friendMessageTabBadge.classList.remove('has-count');
+            }
         }
     }
 
@@ -444,6 +488,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const list = document.getElementById('messagesList');
         list.innerHTML = '<p class="empty-message">Loading...</p>';
         try {
+            if (email) await markThreadRead(email);
+            await updateUnreadMessageBadges();
+
             const res = await fetch(`/api/friends/${encodeURIComponent(email)}/messages`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -518,6 +565,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     setInterval(pollPendingRequestCount, 10000);
 
+    // Poll unread message count so badges stay fresh while this page is open.
+    let lastUnreadMessageCount = null;
+    async function pollUnreadMessageCount() {
+        try {
+            const res = await fetch('/api/friends/messages/unread/count', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const count = data.count ?? 0;
+            if (lastUnreadMessageCount === null) {
+                lastUnreadMessageCount = count;
+                await updateUnreadMessageBadges();
+                return;
+            }
+            if (count !== lastUnreadMessageCount) {
+                lastUnreadMessageCount = count;
+                await updateUnreadMessageBadges();
+            }
+        } catch (err) {
+            // ignore polling failures
+        }
+    }
+    setInterval(pollUnreadMessageCount, 10000);
+
     loadPendingRequests();
     loadFriends();
+    updateUnreadMessageBadges();
 });
