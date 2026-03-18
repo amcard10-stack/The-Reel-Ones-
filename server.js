@@ -1041,6 +1041,8 @@ app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error retrieving messages.' });
     }
 });
+// Start server
 app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+  console.log(`Server running at http://localhost:${port}`);
+});
 });

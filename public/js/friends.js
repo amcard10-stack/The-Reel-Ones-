@@ -137,14 +137,50 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <button class="decline-btn" data-id="${req.id}">Decline</button>
                     </div>
                 `;
-                div.querySelector('.accept-btn').addEventListener('click', async () => {
-                    await respondToRequest(req.id, 'accepted');
-                    loadPendingRequests();
-                    loadFriends();
+                div.querySelector('.accept-btn').addEventListener('click', async (e) => {
+                    const acceptBtn = e.currentTarget;
+                    const declineBtn = div.querySelector('.decline-btn');
+                    const originalAcceptText = acceptBtn.textContent;
+                    const originalDeclineText = declineBtn?.textContent;
+                    acceptBtn.disabled = true;
+                    if (declineBtn) declineBtn.disabled = true;
+                    acceptBtn.textContent = 'Accepting...';
+                    if (declineBtn) declineBtn.textContent = 'Working...';
+
+                    const result = await respondToRequest(req.id, 'accepted');
+                    if (!result.ok) {
+                        alert(result.message || 'Failed to accept request.');
+                        acceptBtn.disabled = false;
+                        if (declineBtn) declineBtn.disabled = false;
+                        acceptBtn.textContent = originalAcceptText;
+                        if (declineBtn) declineBtn.textContent = originalDeclineText;
+                        return;
+                    }
+
+                    await loadPendingRequests();
+                    await loadFriends();
                 });
-                div.querySelector('.decline-btn').addEventListener('click', async () => {
-                    await respondToRequest(req.id, 'declined');
-                    loadPendingRequests();
+                div.querySelector('.decline-btn').addEventListener('click', async (e) => {
+                    const declineBtn = e.currentTarget;
+                    const acceptBtn = div.querySelector('.accept-btn');
+                    const originalDeclineText = declineBtn.textContent;
+                    const originalAcceptText = acceptBtn?.textContent;
+                    declineBtn.disabled = true;
+                    if (acceptBtn) acceptBtn.disabled = true;
+                    declineBtn.textContent = 'Declining...';
+                    if (acceptBtn) acceptBtn.textContent = 'Working...';
+
+                    const result = await respondToRequest(req.id, 'declined');
+                    if (!result.ok) {
+                        alert(result.message || 'Failed to decline request.');
+                        declineBtn.disabled = false;
+                        if (acceptBtn) acceptBtn.disabled = false;
+                        declineBtn.textContent = originalDeclineText;
+                        if (acceptBtn) acceptBtn.textContent = originalAcceptText;
+                        return;
+                    }
+
+                    await loadPendingRequests();
                 });
                 pendingList.appendChild(div);
             });
@@ -155,21 +191,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function respondToRequest(id, status) {
         try {
-            await fetch(`/api/friends/request/${id}`, {
+            const res = await fetch(`/api/friends/request/${id}`, {
                 method: 'PUT',
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status })
             });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) return { ok: false, message: data.message || 'Request failed.' };
+            return { ok: true, message: data.message };
         } catch (err) {
             console.error(err);
+            return { ok: false, message: 'Network error.' };
         }
     }
 
-    async function removeFriend(friendEmail) {
+    async function removeFriend(friendEmail, buttonEl) {
         if (!friendEmail || friendEmail === currentFriendEmail) {
             // ok to unfriend; popup will close below if it matches.
         }
         if (!confirm('Remove this friend?')) return;
+
+        const originalText = buttonEl?.textContent;
+        if (buttonEl) {
+            buttonEl.disabled = true;
+            buttonEl.textContent = 'Removing...';
+        }
 
         try {
             const res = await fetch(`/api/friends/${encodeURIComponent(friendEmail)}`, {
@@ -191,6 +237,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (err) {
             console.error(err);
             alert('Failed to remove friend.');
+        } finally {
+            if (buttonEl) {
+                buttonEl.disabled = false;
+                buttonEl.textContent = originalText;
+            }
         }
     }
 
@@ -234,8 +285,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     openFriendPopup(friend);
                 });
 
-                div.querySelector('.remove-friend-btn')?.addEventListener('click', () => {
-                    removeFriend(friend.email);
+                div.querySelector('.remove-friend-btn')?.addEventListener('click', (e) => {
+                    removeFriend(friend.email, e.currentTarget);
                 });
                 friendsList.appendChild(div);
             });
@@ -338,7 +389,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     //friends watchlists
     async function loadFriendLists(email) {
         const container = document.getElementById('friendListsList');
-        ontainer.innerHTML = '<p class="empty-message">Loading...</p>';
+        container.innerHTML = '<p class="empty-message">Loading...</p>';
         try {
             const res = await fetch(`/api/friends/${encodeURIComponent(email)}/lists`, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -370,6 +421,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
     // MESSAGES
+    function getMyEmailFromToken() {
+        try {
+            const parts = token?.split?.('.') || [];
+            if (parts.length < 2) return null;
+            const base64Url = parts[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+            const decoded = atob(padded);
+            const jsonStr = decoded
+                .split('')
+                .map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+                .join('');
+            const payload = JSON.parse(decodeURIComponent(jsonStr));
+            return payload?.email || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
     async function loadMessages(email) {
         const list = document.getElementById('messagesList');
         list.innerHTML = '<p class="empty-message">Loading...</p>';
@@ -384,7 +454,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 list.innerHTML = '<p class="empty-message">No messages yet. Say something!</p>';
                 return;
             }
-            const myEmail = JSON.parse(atob(token.split('.')[1])).email;
+            const myEmail = getMyEmailFromToken();
             messages.forEach(m => {
                 const div = document.createElement('div');
                 const isMine = m.sender_email === myEmail;
@@ -423,6 +493,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('messageInput')?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') document.getElementById('sendMessageBtn').click();
     });
+
+    // Poll pending request count so the badge stays fresh while this page is open.
+    let lastPendingCount = null;
+    async function pollPendingRequestCount() {
+        try {
+            const res = await fetch('/api/friends/requests/count', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const count = data.count ?? 0;
+            if (lastPendingCount === null) {
+                lastPendingCount = count;
+                return;
+            }
+            if (count !== lastPendingCount) {
+                lastPendingCount = count;
+                await loadPendingRequests();
+            }
+        } catch (err) {
+            // Ignore polling failures; the user can refresh manually.
+        }
+    }
+
+    setInterval(pollPendingRequestCount, 10000);
 
     loadPendingRequests();
     loadFriends();
