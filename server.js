@@ -743,7 +743,7 @@ app.get('/api/friends/search', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
         const [rows] = await connection.execute(
-            `SELECT email, username, first_name AS firstName, last_name AS lastName, profile_picture AS profilePicture
+            `SELECT DISTINCT email, username, first_name AS firstName, last_name AS lastName, profile_picture AS profilePicture
              FROM user
              WHERE (username LIKE ? OR email LIKE ?) AND email != ?
              LIMIT 10`,

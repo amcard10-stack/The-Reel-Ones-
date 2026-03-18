@@ -27,40 +27,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     // SEARCH
   
     async function runSearch() {
-        const query = friendSearch?.value?.trim() || '';
-        searchResults.innerHTML = '';
-        if (query.length < 1) return;
+    const query = friendSearch?.value?.trim() || '';
+    searchResults.innerHTML = '';
+    if (query.length < 1) return;
 
-        try {
-            const res = await fetch(`/api/friends/search?q=${encodeURIComponent(query)}`, {
+    try {
+        const [searchRes, friendsRes] = await Promise.all([
+            fetch(`/api/friends/search?q=${encodeURIComponent(query)}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            const users = data.users || [];
+            }),
+            fetch('/api/friends', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+        ]);
 
-            if (users.length === 0) {
-                searchResults.innerHTML = '<p class="empty-message">No users found.</p>';
-                return;
-            }
+        const searchData = await searchRes.json();
+        const friendsData = await friendsRes.json();
+        const users = searchData.users || [];
+        const friendEmails = new Set((friendsData.friends || []).map(f => f.email));
 
-            users.forEach(user => {
-                const div = document.createElement('div');
-                div.classList.add('search-result-item');
-                const pic = user.profilePicture
-                    ? `<img src="${user.profilePicture}" class="friend-avatar">`
-                    : `<div class="friend-avatar-placeholder"></div>`;
-                const displayName = user.firstName
-                    ? `${user.firstName} ${user.lastName}`
-                    : user.email;
-                const username = user.username ? `@${user.username}` : '';
-                div.innerHTML = `
-                    ${pic}
-                    <div class="friend-info">
-                        <strong>${displayName}</strong>
-                        <span class="meta">${username}</span>
-                    </div>
-                    <button class="add-friend-btn" data-email="${user.email}">Add Friend</button>
-                `;
+        if (users.length === 0) {
+            searchResults.innerHTML = '<p class="empty-message">No users found.</p>';
+            return;
+        }
+
+        users.forEach(user => {
+            const div = document.createElement('div');
+            div.classList.add('search-result-item');
+            const pic = user.profilePicture
+                ? `<img src="${user.profilePicture}" class="friend-avatar">`
+                : `<div class="friend-avatar-placeholder"></div>`;
+            const displayName = user.firstName
+                ? `${user.firstName} ${user.lastName}`
+                : user.email;
+            const username = user.username ? `@${user.username}` : '';
+            const alreadyFriend = friendEmails.has(user.email);
+            div.innerHTML = `
+                ${pic}
+                <div class="friend-info">
+                    <strong>${displayName}</strong>
+                    <span class="meta">${username}</span>
+                </div>
+                ${alreadyFriend
+                    ? `<button class="already-friend-btn" disabled>Already Friends</button>`
+                    : `<button class="add-friend-btn" data-email="${user.email}">Add Friend</button>`
+                }
+            `;
+            if (!alreadyFriend) {
                 div.querySelector('.add-friend-btn').addEventListener('click', async () => {
                     const result = await sendFriendRequest(user.email);
                     if (result.ok) {
@@ -70,13 +83,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                         alert(result.message || 'Failed to send request.');
                     }
                 });
-                searchResults.appendChild(div);
-            });
-        } catch (err) {
-            console.error(err);
-            searchResults.innerHTML = '<p class="empty-message">Search failed.</p>';
-        }
+            }
+            searchResults.appendChild(div);
+        });
+    } catch (err) {
+        console.error(err);
+        searchResults.innerHTML = '<p class="empty-message">Search failed.</p>';
     }
+}
 
     friendSearch?.addEventListener('input', () => {
         clearTimeout(debounceTimer);
