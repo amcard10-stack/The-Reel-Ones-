@@ -165,6 +165,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    async function removeFriend(friendEmail) {
+        if (!friendEmail || friendEmail === currentFriendEmail) {
+            // ok to unfriend; popup will close below if it matches.
+        }
+        if (!confirm('Remove this friend?')) return;
+
+        try {
+            const res = await fetch(`/api/friends/${encodeURIComponent(friendEmail)}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                alert(data.message || 'Failed to remove friend.');
+                return;
+            }
+
+            if (currentFriendEmail === friendEmail) {
+                document.getElementById('friendPopup').style.display = 'none';
+                currentFriendEmail = null;
+            }
+
+            loadFriends();
+        } catch (err) {
+            console.error(err);
+            alert('Failed to remove friend.');
+        }
+    }
+
     // FRIENDS LIST
     async function loadFriends() {
         try {
@@ -196,10 +225,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <strong>${displayName}</strong>
                         <span class="meta">${username}</span>
                     </div>
-                    <button class="view-friend-btn primary-btn" data-email="${friend.email}">View</button>
+                    <div class="friend-actions">
+                        <button class="view-friend-btn primary-btn" data-email="${friend.email}">View</button>
+                        <button class="remove-friend-btn" data-email="${friend.email}">Remove</button>
+                    </div>
                 `;
                 div.querySelector('.view-friend-btn').addEventListener('click', () => {
                     openFriendPopup(friend);
+                });
+
+                div.querySelector('.remove-friend-btn')?.addEventListener('click', () => {
+                    removeFriend(friend.email);
                 });
                 friendsList.appendChild(div);
             });

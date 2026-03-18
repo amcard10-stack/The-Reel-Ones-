@@ -891,6 +891,28 @@ app.get('/api/friends', authenticateToken, async (req, res) => {
     }
 });
 
+// Remove friend
+app.delete('/api/friends/:email', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    if (!email || email === req.user.email) return res.status(400).json({ message: 'Invalid friend.' });
+    try {
+        const connection = await createConnection();
+        const [result] = await connection.execute(
+            `DELETE FROM friend_request
+             WHERE status = 'accepted'
+               AND ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))`,
+            [req.user.email, email, email, req.user.email]
+        );
+        await connection.end();
+
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Friend not found.' });
+        return res.status(200).json({ message: 'Friend removed.' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error removing friend.' });
+    }
+});
+
 // Get a friend's ratings
 app.get('/api/friends/:email/ratings', authenticateToken, async (req, res) => {
     const { email } = req.params;
