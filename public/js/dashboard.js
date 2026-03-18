@@ -170,7 +170,6 @@ document.addEventListener('DOMContentLoaded', () => {
         DataModel.setToken(token);
         renderDashboard();
         updateFriendRequestBadge();
-    }
 
 // profile popup
     async function checkProfileComplete() {
