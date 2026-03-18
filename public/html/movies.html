@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Subscriptions</title>
+    <title>Movies</title>
     <link rel="stylesheet" href="/css/movies.css">
 </head>
 <body>
@@ -18,18 +18,70 @@
         </div>
     </div>
 
-    <h3 class="row-title" id="moviesSectionTitle">Trending</h3>
+    <div class="top-section">
 
-    <div class="row-container">
+            <div id="filterPanel" class="filter-panel">
+                <h4>Filter by Subscription</h4>
 
-        <button class="scroll-btn left" id="scrollLeft">❮</button>
+                <label><input type="checkbox" value="netflix"> Netflix</label>
+                <label><input type="checkbox" value="hulu"> Hulu</label>
+                <label><input type="checkbox" value="disney"> Disney+</label>
+                <label><input type="checkbox" value="max"> HBO Max</label>
+                <label><input type="checkbox" value="prime"> Amazon Prime</label>
 
-        <div class="movie-row" id="moviesRow"></div>
+                <div class="filter-buttons">
+                    <button id="applyFilterBtn">Apply</button>
+                    <button id="clearFilterBtn" type="button">Clear</button>
+                    <button id="saveFilterBtn" type="button">Save</button>
+                </div>
+            </div>
 
-        <button class="scroll-btn right" id="scrollRight">❯</button>
+            <div class="top-content">
+                <h3 class="row-title" id="moviesSectionTitle">Trending</h3>
 
-</div>
-</div>
+                <div class="row-container">
+                    <button class="scroll-btn left" id="scrollLeft">&#10094;</button>
+
+                    <div class="movie-row" id="moviesRow"></div>
+
+                    <button class="scroll-btn right" id="scrollRight">&#10095;</button>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="other-rows">
+
+            <div class="movie-section">
+                <h3 class="row-title">Action</h3>
+                <div class="row-container">
+                    <button class="scroll-btn left">&#10094;</button>
+                    <div class="movie-row" id="actionMoviesRow"></div>
+                    <button class="scroll-btn right">&#10095;</button>
+                </div>
+            </div>
+
+            <div class="movie-section">
+                <h3 class="row-title">Comedy</h3>
+                <div class="row-container">
+                    <button class="scroll-btn left">&#10094;</button>
+                    <div class="movie-row" id="comedyMoviesRow"></div>
+                    <button class="scroll-btn right">&#10095;</button>
+                </div>
+            </div>
+
+            <div class="movie-section">
+                <h3 class="row-title">Horror</h3>
+                <div class="row-container">
+                    <button class="scroll-btn left">&#10094;</button>
+                    <div class="movie-row" id="horrorMoviesRow"></div>
+                    <button class="scroll-btn right">&#10095;</button>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
 <script src="/js/datamodel.js"></script>
 <script src="/js/movies.js"></script>
 
