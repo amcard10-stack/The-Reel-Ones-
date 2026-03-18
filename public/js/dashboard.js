@@ -169,7 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         DataModel.setToken(token);
         renderDashboard();
-
+        updateFriendRequestBadge();
+    }
 
 // profile popup
     async function checkProfileComplete() {
@@ -198,6 +199,23 @@ document.addEventListener('DOMContentLoaded', () => {
         checkProfileComplete();
     }
 });
+
+async function updateFriendRequestBadge() {
+    const badge = document.getElementById('friendRequestBadge');
+    if (!badge) return;
+    try {
+        const res = await fetch('/api/friends/requests/count', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('jwtToken')}` }
+        });
+        const data = await res.json();
+        const count = data.count ?? 0;
+        badge.textContent = count > 0 ? (count > 99 ? '99+' : count) : '';
+        badge.classList.toggle('has-count', count > 0);
+    } catch (err) {
+        badge.textContent = '';
+        badge.classList.remove('has-count');
+    }
+}
 
 //////////////////////////////////////////
 //TMDB SEARCH HELPERS

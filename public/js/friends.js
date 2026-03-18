@@ -106,6 +106,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await res.json();
             const requests = data.requests || [];
             pendingCount.textContent = requests.length > 0 ? requests.length : '';
+            const navBadge = document.getElementById('friendRequestBadge');
+            if (navBadge) {
+                navBadge.textContent = requests.length > 0 ? (requests.length > 99 ? '99+' : requests.length) : '';
+                navBadge.classList.toggle('has-count', requests.length > 0);
+            }
             pendingList.innerHTML = '';
 
             if (requests.length === 0) {

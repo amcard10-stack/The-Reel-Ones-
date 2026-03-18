@@ -811,6 +811,22 @@ app.get('/api/friends/requests', authenticateToken, async (req, res) => {
     }
 });
 
+// Get pending friend request count (for notification badge)
+app.get('/api/friends/requests/count', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [[row]] = await connection.execute(
+            'SELECT COUNT(*) AS count FROM friend_request WHERE receiver_email = ? AND status = ?',
+            [req.user.email, 'pending']
+        );
+        await connection.end();
+        res.status(200).json({ count: row?.count ?? 0 });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ count: 0 });
+    }
+});
+
 // Accept or decline friend request
 app.put('/api/friends/request/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
