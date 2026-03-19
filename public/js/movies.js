@@ -16,21 +16,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const searchBtn = document.getElementById('movieSearchBtn');
 
     const sectionTitle = document.getElementById('moviesSectionTitle');
+ const browseTitle = document.getElementById('browseSectionTitle');
 
-    if (!row) return;
-
-    logoutButton.addEventListener('click', () => {
-        localStorage.removeItem('jwtToken');
-        window.location.href = '/';
-    });
-
-    // filter buttons //
     const applyBtn = document.getElementById('applyFilterBtn');
     const clearBtn = document.getElementById('clearFilterBtn');
     const saveBtn = document.getElementById('saveFilterBtn');
 
-
-if (!row || !allMoviesGrid) return;
+    if (!row || !allMoviesGrid) return;
 
     logoutButton?.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
@@ -49,67 +41,212 @@ if (!row || !allMoviesGrid) return;
     const DEBOUNCE_MS = 400;
     const MIN_CHARS = 2;
 
-    searchBtn.addEventListener('click', () => loadMovies());
+    let browsePage = 1;
+    let isSearchMode = false;
+    let currentSearchQuery = '';
+    let currentSearchPage = 1;
+    let isLoadingMore = false;
+
+    // ================= SEARCH =================
+    searchBtn.addEventListener('click', handleSearchOrBrowseReset);
+
     searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') loadMovies();
+        if (e.key === 'Enter') handleSearchOrBrowseReset();
     });
+
     searchInput.addEventListener('input', () => {
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => loadMovies(), DEBOUNCE_MS);
+        debounceTimer = setTimeout(handleSearchOrBrowseReset, DEBOUNCE_MS);
     });
 
-    const scrollLeft = document.getElementById("scrollLeft");
-    const scrollRight = document.getElementById("scrollRight");
-    scrollLeft.addEventListener("click", () => row.scrollBy({ left: -400, behavior: "smooth" }));
-    scrollRight.addEventListener("click", () => row.scrollBy({ left: 400, behavior: "smooth" }));
+    // ================= FILTER BUTTONS =================
+    applyBtn?.addEventListener('click', refreshPageContent);
 
-    async function loadMovies() {
-        const query = searchInput?.value?.trim();
-        row.innerHTML = '';
+    clearBtn?.addEventListener('click', async () => {
+        document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach(box => {
+            box.checked = false;
+        });
+        await refreshPageContent();
+    });
 
-        if (query && query.length >= MIN_CHARS) {
-            sectionTitle.textContent = `Results for "${query}"`;
-            try {
-                const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.message || 'Search failed');
-                renderMovies(data.results || []);
-            } catch (err) {
-                console.error(err);
-                row.innerHTML = `<p style="color:#dc3545;padding:20px">${err.message}</p>`;
+    saveBtn?.addEventListener('click', async () => {
+        const selectedProviders = getSelectedProviderKeys();
+        const result = await DataModel.saveSubscriptions(selectedProviders);
+        alert(result.ok ? 'Subscriptions saved.' : 'Failed to save.');
+    });
+
+    // ================= LOAD MORE =================
+    loadMoreBtn?.addEventListener('click', async () => {
+        if (isLoadingMore) return;
+
+        isLoadingMore = true;
+        loadMoreBtn.disabled = true;
+
+        try {
+            if (isSearchMode) {
+                currentSearchPage++;
+                const movies = await fetchSearchMovies(currentSearchQuery, currentSearchPage);
+                renderGridMovies(movies, true);
+            } else {
+                browsePage++;
+                const movies = await fetchBrowseMovies(browsePage);
+                renderGridMovies(movies, true);
             }
-        } else {
-            sectionTitle.textContent = 'Trending';
-            try {
-                const res = await fetch('/api/trending/movies', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error('Failed to load');
-                renderMovies(data.results || []);
-            } catch (err) {
-                console.error(err);
-                row.innerHTML = `<p style="color:#dc3545;padding:20px">Failed to load movies.</p>`;
-            }
+        } finally {
+            isLoadingMore = false;
+            loadMoreBtn.disabled = false;
         }
+    });
+
+    // ================= HELPERS =================
+    function getSelectedProviderKeys() {
+        return Array.from(document.querySelectorAll('#filterPanel input:checked'))
+            .map(box => box.value);
     }
 
-    function renderMovies(movies) {
-        movies.forEach(movie => {
-            if (!movie.poster_path) return;
-            const card = document.createElement("div");
-            card.className = "media-card";
-            card.innerHTML = `
-                <img src="https://image.tmdb.org/t/p/w342${movie.poster_path}" alt="${movie.title || ''}">
-                <p>${movie.title || 'Untitled'}</p>
-            `;
-            row.appendChild(card);
+    function getSelectedProviderIds() {
+        return getSelectedProviderKeys()
+            .flatMap(key => PROVIDER_MAP[key] || []);
+    }
+
+    async function loadSavedSubscriptions() {
+        const saved = await DataModel.getSubscriptions();
+        document.querySelectorAll('#filterPanel input').forEach(box => {
+            box.checked = saved.includes(box.value);
         });
     }
 
-    loadMovies();
-});
+    // ================= FILTER (SEARCH ONLY) =================
+    async function filterMoviesByProviders(movies, selectedProviderIds) {
+        if (!selectedProviderIds.length) return movies;
 
-  
+        const checks = await Promise.all(
+            movies.map(async (movie) => {
+                try {
+                    const res = await fetch(`/api/movie/${movie.id}/providers`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) return null;
+
+                    const providers = data.results?.US?.flatrate || [];
+                    const ids = providers.map(p => String(p.provider_id));
+
+                    return selectedProviderIds.some(id => ids.includes(id)) ? movie : null;
+                } catch {
+                    return null;
+                }
+            })
+        );
+
+        return checks.filter(Boolean);
+    }
+
+    // ================= FETCH =================
+    async function fetchBrowseMovies(page = 1) {
+        const ids = getSelectedProviderIds();
+        const query = ids.length ? `&providers=${ids.join(',')}` : '';
+
+        const res = await fetch(`/api/discover/movies?page=${page}${query}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+        return data.results || [];
+    }
+
+    async function fetchSearchMovies(query, page = 1) {
+        const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie&page=${page}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+        let movies = data.results || [];
+
+        movies = await filterMoviesByProviders(movies, getSelectedProviderIds());
+        return movies;
+    }
+
+    // ================= LOAD TRENDING =================
+    async function loadMovies() {
+        const res = await fetch('/api/trending/movies', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+        let movies = data.results || [];
+
+        movies = await filterMoviesByProviders(movies, getSelectedProviderIds());
+        renderMovies(movies);
+    }
+
+    function renderMovies(movies) {
+        row.innerHTML = '';
+
+        if (!movies.length) {
+            row.innerHTML = `<p>No movies found.</p>`;
+            return;
+        }
+
+        movies.forEach(movie => {
+            if (!movie.poster_path) return;
+
+            row.innerHTML += `
+                <div class="media-card">
+                    <img src="https://image.tmdb.org/t/p/w342${movie.poster_path}">
+                    <p>${movie.title}</p>
+                </div>
+            `;
+        });
+    }
+
+    function renderGridMovies(movies, append = false) {
+        if (!append) allMoviesGrid.innerHTML = '';
+
+        const valid = movies.filter(m => m.poster_path);
+
+        if (!valid.length) {
+            allMoviesGrid.innerHTML = `<p>No movies found.</p>`;
+            return;
+        }
+
+        valid.forEach(movie => {
+            allMoviesGrid.innerHTML += `
+                <div class="media-card grid-card">
+                    <img src="https://image.tmdb.org/t/p/w342${movie.poster_path}">
+                    <p>${movie.title}</p>
+                </div>
+            `;
+        });
+    }
+
+    // ================= MAIN LOGIC =================
+    async function handleSearchOrBrowseReset() {
+        const query = searchInput.value.trim();
+
+        if (query.length >= MIN_CHARS) {
+            isSearchMode = true;
+            currentSearchQuery = query;
+            currentSearchPage = 1;
+            browseTitle.textContent = `Search: ${query}`;
+            renderGridMovies(await fetchSearchMovies(query), false);
+        } else {
+            isSearchMode = false;
+            browsePage = 1;
+            browseTitle.textContent = 'Browse Movies';
+            renderGridMovies(await fetchBrowseMovies(1), false);
+        }
+
+        await loadMovies();
+    }
+
+    async function refreshPageContent() {
+        await handleSearchOrBrowseReset();
+    }
+
+    // ================= INIT =================
+    await loadSavedSubscriptions();
+    await handleSearchOrBrowseReset();
+});
+   
