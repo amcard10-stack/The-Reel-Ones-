@@ -21,6 +21,61 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let debounceTimer = null;
 
+    function setMessageNavBadge(count) {
+        const el = document.getElementById('friendMessageBadge');
+        if (!el) return;
+        const n = Number(count) || 0;
+        el.textContent = n > 0 ? (n > 99 ? '99+' : String(n)) : '';
+        el.classList.toggle('has-count', n > 0);
+    }
+
+    function setInlineMessagesBadge(btn, n) {
+        if (!btn) return;
+        const badge = btn.querySelector('.messages-unread-badge');
+        if (!badge) return;
+        const v = Number(n) || 0;
+        if (v > 0) {
+            badge.textContent = v > 99 ? '99+' : String(v);
+            badge.classList.add('has-count');
+        } else {
+            badge.textContent = '';
+            badge.classList.remove('has-count');
+        }
+    }
+
+    async function refreshUnreadBadges() {
+        try {
+            const res = await fetch('/api/friends/messages/unread/count', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json().catch(() => ({}));
+            setMessageNavBadge(data.count ?? 0);
+        } catch (err) {
+            setMessageNavBadge(0);
+        }
+    }
+
+    async function updateInlineUnreadBadgesOnly() {
+        try {
+            const res = await fetch('/api/friends/messages/unread/summary', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json().catch(() => ({ threads: [] }));
+            const map = new Map();
+            for (const row of data.threads || []) {
+                const em = row.senderEmail;
+                if (em) map.set(em, Number(row.count) || 0);
+            }
+            document.querySelectorAll('.friend-card[data-friend-email]').forEach(card => {
+                const email = card.getAttribute('data-friend-email');
+                const btn = card.querySelector('.messages-btn');
+                if (email && btn) setInlineMessagesBadge(btn, map.get(email) || 0);
+            });
+        } catch (err) {
+            /* ignore */
+        }
+    }
+
     // SEARCH
     async function runSearch() {
         const query = friendSearch?.value?.trim() || '';
@@ -127,6 +182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (requests.length === 0) {
                 pendingList.innerHTML = '<p class="empty-message">No pending requests.</p>';
+                refreshUnreadBadges();
                 return;
             }
 
@@ -194,6 +250,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
                 pendingList.appendChild(div);
             });
+            refreshUnreadBadges();
         } catch (err) {
             console.error(err);
         }
@@ -247,21 +304,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     // FRIENDS LIST
     async function loadFriends() {
         try {
-            const res = await fetch('/api/friends', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
+            const [friendsRes, summaryRes] = await Promise.all([
+                fetch('/api/friends', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch('/api/friends/messages/unread/summary', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
+            const data = await friendsRes.json();
+            const summaryData = await summaryRes.json().catch(() => ({ threads: [] }));
             const friends = data.friends || [];
+            const unreadByEmail = new Map();
+            for (const row of summaryData.threads || []) {
+                const em = row.senderEmail;
+                if (em) unreadByEmail.set(em, Number(row.count) || 0);
+            }
             friendsList.innerHTML = '';
 
             if (friends.length === 0) {
                 friendsList.innerHTML = '<p class="empty-message">No friends yet. Search for users to add.</p>';
+                refreshUnreadBadges();
                 return;
             }
 
             friends.forEach(friend => {
                 const div = document.createElement('div');
                 div.classList.add('friend-card');
+                div.setAttribute('data-friend-email', friend.email);
 
                 const pic = friend.profilePicture
                     ? `<img src="${friend.profilePicture}" class="friend-avatar">`
@@ -281,7 +351,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <div class="friend-actions">
                             <button class="tab-inline-btn ratings-btn">Ratings</button>
                             <button class="tab-inline-btn watchlists-btn">Watchlists</button>
-                            <button class="tab-inline-btn messages-btn">Messages</button>
+                            <button type="button" class="tab-inline-btn messages-btn">Messages<span class="messages-unread-badge" aria-label="Unread messages"></span></button>
                             <button class="remove-friend-btn">Remove</button>
                         </div>
                     </div>
@@ -294,6 +364,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const ratingsBtn = div.querySelector('.ratings-btn');
                 const watchlistsBtn = div.querySelector('.watchlists-btn');
                 const messagesBtn = div.querySelector('.messages-btn');
+                setInlineMessagesBadge(messagesBtn, unreadByEmail.get(friend.email) || 0);
 
                 function setActiveBtn(btn) {
                     [ratingsBtn, watchlistsBtn, messagesBtn].forEach(b => b.classList.remove('active'));
@@ -383,7 +454,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                     activeTab = 'messages';
                     setActiveBtn(messagesBtn);
-                    await renderInlineMessages(friend.email, contentEl);
+                    await renderInlineMessages(friend.email, contentEl, messagesBtn);
                 });
 
                 div.querySelector('.remove-friend-btn').addEventListener('click', (e) => {
@@ -392,6 +463,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 friendsList.appendChild(div);
             });
+            refreshUnreadBadges();
         } catch (err) {
             console.error(err);
         }
@@ -416,12 +488,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    async function renderInlineMessages(email, contentEl) {
+    async function renderInlineMessages(email, contentEl, messagesBtn) {
         contentEl.innerHTML = '<p class="empty-message">Loading...</p>';
         try {
             const res = await fetch(`/api/friends/${encodeURIComponent(email)}/messages`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (!res.ok) {
+                contentEl.innerHTML = '<p class="empty-message">Failed to load messages.</p>';
+                return;
+            }
             const data = await res.json();
             const messages = data.messages || [];
             const myEmail = getMyEmailFromToken();
@@ -432,7 +508,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const isMine = m.sender_email === myEmail;
                     return `
                         <div class="message-bubble ${isMine ? 'mine' : 'theirs'}">
-                            <p>${m.content}</p>
+                            <p>${escapeHtml(m.content)}</p>
                             <span class="message-time">${new Date(m.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
                     `;
@@ -442,7 +518,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <div class="messages-list">${messagesHtml}</div>
                 <div class="message-input-row" style="margin-top:8px;">
                     <input type="text" class="inline-message-input" placeholder="Send a message...">
-                    <button class="primary-btn inline-send-btn">Send</button>
+                    <button type="button" class="primary-btn inline-send-btn">Send</button>
                 </div>
             `;
 
@@ -463,10 +539,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
                     if (res.ok) {
                         input.value = '';
-                        await renderInlineMessages(email, contentEl);
+                        await renderInlineMessages(email, contentEl, messagesBtn);
                     } else {
-                        const data = await res.json().catch(() => ({}));
-                        alert(data.message || 'Could not send message.');
+                        const errData = await res.json().catch(() => ({}));
+                        alert(errData.message || 'Could not send message.');
                     }
                 } catch (err) {
                     console.error(err);
@@ -476,9 +552,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             sendBtn?.addEventListener('click', sendMessage);
             input?.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 
+            try {
+                await fetch(`/api/friends/${encodeURIComponent(email)}/messages/read`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (readErr) {
+                console.error(readErr);
+            }
+            setInlineMessagesBadge(messagesBtn, 0);
+            await refreshUnreadBadges();
         } catch (err) {
             contentEl.innerHTML = '<p class="empty-message">Failed to load messages.</p>';
         }
+    }
+
+    function escapeHtml(text) {
+        if (text == null) return '';
+        const s = String(text);
+        return s
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
 
     let lastPendingCount = null;
@@ -502,7 +598,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    setInterval(pollPendingRequestCount, 10000);
+    setInterval(() => {
+        pollPendingRequestCount();
+        refreshUnreadBadges();
+        updateInlineUnreadBadgesOnly();
+    }, 10000);
 
     loadPendingRequests();
     loadFriends();
