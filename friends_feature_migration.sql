@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS message (
     receiver_email VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
     sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP NULL DEFAULT NULL,
     FOREIGN KEY (sender_email) REFERENCES user(email) ON DELETE CASCADE,
     FOREIGN KEY (receiver_email) REFERENCES user(email) ON DELETE CASCADE
 );

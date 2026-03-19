@@ -24,6 +24,11 @@ const upload = multer({ storage });
 // Middleware to parse JSON bodies
 app.use(express.json());
 
+/** True when MySQL rejects a query (e.g. message.read_at not migrated yet). */
+function isUnknownColumnError(err) {
+    return Boolean(err && (err.code === 'ER_BAD_FIELD_ERROR' || Number(err.errno) === 1054));
+}
+
 // Serve static files from the "public" folder
 app.use(express.static('public'));
 
@@ -1062,8 +1067,9 @@ app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
 
     try {
         const connection = await createConnection();
+        // Note: omit read_at so this works before friends_message_read_migration.sql is applied.
         const [rows] = await connection.execute(
-            `SELECT id, sender_email, receiver_email, content, sent_at, read_at
+            `SELECT id, sender_email, receiver_email, content, sent_at
              FROM message
              WHERE (sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?)
              ORDER BY sent_at ASC`,
@@ -1099,13 +1105,14 @@ app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
     }
 });
 
-// Unread message count (requires message.read_at — run friends_message_read_migration.sql)
+// Unread message count (uses message.read_at when present — run friends_message_read_migration.sql)
 // Optional ?from=friend@email counts only messages sent by that friend to the current user.
 app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res) => {
     const fromEmail = (req.query.from || '').trim() || null;
 
+    let connection;
     try {
-        const connection = await createConnection();
+        connection = await createConnection();
 
         if (fromEmail) {
             const [friendCheck] = await connection.execute(
@@ -1116,6 +1123,7 @@ app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res
             );
             if (friendCheck.length === 0) {
                 await connection.end();
+                connection = null;
                 return res.status(403).json({ message: 'Not friends.' });
             }
 
@@ -1127,6 +1135,7 @@ app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res
             );
 
             await connection.end();
+            connection = null;
             return res.status(200).json({ count: row?.count ?? 0 });
         }
 
@@ -1138,8 +1147,17 @@ app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res
         );
 
         await connection.end();
+        connection = null;
         return res.status(200).json({ count: row?.count ?? 0 });
     } catch (error) {
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (_) { /* ignore */ }
+        }
+        if (isUnknownColumnError(error)) {
+            return res.status(200).json({ count: 0 });
+        }
         console.error(error);
         return res.status(500).json({ message: 'Error counting unread messages.', count: 0 });
     }
@@ -1153,9 +1171,9 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
         return res.status(400).json({ message: 'Invalid friend.' });
     }
 
+    let connection;
     try {
-        const connection = await createConnection();
-
+        connection = await createConnection();
         const [friendCheck] = await connection.execute(
             `SELECT id FROM friend_request
              WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
@@ -1165,6 +1183,7 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
 
         if (friendCheck.length === 0) {
             await connection.end();
+            connection = null;
             return res.status(403).json({ message: 'Not friends.' });
         }
 
@@ -1176,8 +1195,17 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
         );
 
         await connection.end();
+        connection = null;
         return res.status(200).json({ marked: result.affectedRows });
     } catch (error) {
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (_) { /* ignore */ }
+        }
+        if (isUnknownColumnError(error)) {
+            return res.status(200).json({ marked: 0, note: 'read_at column missing; run friends_message_read_migration.sql for unread badges.' });
+        }
         console.error(error);
         return res.status(500).json({ message: 'Error marking messages read.' });
     }
