@@ -572,9 +572,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (res.ok) {
                 input.value = '';
                 loadMessages(currentFriendEmail);
+            } else {
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || 'Could not send message. Are you still friends?');
             }
         } catch (err) {
             console.error(err);
+            alert('Could not send message. Check your connection.');
         }
     });
 
