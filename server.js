@@ -1083,6 +1083,64 @@ app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error retrieving messages.' });
     }
 });
+// ================= TMDB DISCOVER MOVIES =================
+app.get('/api/discover/movies', authenticateToken, async (req, res) => {
+  const page = req.query.page || 1;
+  const providers = req.query.providers; // "8,15,337"
+
+  if (!process.env.TMDB_API_KEY) {
+    return res.status(500).json({ message: 'TMDB API key missing' });
+  }
+
+  try {
+    let url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&page=${page}&watch_region=US`;
+
+    // ONLY add provider filter if selected
+    if (providers) {
+      url += `&with_watch_providers=${providers}`;
+    }
+
+    const tmdbRes = await fetch(url);
+
+    if (!tmdbRes.ok) {
+      return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
+    }
+
+    const data = await tmdbRes.json();
+    res.status(200).json(data);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error fetching discover movies' });
+  }
+});
+
+
+// ================= TMDB PROVIDERS FOR A MOVIE =================
+app.get('/api/movie/:id/providers', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  if (!process.env.TMDB_API_KEY) {
+    return res.status(500).json({ message: 'TMDB API key missing' });
+  }
+
+  try {
+    const url = `https://api.themoviedb.org/3/movie/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`;
+
+    const tmdbRes = await fetch(url);
+
+    if (!tmdbRes.ok) {
+      return res.status(tmdbRes.status).json({ message: 'Provider fetch failed' });
+    }
+
+    const data = await tmdbRes.json();
+    res.status(200).json(data);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error fetching providers' });
+  }
+});
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
