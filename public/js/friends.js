@@ -125,6 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 navBadge.textContent = requests.length > 0 ? (requests.length > 99 ? '99+' : requests.length) : '';
                 navBadge.classList.toggle('has-count', requests.length > 0);
             }
+            refreshUnreadBadges();
             pendingList.innerHTML = '';
 
             if (requests.length === 0) {
@@ -333,15 +334,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         switchTab('ratings');
         popup.style.display = 'flex';
         loadFriendRatings(friend.email);
+        refreshUnreadBadges();
+    }
+
+    function closeFriendPopup() {
+        document.getElementById('friendPopup').style.display = 'none';
+        currentFriendEmail = null;
+        const tabBadge = document.getElementById('messagesTabBadge');
+        if (tabBadge) {
+            tabBadge.textContent = '';
+            tabBadge.classList.remove('has-count');
+        }
     }
 
     document.getElementById('friendPopupClose')?.addEventListener('click', () => {
-        document.getElementById('friendPopup').style.display = 'none';
+        closeFriendPopup();
     });
 
     document.getElementById('friendPopup')?.addEventListener('click', (e) => {
         if (e.target === document.getElementById('friendPopup')) {
-            document.getElementById('friendPopup').style.display = 'none';
+            closeFriendPopup();
         }
     });
 
@@ -434,6 +446,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
 
+    function setMessageNavBadge(count) {
+        const el = document.getElementById('friendMessageBadge');
+        if (!el) return;
+        const n = Number(count) || 0;
+        el.textContent = n > 0 ? (n > 99 ? '99+' : String(n)) : '';
+        el.classList.toggle('has-count', n > 0);
+    }
+
+    function setMessagesTabBadge(count) {
+        const el = document.getElementById('messagesTabBadge');
+        if (!el) return;
+        const n = Number(count) || 0;
+        el.textContent = n > 0 ? (n > 99 ? '99+' : String(n)) : '';
+        el.classList.toggle('has-count', n > 0);
+    }
+
+    async function refreshUnreadBadges() {
+        try {
+            const res = await fetch('/api/friends/messages/unread/count', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json().catch(() => ({}));
+            const total = data.count ?? 0;
+            setMessageNavBadge(total);
+
+            const popup = document.getElementById('friendPopup');
+            const popupOpen = popup && popup.style.display === 'flex';
+            if (popupOpen && currentFriendEmail) {
+                const u = encodeURIComponent(currentFriendEmail);
+                const resFrom = await fetch(`/api/friends/messages/unread/count?from=${u}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const fromData = await resFrom.json().catch(() => ({}));
+                if (resFrom.ok) {
+                    setMessagesTabBadge(fromData.count ?? 0);
+                } else {
+                    setMessagesTabBadge(0);
+                }
+            } else {
+                setMessagesTabBadge(0);
+            }
+        } catch (err) {
+            setMessageNavBadge(0);
+            setMessagesTabBadge(0);
+        }
+    }
+
     // MESSAGES
     function getMyEmailFromToken() {
         try {
@@ -462,25 +521,39 @@ document.addEventListener('DOMContentLoaded', async () => {
             const res = await fetch(`/api/friends/${encodeURIComponent(email)}/messages`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (!res.ok) {
+                list.innerHTML = '<p class="empty-message">Failed to load messages.</p>';
+                return;
+            }
             const data = await res.json();
             const messages = data.messages || [];
             list.innerHTML = '';
             if (messages.length === 0) {
                 list.innerHTML = '<p class="empty-message">No messages yet. Say something!</p>';
-                return;
-            }
-            const myEmail = getMyEmailFromToken();
-            messages.forEach(m => {
-                const div = document.createElement('div');
-                const isMine = m.sender_email === myEmail;
-                div.classList.add('message-bubble', isMine ? 'mine' : 'theirs');
-                div.innerHTML = `
+            } else {
+                const myEmail = getMyEmailFromToken();
+                messages.forEach(m => {
+                    const div = document.createElement('div');
+                    const isMine = m.sender_email === myEmail;
+                    div.classList.add('message-bubble', isMine ? 'mine' : 'theirs');
+                    div.innerHTML = `
                     <p>${m.content}</p>
                     <span class="message-time">${new Date(m.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 `;
-                list.appendChild(div);
-            });
-            list.scrollTop = list.scrollHeight;
+                    list.appendChild(div);
+                });
+                list.scrollTop = list.scrollHeight;
+            }
+
+            try {
+                await fetch(`/api/friends/${encodeURIComponent(email)}/messages/read`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (readErr) {
+                console.error(readErr);
+            }
+            await refreshUnreadBadges();
         } catch (err) {
             list.innerHTML = '<p class="empty-message">Failed to load messages.</p>';
         }
@@ -531,8 +604,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    setInterval(pollPendingRequestCount, 10000);
+    setInterval(() => {
+        pollPendingRequestCount();
+        refreshUnreadBadges();
+    }, 10000);
 
     loadPendingRequests();
     loadFriends();
+    refreshUnreadBadges();
 });

@@ -109,6 +109,54 @@ body {
     display: inline-block;
 }
 
+.friend-message-badge {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    color: #0d1b2a;
+    background: #4ecdc4;
+    border-radius: 9px;
+    vertical-align: middle;
+}
+
+.friend-message-badge:empty,
+.friend-message-badge:not(.has-count) {
+    display: none;
+}
+
+.friend-message-badge.has-count {
+    display: inline-block;
+}
+
+.tab-message-badge {
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    margin-left: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    color: #0d1b2a;
+    background: #4ecdc4;
+    border-radius: 8px;
+    vertical-align: middle;
+}
+
+.tab-message-badge:empty,
+.tab-message-badge:not(.has-count) {
+    display: none;
+}
+
+.tab-message-badge.has-count {
+    display: inline-block;
+}
+
 .section {
     margin-top: 35px;
     background-color: #1E3A5F;

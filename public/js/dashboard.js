@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     refreshButton?.addEventListener('click', async () => {
         renderDashboard();
+        updateFriendsNavBadges();
     });
 
     if (watchHistorySearch) {
@@ -169,7 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         DataModel.setToken(token);
         renderDashboard();
-        updateFriendRequestBadge();
+        updateFriendsNavBadges();
+        setInterval(updateFriendsNavBadges, 10000);
 
 // profile popup
     async function checkProfileComplete() {
@@ -214,6 +216,27 @@ async function updateFriendRequestBadge() {
         badge.textContent = '';
         badge.classList.remove('has-count');
     }
+}
+
+async function updateFriendMessageBadge() {
+    const badge = document.getElementById('friendMessageBadge');
+    if (!badge) return;
+    try {
+        const res = await fetch('/api/friends/messages/unread/count', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('jwtToken')}` }
+        });
+        const data = await res.json();
+        const count = data.count ?? 0;
+        badge.textContent = count > 0 ? (count > 99 ? '99+' : String(count)) : '';
+        badge.classList.toggle('has-count', count > 0);
+    } catch (err) {
+        badge.textContent = '';
+        badge.classList.remove('has-count');
+    }
+}
+
+async function updateFriendsNavBadges() {
+    await Promise.all([updateFriendRequestBadge(), updateFriendMessageBadge()]);
 }
 
 //////////////////////////////////////////
