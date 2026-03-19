@@ -1063,7 +1063,7 @@ app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
         const [rows] = await connection.execute(
-            `SELECT id, sender_email, receiver_email, content, sent_at
+            `SELECT id, sender_email, receiver_email, content, sent_at, read_at
              FROM message
              WHERE (sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?)
              ORDER BY sent_at ASC`,
@@ -1077,9 +1077,117 @@ app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error retrieving messages.' });
     }
 });
+// Get messages between current user and a friend
+app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT id, sender_email, receiver_email, content, sent_at, read_at
+             FROM message
+             WHERE (sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?)
+             ORDER BY sent_at ASC`,
+            [req.user.email, email, email, req.user.email]
+        );
+
+        await connection.end();
+        res.status(200).json({ messages: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving messages.' });
+    }
+});
+
+// Unread message count (requires message.read_at — run friends_message_read_migration.sql)
+// Optional ?from=friend@email counts only messages sent by that friend to the current user.
+app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res) => {
+    const fromEmail = (req.query.from || '').trim() || null;
+
+    try {
+        const connection = await createConnection();
+
+        if (fromEmail) {
+            const [friendCheck] = await connection.execute(
+                `SELECT id FROM friend_request
+                 WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+                 AND status = 'accepted'`,
+                [req.user.email, fromEmail, fromEmail, req.user.email]
+            );
+            if (friendCheck.length === 0) {
+                await connection.end();
+                return res.status(403).json({ message: 'Not friends.' });
+            }
+
+            const [[row]] = await connection.execute(
+                `SELECT COUNT(*) AS count
+                 FROM message
+                 WHERE receiver_email = ? AND sender_email = ? AND read_at IS NULL`,
+                [req.user.email, fromEmail]
+            );
+
+            await connection.end();
+            return res.status(200).json({ count: row?.count ?? 0 });
+        }
+
+        const [[row]] = await connection.execute(
+            `SELECT COUNT(*) AS count
+             FROM message
+             WHERE receiver_email = ? AND read_at IS NULL`,
+            [req.user.email]
+        );
+
+        await connection.end();
+        return res.status(200).json({ count: row?.count ?? 0 });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error counting unread messages.', count: 0 });
+    }
+});
+
+// Mark all messages from :email → current user as read
+app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+
+    if (!email || email === req.user.email) {
+        return res.status(400).json({ message: 'Invalid friend.' });
+    }
+
+    try {
+        const connection = await createConnection();
+
+        const [friendCheck] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, email, email, req.user.email]
+        );
+
+        if (friendCheck.length === 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'Not friends.' });
+        }
+
+        const [result] = await connection.execute(
+            `UPDATE message
+             SET read_at = UTC_TIMESTAMP()
+             WHERE receiver_email = ? AND sender_email = ? AND read_at IS NULL`,
+            [req.user.email, email]
+        );
+
+        await connection.end();
+        return res.status(200).json({ marked: result.affectedRows });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error marking messages read.' });
+    }
+});
+
 //////////////////////////////////////
 // END ROUTES TO HANDLE API REQUESTS
 //////////////////////////////////////
+
+// Start server
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
