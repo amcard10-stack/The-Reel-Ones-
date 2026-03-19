@@ -1,5 +1,3 @@
-/* Friends tab - matches app theme, extensible for future features */
-
 body {
     font-family: Arial, sans-serif;
     background-color: #0A1A2F;
@@ -98,62 +96,10 @@ body {
     background: #dc3545;
     border-radius: 9px;
     vertical-align: middle;
-}
-
-.friend-request-badge:empty,
-.friend-request-badge:not(.has-count) {
     display: none;
 }
 
 .friend-request-badge.has-count {
-    display: inline-block;
-}
-
-.friend-message-badge {
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    margin-left: 4px;
-    font-size: 11px;
-    font-weight: 700;
-    line-height: 18px;
-    text-align: center;
-    color: #0d1b2a;
-    background: #4ecdc4;
-    border-radius: 9px;
-    vertical-align: middle;
-}
-
-.friend-message-badge:empty,
-.friend-message-badge:not(.has-count) {
-    display: none;
-}
-
-.friend-message-badge.has-count {
-    display: inline-block;
-}
-
-.tab-message-badge {
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
-    margin-left: 6px;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 16px;
-    text-align: center;
-    color: #0d1b2a;
-    background: #4ecdc4;
-    border-radius: 8px;
-    vertical-align: middle;
-}
-
-.tab-message-badge:empty,
-.tab-message-badge:not(.has-count) {
-    display: none;
-}
-
-.tab-message-badge.has-count {
     display: inline-block;
 }
 
@@ -219,10 +165,6 @@ body {
     border: 1px solid rgba(255,255,255,0.06);
 }
 
-.search-result-item span {
-    color: #F2F4F7;
-}
-
 .add-friend-btn {
     padding: 6px 14px;
     border-radius: 8px;
@@ -237,16 +179,18 @@ body {
     color: #0A1A2F;
 }
 
-.friends-list {
-    margin-top: 12px;
+.already-friend-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: none;
+    background-color: rgba(255,255,255,0.08);
+    color: #D9DEE4;
+    cursor: default;
+    font-size: 13px;
 }
 
-.friend-item {
-    padding: 14px 16px;
-    margin-bottom: 10px;
-    background: rgba(255,255,255,0.04);
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.06);
+.friends-list {
+    margin-top: 12px;
 }
 
 .empty-message {
@@ -262,17 +206,6 @@ body {
     padding: 2px 8px;
     font-size: 12px;
     margin-left: 8px;
-}
-
-.friend-item {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 14px 16px;
-    margin-bottom: 10px;
-    background: rgba(255,255,255,0.04);
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.06);
 }
 
 .friend-avatar {
@@ -331,15 +264,12 @@ body {
 
 .decline-btn:hover { background-color: rgba(255,255,255,0.2); }
 
-.view-friend-btn {
-    flex-shrink: 0;
-}
-
 .friend-actions {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 .remove-friend-btn {
@@ -355,90 +285,64 @@ body {
     background-color: rgba(200, 35, 51, 1);
 }
 
-/* Popup */
-.popup-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.popup-content {
-    background: #1E3A5F;
-    border-radius: 16px;
-    padding: 24px;
-    max-width: 480px;
-    width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-    position: relative;
-    border: 1px solid rgba(255,255,255,0.1);
-}
-
-.popup-close {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    background: none;
-    border: none;
-    color: #D9DEE4;
-    font-size: 24px;
-    cursor: pointer;
-}
-
-.popup-header {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 20px;
-    align-items: center;
-}
-
-.popup-poster {
-    width: 60px;
-    height: 60px;
-    object-fit: cover;
-    border-radius: 50%;
-}
-
-.popup-poster-placeholder {
-    width: 60px;
-    height: 60px;
-    background: rgba(255,255,255,0.08);
-    border-radius: 50%;
-}
-
-.popup-info h3 { margin: 0 0 4px 0; }
-.popup-meta { color: #D9DEE4; font-size: 13px; margin: 0; }
-
-/* Tabs */
-.popup-tabs {
-    display: flex;
-    gap: 8px;
+/* Friend card */
+.friend-card {
     margin-bottom: 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    padding-bottom: 12px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    overflow: hidden;
 }
 
-.tab-btn {
-    padding: 8px 18px;
+.friend-card-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+}
+
+.tab-inline-btn {
+    padding: 6px 14px;
     border-radius: 8px;
     border: none;
-    background: rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.08);
     color: #D9DEE4;
     cursor: pointer;
+    font-size: 13px;
+    transition: 0.2s ease;
 }
 
-.tab-btn.active {
+.tab-inline-btn:hover {
     background: #3A6EA5;
     color: #F2F4F7;
 }
 
-/* Ratings */
-.friend-ratings-list { max-height: 300px; overflow-y: auto; }
+.tab-inline-btn.active {
+    background: #3A6EA5;
+    color: #F2F4F7;
+}
 
+.friend-inline-content {
+    padding: 0 16px 16px 16px;
+}
+
+.friend-inline-content:empty {
+    padding: 0;
+}
+
+/* Pending requests */
+.friend-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Ratings */
 .friend-rating-item {
     padding: 12px;
     margin-bottom: 8px;
@@ -456,6 +360,35 @@ body {
 
 .rating-stars { color: #E26A6A; }
 .review-text { margin: 6px 0 0 0; font-size: 13px; color: #D9DEE4; }
+
+/* Watchlists */
+.friend-list-card {
+    padding: 12px;
+    margin-bottom: 10px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+
+.friend-list-name {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #F2F4F7;
+}
+
+.friend-list-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.list-item-tag {
+    background: rgba(255,255,255,0.08);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #D9DEE4;
+}
 
 /* Messages */
 .messages-list {
@@ -497,54 +430,12 @@ body {
     gap: 10px;
 }
 
-.message-input-row input {
+.message-input-row input,
+.inline-message-input {
     flex: 1;
     padding: 10px 14px;
     border-radius: 10px;
     border: 1px solid rgba(255,255,255,0.15);
     background: rgba(0,0,0,0.2);
     color: #F2F4F7;
-}
-
-.friend-lists-list {
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.friend-list-card {
-    padding: 12px;
-    margin-bottom: 10px;
-    background: rgba(255,255,255,0.04);
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.06);
-}
-
-.friend-list-name {
-    margin: 0 0 10px 0;
-    font-size: 14px;
-    color: #F2F4F7;
-}
-
-.friend-list-items {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.list-item-tag {
-    background: rgba(255,255,255,0.08);
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    color: #D9DEE4;
-}
-
-.already-friend-btn {
-    padding: 6px 14px;
-    border-radius: 8px;
-    border: none;
-    background-color: rgba(255,255,255,0.08);
-    color: #D9DEE4;
-    cursor: default;
-    font-size: 13px;
 }
