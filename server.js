@@ -732,8 +732,41 @@ app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Error searching TMDB.' });
   }
 });
+// TMDB: Watch providers for a movie or show
+app.get('/api/title/providers', authenticateToken, async (req, res) => {
+
+});
+
+// TMDB: Movies by genre
+app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
+  const { genreId } = req.query;
+
+  if (!genreId) {
+    return res.status(400).json({ message: 'genreId is required.' });
+  }
+
+  if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+    return res.status(503).json({ message: 'TMDB API key not configured.' });
+  }
+
+  try {
+    const url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}`;
+    const tmdbRes = await fetch(url);
+
+    if (!tmdbRes.ok) {
+      return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+    }
+
+    const data = await tmdbRes.json();
+    return res.status(200).json(data);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Error loading genre movies.' });
+  }
+});
 
 //friends
+
 
 // Search users by username or email
 app.get('/api/friends/search', authenticateToken, async (req, res) => {
@@ -743,7 +776,7 @@ app.get('/api/friends/search', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
         const [rows] = await connection.execute(
-            `SELECT DISTINCT email, username, first_name AS firstName, last_name AS lastName, profile_picture AS profilePicture
+            `SELECT email, username, first_name AS firstName, last_name AS lastName, profile_picture AS profilePicture
              FROM user
              WHERE (username LIKE ? OR email LIKE ?) AND email != ?
              LIMIT 10`,
@@ -756,7 +789,32 @@ app.get('/api/friends/search', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error searching users.' });
     }
 });
+app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
+  const { genreId } = req.query;
 
+  if (!genreId) {
+    return res.status(400).json({ message: 'genreId is required.' });
+  }
+
+  if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+    return res.status(503).json({ message: 'TMDB API key not configured.' });
+  }
+
+  try {
+    const url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}`;
+    const tmdbRes = await fetch(url);
+
+    if (!tmdbRes.ok) {
+      return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+    }
+
+    const data = await tmdbRes.json();
+    return res.status(200).json(data);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Error loading genre movies.' });
+  }
+});
 // Send friend request
 app.post('/api/friends/request', authenticateToken, async (req, res) => {
     const { receiverEmail } = req.body;
@@ -891,28 +949,6 @@ app.get('/api/friends', authenticateToken, async (req, res) => {
     }
 });
 
-// Remove friend
-app.delete('/api/friends/:email', authenticateToken, async (req, res) => {
-    const { email } = req.params;
-    if (!email || email === req.user.email) return res.status(400).json({ message: 'Invalid friend.' });
-    try {
-        const connection = await createConnection();
-        const [result] = await connection.execute(
-            `DELETE FROM friend_request
-             WHERE status = 'accepted'
-               AND ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))`,
-            [req.user.email, email, email, req.user.email]
-        );
-        await connection.end();
-
-        if (result.affectedRows === 0) return res.status(404).json({ message: 'Friend not found.' });
-        return res.status(200).json({ message: 'Friend removed.' });
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Error removing friend.' });
-    }
-});
-
 // Get a friend's ratings
 app.get('/api/friends/:email/ratings', authenticateToken, async (req, res) => {
     const { email } = req.params;
@@ -1041,8 +1077,9 @@ app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error retrieving messages.' });
     }
 });
-
-// Start server
+//////////////////////////////////////
+// END ROUTES TO HANDLE API REQUESTS
+//////////////////////////////////////
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
