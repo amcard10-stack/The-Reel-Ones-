@@ -22,6 +22,8 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.use(express.json());
+
+// Serve static files from the "public" folder
 app.use(express.static('public'));
 
 //////////////////////////////////////
@@ -1258,7 +1260,27 @@ app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
 
     try {
         const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT id, sender_email, receiver_email, content, sent_at, read_at
+             FROM message
+             WHERE (sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?)
+             ORDER BY sent_at ASC`,
+            [req.user.email, email, email, req.user.email]
+        );
 
+        await connection.end();
+        res.status(200).json({ messages: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving messages.' });
+    }
+});
+// Get messages between current user and a friend
+app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+
+    try {
+        const connection = await createConnection();
         const [rows] = await connection.execute(
             `SELECT id, sender_email, receiver_email, content, sent_at, read_at
              FROM message
@@ -1275,6 +1297,8 @@ app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
     }
 });
 
+// Unread message count (requires message.read_at — run friends_message_read_migration.sql)
+// Optional ?from=friend@email counts only messages sent by that friend to the current user.
 app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res) => {
     const fromEmail = (req.query.from || '').trim() || null;
 
@@ -1283,13 +1307,11 @@ app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res
 
         if (fromEmail) {
             const [friendCheck] = await connection.execute(
-                `SELECT id
-                 FROM friend_request
+                `SELECT id FROM friend_request
                  WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
-                   AND status = 'accepted'`,
+                 AND status = 'accepted'`,
                 [req.user.email, fromEmail, fromEmail, req.user.email]
             );
-
             if (friendCheck.length === 0) {
                 await connection.end();
                 return res.status(403).json({ message: 'Not friends.' });
@@ -1321,6 +1343,7 @@ app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res
     }
 });
 
+// Mark all messages from :email → current user as read
 app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res) => {
     const { email } = req.params;
 
@@ -1332,10 +1355,9 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
         const connection = await createConnection();
 
         const [friendCheck] = await connection.execute(
-            `SELECT id
-             FROM friend_request
+            `SELECT id FROM friend_request
              WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
-               AND status = 'accepted'`,
+             AND status = 'accepted'`,
             [req.user.email, email, email, req.user.email]
         );
 
@@ -1351,17 +1373,23 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
             [req.user.email, email]
         );
 
-        await connection.end();
-        return res.status(200).json({ marked: result.affectedRows });
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Error marking messages read.' });
+        await connection.end(); // 👈 ADD THIS
+
+        const providers = rows.map(r => r.provider_key);
+
+        res.json(providers);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json([]);
     }
 });
 
 //////////////////////////////////////
 // END ROUTES TO HANDLE API REQUESTS
 //////////////////////////////////////
+
+// Start server
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });
+

@@ -56,48 +56,6 @@
     </div>
 </div>
 
-<!-- Friend detail popup (ratings + messages) -->
-<div id="friendPopup" class="popup-overlay" style="display:none;">
-    <div class="popup-content">
-        <button class="popup-close" id="friendPopupClose">&times;</button>
-        <div class="popup-header">
-            <img id="friendPopupPic" class="popup-poster" src="" alt="" style="display:none; border-radius:50%;">
-            <div id="friendPopupPlaceholder" class="popup-poster-placeholder" style="border-radius:50%;"></div>
-            <div class="popup-info">
-                <h3 id="friendPopupName"></h3>
-                <p id="friendPopupUsername" class="popup-meta"></p>
-                <p id="friendPopupEmail" class="popup-meta"></p>
-            </div>
-        </div>
-
-        <!-- TABS -->
-    <div class="popup-tabs">
-        <button class="tab-btn active" data-tab="ratings">Ratings</button>
-        <button class="tab-btn" data-tab="watchlists">Watchlists</button>
-        <button class="tab-btn" data-tab="messages">Messages <span id="messagesTabBadge" class="tab-message-badge" aria-label="Unread in this chat"></span></button>
-    </div>
-
-<!-- RATINGS TAB -->
-    <div id="tab-ratings" class="tab-content">
-        <div id="friendRatingsList" class="friend-ratings-list"></div>
-    </div>
-
-<!-- WATCHLISTS TAB -->
-    <div id="tab-watchlists" class="tab-content" style="display:none;">
-        <div id="friendListsList" class="friend-lists-list"></div>
-    </div>
-
-<!-- MESSAGES TAB -->
-    <div id="tab-messages" class="tab-content" style="display:none;">
-        <div id="messagesList" class="messages-list"></div>
-        <div class="message-input-row">
-            <input type="text" id="messageInput" placeholder="Send a message about a movie or show...">
-            <button id="sendMessageBtn" class="primary-btn">Send</button>
-        </div>
-    </div>
-</div>
-</div>
-
 <script src="/js/datamodel.js"></script>
 <script src="/js/friends.js"></script>
 </body>

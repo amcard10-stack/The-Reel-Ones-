@@ -359,5 +359,39 @@ getPostersForItems: async function (items) {
     return posters;
 },
 
-    };
+    getSubscriptions: async function () {
+    if (!token) return [];
+    try {
+        const response = await fetch('/api/subscriptions', {
+            method: 'GET',
+            headers: authHeaders(),
+        });
+
+        if (!response.ok) return [];
+
+        const data = await response.json();
+
+        return data;
+    } catch (error) {
+        console.error("Error fetching subscriptions:", error);
+        return [];
+    }
+},
+
+saveSubscriptions: async function (subscriptions) {
+    if (!token) return { ok: false };
+    try {
+        const response = await fetch('/api/subscriptions', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ providers: subscriptions }),
+        });
+
+        return { ok: response.ok, data: await response.json() };
+    } catch (error) {
+        console.error("Error saving subscriptions:", error);
+        return { ok: false };
+    }
+},
+   };
 })();
