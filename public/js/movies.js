@@ -16,13 +16,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const searchBtn = document.getElementById('movieSearchBtn');
 
     const sectionTitle = document.getElementById('moviesSectionTitle');
- const browseTitle = document.getElementById('browseSectionTitle');
+    const browseTitle = document.getElementById('browseSectionTitle');
 
     const applyBtn = document.getElementById('applyFilterBtn');
     const clearBtn = document.getElementById('clearFilterBtn');
     const saveBtn = document.getElementById('saveFilterBtn');
 
     if (!row || !allMoviesGrid) return;
+
 
     logoutButton?.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
@@ -70,10 +71,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     saveBtn?.addEventListener('click', async () => {
-        const selectedProviders = getSelectedProviderKeys();
-        const result = await DataModel.saveSubscriptions(selectedProviders);
-        alert(result.ok ? 'Subscriptions saved.' : 'Failed to save.');
-    });
+    const selectedProviders = getSelectedProviderKeys();
+
+    console.log("SELECTED:", selectedProviders); 
+
+    const result = await DataModel.saveSubscriptions(selectedProviders);
+    console.log("RESULT:", result);
+
+    alert(result.ok ? 'Subscriptions saved.' : 'Failed to save.');
+});
 
     // ================= LOAD MORE =================
     loadMoreBtn?.addEventListener('click', async () => {
@@ -145,17 +151,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ================= FETCH =================
     async function fetchBrowseMovies(page = 1) {
-        const ids = getSelectedProviderIds();
-        const query = ids.length ? `&providers=${ids.join(',')}` : '';
+    const ids = getSelectedProviderIds();
+    const query = ids.length ? `&providers=${ids.join('|')}` : '';
 
-        const res = await fetch(`/api/discover/movies?page=${page}${query}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+    const res = await fetch(`/api/discover/movies?page=${page}${query}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
 
-        const data = await res.json();
-        return data.results || [];
-    }
+    const data = await res.json();
 
+    let movies = data.results || [];
+
+    //apply filter
+    movies = await filterMoviesByProviders(movies, ids);
+
+    return movies;
+}
     async function fetchSearchMovies(query, page = 1) {
         const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie&page=${page}`, {
             headers: { 'Authorization': `Bearer ${token}` }

@@ -368,8 +368,10 @@ getPostersForItems: async function (items) {
         });
 
         if (!response.ok) return [];
+
         const data = await response.json();
-        return data.subscriptions || [];
+
+        return data;
     } catch (error) {
         console.error("Error fetching subscriptions:", error);
         return [];
@@ -382,7 +384,7 @@ saveSubscriptions: async function (subscriptions) {
         const response = await fetch('/api/subscriptions', {
             method: 'POST',
             headers: authHeaders(),
-            body: JSON.stringify({ subscriptions }),
+            body: JSON.stringify({ providers: subscriptions }),
         });
 
         return { ok: response.ok, data: await response.json() };
