@@ -16,14 +16,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const searchBtn = document.getElementById('movieSearchBtn');
 
     const sectionTitle = document.getElementById('moviesSectionTitle');
-    const browseTitle = document.getElementById('browseSectionTitle');
+ const browseTitle = document.getElementById('browseSectionTitle');
 
     const applyBtn = document.getElementById('applyFilterBtn');
     const clearBtn = document.getElementById('clearFilterBtn');
     const saveBtn = document.getElementById('saveFilterBtn');
 
     if (!row || !allMoviesGrid) return;
-
 
     logoutButton?.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
@@ -42,233 +41,212 @@ document.addEventListener('DOMContentLoaded', async () => {
     const DEBOUNCE_MS = 400;
     const MIN_CHARS = 2;
 
-    searchBtn?.addEventListener('click', () => loadTrendingMovies());
-    searchInput?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') loadTrendingMovies();
+    let browsePage = 1;
+    let isSearchMode = false;
+    let currentSearchQuery = '';
+    let currentSearchPage = 1;
+    let isLoadingMore = false;
+
+    // ================= SEARCH =================
+    searchBtn.addEventListener('click', handleSearchOrBrowseReset);
+
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleSearchOrBrowseReset();
     });
-    searchInput?.addEventListener('input', () => {
+
+    searchInput.addEventListener('input', () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(handleSearchOrBrowseReset, DEBOUNCE_MS);
     });
 
-    function setupScrollButtons() {
-        document.querySelectorAll('.row-container').forEach((container) => {
-            const row = container.querySelector('.movie-row');
-            const leftBtn = container.querySelector('.scroll-btn.left');
-            const rightBtn = container.querySelector('.scroll-btn.right');
+    // ================= FILTER BUTTONS =================
+    applyBtn?.addEventListener('click', refreshPageContent);
 
-            if (!row) return;
-
-            leftBtn?.addEventListener('click', () => {
-                row.scrollBy({ left: -400, behavior: 'smooth' });
-            });
-
-            rightBtn?.addEventListener('click', () => {
-                row.scrollBy({ left: 400, behavior: 'smooth' });
-            });
+    clearBtn?.addEventListener('click', async () => {
+        document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach(box => {
+            box.checked = false;
         });
-    }
+        await refreshPageContent();
+    });
 
-    function getSelectedSubscriptions() {
-        return Array.from(document.querySelectorAll('#filterPanel input[type="checkbox"]:checked'))
-            .map((cb) => cb.value);
-    }
+    saveBtn?.addEventListener('click', async () => {
+        const selectedProviders = getSelectedProviderKeys();
+        const result = await DataModel.saveSubscriptions(selectedProviders);
+        alert(result.ok ? 'Subscriptions saved.' : 'Failed to save.');
+    });
 
-    function matchesSubscriptionFilter(providerData, selectedFilters) {
-        if (!selectedFilters.length) return true;
-        if (!providerData?.flatrate?.length) return false;
+    // ================= LOAD MORE =================
+    loadMoreBtn?.addEventListener('click', async () => {
+        if (isLoadingMore) return;
 
-        const providerNames = providerData.flatrate.map((p) => (p.providerName || '').toLowerCase());
+        isLoadingMore = true;
+        loadMoreBtn.disabled = true;
 
-        return selectedFilters.some((filter) => {
-            if (filter === 'netflix') {
-                return providerNames.some((name) => name.includes('netflix'));
-            }
-            if (filter === 'hulu') {
-                return providerNames.some((name) => name.includes('hulu'));
-            }
-            if (filter === 'disney') {
-                return providerNames.some((name) => name.includes('disney'));
-            }
-            if (filter === 'max') {
-                return providerNames.some((name) => name.includes('max') || name.includes('hbo'));
-            }
-            if (filter === 'prime') {
-                return providerNames.some((name) => name.includes('amazon') || name.includes('prime'));
-            }
-            return false;
-        });
-    }
-
-    async function fetchProviders(tmdbId, type) {
         try {
-            const res = await fetch(`/api/title/providers?tmdbId=${tmdbId}&type=${type}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) return null;
-            return data;
-        } catch (err) {
-            console.error('Provider fetch failed:', err);
-            return null;
+            if (isSearchMode) {
+                currentSearchPage++;
+                const movies = await fetchSearchMovies(currentSearchQuery, currentSearchPage);
+                renderGridMovies(movies, true);
+            } else {
+                browsePage++;
+                const movies = await fetchBrowseMovies(browsePage);
+                renderGridMovies(movies, true);
+            }
+        } finally {
+            isLoadingMore = false;
+            loadMoreBtn.disabled = false;
         }
+    });
+
+    // ================= HELPERS =================
+    function getSelectedProviderKeys() {
+        return Array.from(document.querySelectorAll('#filterPanel input:checked'))
+            .map(box => box.value);
     }
 
-    function formatProviders(providerData) {
-        if (!providerData) {
-            return 'Availability unavailable';
-        }
-
-        if (providerData.flatrate && providerData.flatrate.length > 0) {
-            const names = providerData.flatrate.slice(0, 3).map((p) => p.providerName);
-            return `Streaming on: ${names.join(', ')}`;
-        }
-
-        if (providerData.rent && providerData.rent.length > 0) {
-            const names = providerData.rent.slice(0, 3).map((p) => p.providerName);
-            return `Available to rent: ${names.join(', ')}`;
-        }
-
-        if (providerData.buy && providerData.buy.length > 0) {
-            const names = providerData.buy.slice(0, 3).map((p) => p.providerName);
-            return `Available to buy: ${names.join(', ')}`;
-        }
-
-        return 'Not available for streaming';
+    function getSelectedProviderIds() {
+        return getSelectedProviderKeys()
+            .flatMap(key => PROVIDER_MAP[key] || []);
     }
 
-    async function renderMoviesToRow(targetRow, movies, selectedFilters = []) {
-        if (!targetRow) return;
+    async function loadSavedSubscriptions() {
+        const saved = await DataModel.getSubscriptions();
+        document.querySelectorAll('#filterPanel input').forEach(box => {
+            box.checked = saved.includes(box.value);
+        });
+    }
 
-        targetRow.innerHTML = '';
+    // ================= FILTER (SEARCH ONLY) =================
+    async function filterMoviesByProviders(movies, selectedProviderIds) {
+        if (!selectedProviderIds.length) return movies;
 
-        const usableMovies = movies.filter((movie) => movie.poster_path);
+        const checks = await Promise.all(
+            movies.map(async (movie) => {
+                try {
+                    const res = await fetch(`/api/movie/${movie.id}/providers`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
 
-        if (!usableMovies.length) {
-            targetRow.innerHTML = `<p style="color:#666;padding:20px">No movies found.</p>`;
+                    const data = await res.json();
+                    if (!res.ok) return null;
+
+                    const providers = data.results?.US?.flatrate || [];
+                    const ids = providers.map(p => String(p.provider_id));
+
+                    return selectedProviderIds.some(id => ids.includes(id)) ? movie : null;
+                } catch {
+                    return null;
+                }
+            })
+        );
+
+        return checks.filter(Boolean);
+    }
+
+    // ================= FETCH =================
+    async function fetchBrowseMovies(page = 1) {
+        const ids = getSelectedProviderIds();
+        const query = ids.length ? `&providers=${ids.join(',')}` : '';
+
+        const res = await fetch(`/api/discover/movies?page=${page}${query}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+        return data.results || [];
+    }
+
+    async function fetchSearchMovies(query, page = 1) {
+        const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie&page=${page}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+        let movies = data.results || [];
+
+        movies = await filterMoviesByProviders(movies, getSelectedProviderIds());
+        return movies;
+    }
+
+    // ================= LOAD TRENDING =================
+    async function loadMovies() {
+        const res = await fetch('/api/trending/movies', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+        let movies = data.results || [];
+
+        movies = await filterMoviesByProviders(movies, getSelectedProviderIds());
+        renderMovies(movies);
+    }
+
+    function renderMovies(movies) {
+        row.innerHTML = '';
+
+        if (!movies.length) {
+            row.innerHTML = `<p>No movies found.</p>`;
             return;
         }
 
-        const cards = [];
+        movies.forEach(movie => {
+            if (!movie.poster_path) return;
 
-        for (const movie of usableMovies) {
-            const card = document.createElement('div');
-            card.className = 'media-card';
-
-            card.innerHTML = `
-                <img src="https://image.tmdb.org/t/p/w342${movie.poster_path}" alt="${movie.title || ''}">
-                <p class="media-title">${movie.title || 'Untitled'}</p>
-                <p class="provider-label">Loading availability...</p>
+            row.innerHTML += `
+                <div class="media-card">
+                    <img src="https://image.tmdb.org/t/p/w342${movie.poster_path}">
+                    <p>${movie.title}</p>
+                </div>
             `;
-
-            targetRow.appendChild(card);
-            cards.push({ movie, card });
-        }
-
-        let visibleCount = 0;
-
-        for (const { movie, card } of cards) {
-            const providerLabel = card.querySelector('.provider-label');
-            const providerData = await fetchProviders(movie.id, 'movie');
-
-            if (!matchesSubscriptionFilter(providerData, selectedFilters)) {
-                card.remove();
-                continue;
-            }
-
-            providerLabel.textContent = formatProviders(providerData);
-            visibleCount++;
-        }
-
-        if (visibleCount === 0) {
-            targetRow.innerHTML = `<p style="color:#666;padding:20px">No movies matched this filter.</p>`;
-        }
-    }
-
-    async function loadTrendingMovies() {
-        const query = searchInput?.value?.trim();
-        const selectedFilters = getSelectedSubscriptions();
-        trendingRow.innerHTML = '';
-
-        if (query && query.length >= MIN_CHARS) {
-            sectionTitle.textContent = `Results for "${query}"`;
-            try {
-                const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.message || 'Search failed');
-                await renderMoviesToRow(trendingRow, data.results || [], selectedFilters);
-            } catch (err) {
-                console.error(err);
-                trendingRow.innerHTML = `<p style="color:#dc3545;padding:20px">${err.message}</p>`;
-            }
-        } else {
-            sectionTitle.textContent = 'Trending';
-            try {
-                const res = await fetch('/api/trending/movies', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.message || 'Failed to load');
-                await renderMoviesToRow(trendingRow, data.results || [], selectedFilters);
-            } catch (err) {
-                console.error(err);
-                trendingRow.innerHTML = `<p style="color:#dc3545;padding:20px">Failed to load movies.</p>`;
-            }
-        }
-    }
-
-    async function loadGenreMovies(targetRow, genreId) {
-        if (!targetRow) return;
-
-        const selectedFilters = getSelectedSubscriptions();
-        targetRow.innerHTML = '';
-
-        try {
-            const res = await fetch(`/api/movies/by-genre?genreId=${genreId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-
-            const text = await res.text();
-            let data;
-
-            try {
-                data = JSON.parse(text);
-            } catch {
-                throw new Error(`Server returned non-JSON response for genre ${genreId}`);
-            }
-
-            if (!res.ok) {
-                throw new Error(data.message || 'Failed to load genre movies');
-            }
-
-            await renderMoviesToRow(targetRow, data.results || [], selectedFilters);
-        } catch (err) {
-            console.error(err);
-            targetRow.innerHTML = `<p style="color:#dc3545;padding:20px">${err.message}</p>`;
-        }
-    }
-
-    async function reloadAllRows() {
-        await Promise.all([
-            loadTrendingMovies(),
-            loadGenreMovies(actionRow, 28),
-            loadGenreMovies(comedyRow, 35),
-            loadGenreMovies(horrorRow, 27)
-        ]);
-    }
-
-    applyFilterBtn?.addEventListener('click', reloadAllRows);
-
-    clearFilterBtn?.addEventListener('click', async () => {
-        document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach((cb) => {
-            cb.checked = false;
         });
-        await reloadAllRows();
-    });
+    }
 
-    setupScrollButtons();
-    await reloadAllRows();
+    function renderGridMovies(movies, append = false) {
+        if (!append) allMoviesGrid.innerHTML = '';
+
+        const valid = movies.filter(m => m.poster_path);
+
+        if (!valid.length) {
+            allMoviesGrid.innerHTML = `<p>No movies found.</p>`;
+            return;
+        }
+
+        valid.forEach(movie => {
+            allMoviesGrid.innerHTML += `
+                <div class="media-card grid-card">
+                    <img src="https://image.tmdb.org/t/p/w342${movie.poster_path}">
+                    <p>${movie.title}</p>
+                </div>
+            `;
+        });
+    }
+
+    // ================= MAIN LOGIC =================
+    async function handleSearchOrBrowseReset() {
+        const query = searchInput.value.trim();
+
+        if (query.length >= MIN_CHARS) {
+            isSearchMode = true;
+            currentSearchQuery = query;
+            currentSearchPage = 1;
+            browseTitle.textContent = `Search: ${query}`;
+            renderGridMovies(await fetchSearchMovies(query), false);
+        } else {
+            isSearchMode = false;
+            browsePage = 1;
+            browseTitle.textContent = 'Browse Movies';
+            renderGridMovies(await fetchBrowseMovies(1), false);
+        }
+
+        await loadMovies();
+    }
+
+    async function refreshPageContent() {
+        await handleSearchOrBrowseReset();
+    }
+
+    // ================= INIT =================
+    await loadSavedSubscriptions();
+    await handleSearchOrBrowseReset();
 });
+   
