@@ -1471,7 +1471,7 @@ app.post('/api/subscriptions', authenticateToken, async (req, res) => {
         res.json({ ok: true });
 
     } catch (err) {
-        console.error("SUBSCRIPTION ERROR:", err); // 👈 THIS IS KEY
+        console.error("SUBSCRIPTION ERROR:", err); 
         res.status(500).json({ ok: false, error: err.message });
     }
 });
@@ -1495,6 +1495,35 @@ app.get('/api/subscriptions', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json([]);
+    }
+});
+
+app.get('/api/discover/tv', authenticateToken, async (req, res) => {
+    const page = req.query.page || 1;
+    const providers = req.query.providers;
+
+    if (!process.env.TMDB_API_KEY) {
+        return res.status(500).json({ message: 'TMDB API key missing' });
+    }
+
+    try {
+        let url = `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}&page=${page}&watch_region=US`;
+
+        if (providers) {
+            url += `&with_watch_providers=${providers}`;
+        }
+
+        const tmdbRes = await fetch(url);
+
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
+        }
+
+        const data = await tmdbRes.json();
+        return res.status(200).json(data);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error fetching discover shows' });
     }
 });
 

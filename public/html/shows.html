@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Subscriptions</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shows</title>
     <link rel="stylesheet" href="/css/shows.css">
 </head>
 <body>
@@ -11,23 +13,49 @@
     <div class="header">
         <h1>Shows</h1>
         <div class="header-right">
-            <input type="text" id="showSearch" placeholder="Search shows..." class="page-search">
+            <input type="text" id="showSearch" class="page-search" placeholder="Search shows...">
             <button id="showSearchBtn">Search</button>
             <button onclick="window.location.href='/dashboard'">Dashboard</button>
             <button id="logoutButton">Log Out</button>
         </div>
     </div>
 
-    <h3 class="row-title" id="showsSectionTitle">Trending</h3>
+    <div class="top-section">
+        <div class="filter-panel">
+            <h4>Filter by Subscription</h4>
 
-    <div class="row-container">
+            <label><input type="checkbox" value="netflix" class="subscription-filter"> Netflix</label>
+            <label><input type="checkbox" value="hulu" class="subscription-filter"> Hulu</label>
+            <label><input type="checkbox" value="disney" class="subscription-filter"> Disney+</label>
+            <label><input type="checkbox" value="max" class="subscription-filter"> HBO Max</label>
+            <label><input type="checkbox" value="prime" class="subscription-filter"> Amazon Prime</label>
 
-        <button class="scroll-btn left" id="scrollLeft">❮</button>
+            <div class="filter-buttons">
+                <button id="applyFilterBtn">Apply</button>
+                <button id="clearFilterBtn">Clear</button>
+                <button id="saveFilterBtn">Save</button>
+            </div>
+        </div>
 
-        <div class="movie-row" id="showsRow"></div>
+        <div class="top-content">
+            <h3 class="row-title" id="showsSectionTitle">Trending</h3>
+            <div class="row-container">
+                <button class="scroll-btn left" id="scrollLeftBtn">&#8249;</button>
+                <div class="movie-row" id="trendingShowsRow"></div>
+                <button class="scroll-btn right" id="scrollRightBtn">&#8250;</button>
+            </div>
+        </div>
+    </div>
 
-        <button class="scroll-btn right" id="scrollRight">❯</button>
+    <div class="other-rows">
+        <div class="show-section browse-section">
+            <h3 class="row-title" id="browseSectionTitle">Browse Shows</h3>
+            <div id="showsGrid" class="shows-grid"></div>
 
+            <div class="load-more-wrap">
+                <button id="loadMoreBtn">Load More</button>
+            </div>
+        </div>
     </div>
 
 </div>
