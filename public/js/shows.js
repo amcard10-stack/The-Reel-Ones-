@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', async () => {
-
     const token = localStorage.getItem('jwtToken');
 
     if (!token) {
@@ -7,89 +6,190 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    const logoutButton = document.getElementById('logoutButton');
-    const row = document.getElementById('showsRow');
+    DataModel.setToken(token);
+
+    const trendingRow = document.getElementById('trendingShowsRow');
+    const showsGrid = document.getElementById('showsGrid');
     const searchInput = document.getElementById('showSearch');
     const searchBtn = document.getElementById('showSearchBtn');
-    const sectionTitle = document.getElementById('showsSectionTitle');
+    const browseTitle = document.getElementById('browseSectionTitle');
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
 
-    if (!row) return;
+    const applyBtn = document.getElementById('applyFilterBtn');
+    const clearBtn = document.getElementById('clearFilterBtn');
+    const saveBtn = document.getElementById('saveFilterBtn');
 
-    logoutButton.addEventListener('click', () => {
-        localStorage.removeItem('jwtToken');
-        window.location.href = '/';
-    });
+    if (!trendingRow || !showsGrid) return;
 
-    let debounceTimer = null;
-    const DEBOUNCE_MS = 400;
-    const MIN_CHARS = 2;
+    const PROVIDER_MAP = {
+        netflix: ['8'],
+        hulu: ['15'],
+        disney: ['337'],
+        max: ['189', '384'],
+        prime: ['9']
+    };
 
-    searchBtn.addEventListener('click', () => loadShows());
-    searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') loadShows();
-    });
-    searchInput.addEventListener('input', () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => loadShows(), DEBOUNCE_MS);
-    });
+    let browsePage = 1;
+    let isSearchMode = false;
+    let currentSearchQuery = '';
+    let currentSearchPage = 1;
 
-    const scrollLeft = document.getElementById("scrollLeft");
-    const scrollRight = document.getElementById("scrollRight");
-    scrollLeft.addEventListener("click", () => row.scrollBy({ left: -400, behavior: "smooth" }));
-    scrollRight.addEventListener("click", () => row.scrollBy({ left: 400, behavior: "smooth" }));
-
-    async function loadShows() {
-        const query = searchInput?.value?.trim();
-        row.innerHTML = '';
-
-        if (query && query.length >= MIN_CHARS) {
-            sectionTitle.textContent = `Results for "${query}"`;
-            try {
-                const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=tv`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.message || 'Search failed');
-                renderShows(data.results || []);
-            } catch (err) {
-                console.error(err);
-                row.innerHTML = `<p style="color:#dc3545;padding:20px">${err.message}</p>`;
-            }
-        } else {
-            sectionTitle.textContent = 'Trending';
-            try {
-                const res = await fetch('/api/trending/shows', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    if (res.status === 401) {
-                        localStorage.removeItem('jwtToken');
-                        window.location.href = '/';
-                        return;
-                    }
-                    throw new Error(data.message || 'Failed to load');
-                }
-                renderShows(data.results || []);
-            } catch (err) {
-                console.error(err);
-                row.innerHTML = `<p style="color:#dc3545;padding:20px">${err.message}</p>`;
-            }
-        }
+    function getSelectedProviderKeys() {
+        return Array.from(document.querySelectorAll('.subscription-filter:checked'))
+            .map(box => box.value);
     }
 
-    function renderShows(shows) {
-        shows.forEach(show => {
-            if (!show.poster_path) return;
-            const card = document.createElement("div");
-            card.className = "media-card";
-            card.innerHTML = `
-                <img src="https://image.tmdb.org/t/p/w342${show.poster_path}" alt="${show.name || ''}">
-                <p>${show.name || 'Untitled'}</p>
-            `;
-            row.appendChild(card);
+    function getSelectedProviderIds() {
+        return getSelectedProviderKeys()
+            .flatMap(key => PROVIDER_MAP[key] || []);
+    }
+
+    saveBtn.addEventListener('click', async () => {
+        const selected = getSelectedProviderKeys();
+        await DataModel.saveSubscriptions(selected);
+        alert('Saved!');
+    });
+
+    clearBtn.addEventListener('click', async () => {
+        document.querySelectorAll('.subscription-filter').forEach(box => {
+            box.checked = false;
+        });
+        await loadContent();
+    });
+
+    applyBtn.addEventListener('click', loadContent);
+
+    async function loadSavedSubscriptions() {
+        const result = await DataModel.getSubscriptions();
+        const saved = result.subscriptions || result || [];
+
+        document.querySelectorAll('.subscription-filter').forEach(box => {
+            box.checked = saved.includes(box.value);
         });
     }
 
-    loadShows();
+    async function fetchBrowseShows(page = 1) {
+        const ids = getSelectedProviderIds();
+        const query = ids.length ? `&providers=${ids.join(',')}` : '';
+
+        const res = await fetch(`/api/discover/tv?page=${page}${query}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+        return data.results || [];
+    }
+
+    async function fetchSearchShows(query, page = 1) {
+        const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=tv&page=${page}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+        return data.results || [];
+    }
+
+    async function filterShowsByProviders(shows, selectedProviderIds) {
+        if (!selectedProviderIds.length) return shows;
+
+        const checks = await Promise.all(
+            shows.map(async (show) => {
+                try {
+                    const res = await fetch(`/api/tv/${show.id}/providers`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) return null;
+
+                    const providers = data.results?.US?.flatrate || [];
+                    const ids = providers.map(p => String(p.provider_id));
+
+                    return selectedProviderIds.some(id => ids.includes(id)) ? show : null;
+                } catch {
+                    return null;
+                }
+            })
+        );
+
+        return checks.filter(Boolean);
+    }
+
+    async function loadTrending() {
+        const res = await fetch('/api/trending/shows', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        const data = await res.json();
+        let shows = data.results || [];
+
+        shows = await filterShowsByProviders(shows, getSelectedProviderIds());
+        renderTrending(shows);
+    }
+
+    function renderTrending(shows) {
+        trendingRow.innerHTML = '';
+
+        shows.forEach(show => {
+            if (!show.poster_path) return;
+
+            trendingRow.innerHTML += `
+                <div class="media-card">
+                    <img src="https://image.tmdb.org/t/p/w342${show.poster_path}" alt="${show.name}">
+                    <p>${show.name}</p>
+                </div>
+            `;
+        });
+    }
+
+    function renderGrid(shows, append = false) {
+        if (!append) showsGrid.innerHTML = '';
+
+        shows.forEach(show => {
+            if (!show.poster_path) return;
+
+            showsGrid.innerHTML += `
+                <div class="media-card grid-card">
+                    <img src="https://image.tmdb.org/t/p/w342${show.poster_path}" alt="${show.name}">
+                    <p>${show.name}</p>
+                </div>
+            `;
+        });
+    }
+
+    async function loadContent() {
+        const query = searchInput.value.trim();
+
+        if (query.length >= 2) {
+            isSearchMode = true;
+            currentSearchQuery = query;
+            currentSearchPage = 1;
+            browseTitle.textContent = `Search: ${query}`;
+            renderGrid(await fetchSearchShows(query));
+        } else {
+            isSearchMode = false;
+            browsePage = 1;
+            browseTitle.textContent = 'Browse Shows';
+            renderGrid(await fetchBrowseShows(1));
+        }
+
+        await loadTrending();
+    }
+
+    loadMoreBtn.addEventListener('click', async () => {
+        if (isSearchMode) {
+            currentSearchPage++;
+            const more = await fetchSearchShows(currentSearchQuery, currentSearchPage);
+            renderGrid(more, true);
+        } else {
+            browsePage++;
+            const more = await fetchBrowseShows(browsePage);
+            renderGrid(more, true);
+        }
+    });
+
+    searchBtn.addEventListener('click', loadContent);
+
+    await loadSavedSubscriptions();
+    await loadContent();
 });

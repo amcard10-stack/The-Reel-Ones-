@@ -1383,13 +1383,156 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
         res.status(500).json([]);
     }
 });
+// ================= TMDB DISCOVER MOVIES =================
+app.get('/api/discover/movies', authenticateToken, async (req, res) => {
+  const page = req.query.page || 1;
+  const providers = req.query.providers; // "8,15,337"
 
+  if (!process.env.TMDB_API_KEY) {
+    return res.status(500).json({ message: 'TMDB API key missing' });
+  }
+
+  try {
+    let url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&page=${page}&watch_region=US`;
+
+    // ONLY add provider filter if selected
+    if (providers) {
+      url += `&with_watch_providers=${providers}`;
+    }
+
+    const tmdbRes = await fetch(url);
+
+    if (!tmdbRes.ok) {
+      return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
+    }
+
+    const data = await tmdbRes.json();
+    res.status(200).json(data);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error fetching discover movies' });
+  }
+});
+
+
+// ================= TMDB PROVIDERS FOR A MOVIE =================
+app.get('/api/movie/:id/providers', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  if (!process.env.TMDB_API_KEY) {
+    return res.status(500).json({ message: 'TMDB API key missing' });
+  }
+
+  try {
+    const url = `https://api.themoviedb.org/3/movie/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`;
+
+    const tmdbRes = await fetch(url);
+
+    if (!tmdbRes.ok) {
+      return res.status(tmdbRes.status).json({ message: 'Provider fetch failed' });
+    }
+
+    const data = await tmdbRes.json();
+    res.status(200).json(data);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error fetching providers' });
+  }
+});
+
+app.post('/api/subscriptions', authenticateToken, async (req, res) => {
+    const userEmail = req.user.email;
+    const { providers } = req.body;
+
+    try {
+        const connection = await createConnection();
+
+        console.log("Saving for:", userEmail);
+        console.log("Providers:", providers);
+
+        // clear old
+        await connection.execute(
+            'DELETE FROM user_subscription WHERE user_email = ?',
+            [userEmail]
+        );
+
+        // insert new
+        for (const provider of providers) {
+            await connection.execute(
+                'INSERT INTO user_subscription (user_email, provider_key) VALUES (?, ?)',
+                [userEmail, provider]
+            );
+        }
+
+        await connection.end();
+
+        res.json({ ok: true });
+
+    } catch (err) {
+        console.error("SUBSCRIPTION ERROR:", err); 
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+app.get('/api/subscriptions', authenticateToken, async (req, res) => {
+    const userEmail = req.user.email;
+
+    try {
+        const connection = await createConnection();
+
+        const [rows] = await connection.execute(
+            'SELECT provider_key FROM user_subscription WHERE user_email = ?',
+            [userEmail]
+        );
+
+        await connection.end();
+
+        const providers = rows.map(r => r.provider_key);
+
+        res.json(providers);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json([]);
+    }
+});
+
+app.get('/api/discover/tv', authenticateToken, async (req, res) => {
+    const page = req.query.page || 1;
+    const providers = req.query.providers;
+
+    if (!process.env.TMDB_API_KEY) {
+        return res.status(500).json({ message: 'TMDB API key missing' });
+    }
+
+    try {
+        let url = `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}&page=${page}&watch_region=US`;
+
+        if (providers) {
+            url += `&with_watch_providers=${providers}`;
+        }
+
+        const tmdbRes = await fetch(url);
+
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
+        }
+
+        const data = await tmdbRes.json();
+        return res.status(200).json(data);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error fetching discover shows' });
+    }
+});
+
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
+});
 //////////////////////////////////////
 // END ROUTES TO HANDLE API REQUESTS
 //////////////////////////////////////
 
-// Start server
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-});
+
 
