@@ -1441,6 +1441,63 @@ app.get('/api/movie/:id/providers', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Error fetching providers' });
   }
 });
+
+app.post('/api/subscriptions', authenticateToken, async (req, res) => {
+    const userEmail = req.user.email;
+    const { providers } = req.body;
+
+    try {
+        const connection = await createConnection();
+
+        console.log("Saving for:", userEmail);
+        console.log("Providers:", providers);
+
+        // clear old
+        await connection.execute(
+            'DELETE FROM user_subscription WHERE user_email = ?',
+            [userEmail]
+        );
+
+        // insert new
+        for (const provider of providers) {
+            await connection.execute(
+                'INSERT INTO user_subscription (user_email, provider_key) VALUES (?, ?)',
+                [userEmail, provider]
+            );
+        }
+
+        await connection.end();
+
+        res.json({ ok: true });
+
+    } catch (err) {
+        console.error("SUBSCRIPTION ERROR:", err); // 👈 THIS IS KEY
+        res.status(500).json({ ok: false, error: err.message });
+    }
+});
+
+app.get('/api/subscriptions', authenticateToken, async (req, res) => {
+    const userEmail = req.user.email;
+
+    try {
+        const connection = await createConnection();
+
+        const [rows] = await connection.execute(
+            'SELECT provider_key FROM user_subscription WHERE user_email = ?',
+            [userEmail]
+        );
+
+        await connection.end();
+
+        const providers = rows.map(r => r.provider_key);
+
+        res.json(providers);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json([]);
+    }
+});
+
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
