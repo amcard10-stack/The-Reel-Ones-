@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         netflix: ['8'],
         hulu: ['15'],
         disney: ['337'],
-        max: ['189', '384'],
+        max: ['1899'],
         prime: ['9']
     };
 
