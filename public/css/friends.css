@@ -548,3 +548,57 @@ body {
     cursor: default;
     font-size: 13px;
 }
+
+/* Friend card (inline) */
+.friend-card {
+    margin-bottom: 16px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    overflow: hidden;
+}
+
+.friend-card-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+}
+
+.tab-inline-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: #D9DEE4;
+    cursor: pointer;
+    font-size: 13px;
+    transition: 0.2s ease;
+}
+
+.tab-inline-btn:hover {
+    background: #3A6EA5;
+    color: #F2F4F7;
+}
+
+.tab-inline-btn.active {
+    background: #3A6EA5;
+    color: #F2F4F7;
+}
+
+.friend-inline-content {
+    padding: 0 16px 16px 16px;
+}
+
+.friend-inline-content:empty {
+    padding: 0;
+}
+
+.inline-message-input {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.2);
+    color: #F2F4F7;
+}
