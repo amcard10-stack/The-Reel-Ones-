@@ -1527,6 +1527,36 @@ app.get('/api/discover/tv', authenticateToken, async (req, res) => {
     }
 });
 
+app.get('/api/trending/tv', async (req, res) => {
+    try {
+        const response = await fetch(
+            `https://api.themoviedb.org/3/trending/tv/week?api_key=${process.env.TMDB_API_KEY}`
+        );
+
+        const data = await response.json();
+        res.json(data);
+    } catch (error) {
+        console.error('Error fetching trending TV:', error);
+        res.status(500).json({ error: 'Failed to fetch trending TV' });
+    }
+});
+
+app.get('/api/tv/:id/providers', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const response = await fetch(
+            `https://api.themoviedb.org/3/tv/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`
+        );
+
+        const data = await response.json();
+        res.json(data);
+    } catch (error) {
+        console.error('Error fetching TV providers:', error);
+        res.status(500).json({ error: 'Failed to fetch TV providers' });
+    }
+});
+
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });

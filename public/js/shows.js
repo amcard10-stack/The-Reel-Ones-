@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('SHOWS JS RUNNING'); //debug tool
+
     const token = localStorage.getItem('jwtToken');
 
     if (!token) {
@@ -44,20 +46,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             .flatMap(key => PROVIDER_MAP[key] || []);
     }
 
-    saveBtn.addEventListener('click', async () => {
+    saveBtn?.addEventListener('click', async () => {
         const selected = getSelectedProviderKeys();
         await DataModel.saveSubscriptions(selected);
         alert('Saved!');
     });
 
-    clearBtn.addEventListener('click', async () => {
+    clearBtn?.addEventListener('click', async () => {
         document.querySelectorAll('.subscription-filter').forEach(box => {
             box.checked = false;
         });
         await loadContent();
     });
 
-    applyBtn.addEventListener('click', loadContent);
+    applyBtn?.addEventListener('click', loadContent);
 
     async function loadSavedSubscriptions() {
         const result = await DataModel.getSubscriptions();
@@ -116,15 +118,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function loadTrending() {
-        const res = await fetch('/api/trending/shows', {
+        console.log('TRENDING FUNCTION RUNNING'); // debug
+
+        const res = await fetch('/api/trending/tv', { 
             headers: { Authorization: `Bearer ${token}` }
         });
 
         const data = await res.json();
+        console.log('TRENDING DATA:', data); // debug
+
         let shows = data.results || [];
 
         shows = await filterShowsByProviders(shows, getSelectedProviderIds());
-        renderTrending(shows);
+
+        renderTrending(shows.slice(0, 10)); 
     }
 
     function renderTrending(shows) {
@@ -158,7 +165,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function loadContent() {
-        const query = searchInput.value.trim();
+        console.log('LOADING CONTENT');// debug
+
+        const query = searchInput?.value?.trim() || '';
 
         if (query.length >= 2) {
             isSearchMode = true;
@@ -173,10 +182,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderGrid(await fetchBrowseShows(1));
         }
 
+        console.log('CALLING TRENDING...'); // debug
         await loadTrending();
     }
 
-    loadMoreBtn.addEventListener('click', async () => {
+    loadMoreBtn?.addEventListener('click', async () => {
         if (isSearchMode) {
             currentSearchPage++;
             const more = await fetchSearchShows(currentSearchQuery, currentSearchPage);
@@ -188,7 +198,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    searchBtn.addEventListener('click', loadContent);
+    searchBtn?.addEventListener('click', loadContent);
 
     await loadSavedSubscriptions();
     await loadContent();
