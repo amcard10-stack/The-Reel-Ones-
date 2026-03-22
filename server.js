@@ -179,51 +179,64 @@ app.post('/api/login', async (req, res) => {
 //////////////////////////////////////
 // DASHBOARD / WATCH HISTORY / RATINGS
 //////////////////////////////////////
-app.get('/api/dashboard/watch-history', authenticateToken, async (req, res) => {
+app.get('/api/title/providers', authenticateToken, async (req, res) => {
+    const { id, type } = req.query;
+
+    if (!id || !type) {
+        return res.status(400).json({ message: 'id and type are required.' });
+    }
+
+    if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+        return res.status(503).json({ message: 'TMDB API key not configured.' });
+    }
+
     try {
-        const connection = await createConnection();
+        const tmdbType = type === 'show' ? 'tv' : 'movie';
+        const url = `https://api.themoviedb.org/3/${tmdbType}/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`;
 
-        const [rows] = await connection.execute(
-            `SELECT wh.id, wh.title, wh.type, wh.watched_at, r.rating, r.review
-             FROM watch_history wh
-             LEFT JOIN rating r
-               ON r.user_email = wh.user_email
-              AND r.title = wh.title
-              AND r.type = wh.type
-             WHERE wh.user_email = ?
-             ORDER BY wh.watched_at DESC
-             LIMIT 50`,
-            [req.user.email]
-        );
+        const tmdbRes = await fetch(url);
 
-        const [ratingOnlyRows] = await connection.execute(
-            `SELECT r.id, r.title, r.type, r.rated_at as watched_at, r.rating, r.review
-             FROM rating r
-             WHERE r.user_email = ?
-               AND NOT EXISTS (
-                   SELECT 1
-                   FROM watch_history wh
-                   WHERE wh.user_email = r.user_email
-                     AND wh.title = r.title
-                     AND wh.type = r.type
-               )
-             ORDER BY r.rated_at DESC`,
-            [req.user.email]
-        );
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+        }
 
-        await connection.end();
+        const data = await tmdbRes.json();
 
-        const fromWh = rows.map(r => ({ ...r, watched_at: r.watched_at }));
-        const fromRatings = ratingOnlyRows.map(r => ({ ...r, id: r.id + 1000000 }));
+        const regionData =
+            data?.results?.US ||
+            data?.results?.CA ||
+            data?.results?.GB ||
+            Object.values(data?.results || {})[0] ||
+            null;
 
-        const watchHistory = [...fromWh, ...fromRatings]
-            .sort((a, b) => new Date(b.watched_at) - new Date(a.watched_at))
-            .slice(0, 50);
+        if (!regionData) {
+            return res.status(200).json({
+                available: false,
+                providers: [],
+                streamingProviders: [],
+                label: 'Availability unavailable'
+            });
+        }
 
-        res.status(200).json({ watchHistory });
+        const streamingProviders = (regionData.flatrate || []).map((p) => p.provider_name);
+        const rentProviders = (regionData.rent || []).map((p) => p.provider_name);
+        const buyProviders = (regionData.buy || []).map((p) => p.provider_name);
+
+        const allProviders = [...streamingProviders, ...rentProviders, ...buyProviders];
+        const uniqueProviders = [...new Set(allProviders)];
+        const uniqueStreamingProviders = [...new Set(streamingProviders)];
+
+        return res.status(200).json({
+            available: uniqueProviders.length > 0,
+            providers: uniqueProviders,
+            streamingProviders: uniqueStreamingProviders,
+            label: uniqueProviders.length > 0
+                ? uniqueProviders.slice(0, 3).join(', ')
+                : 'Availability unavailable'
+        });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Error retrieving watch history.' });
+        return res.status(500).json({ message: 'Error loading providers.' });
     }
 });
 
@@ -1373,7 +1386,8 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
             [req.user.email, email]
         );
 
-        await connection.end(); // 👈 ADD THIS
+    await connection.end();
+    return res.status(200).json({ marked: result.affectedRows });
 
         const providers = rows.map(r => r.provider_key);
 
