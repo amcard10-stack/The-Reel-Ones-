@@ -22,8 +22,6 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.use(express.json());
-
-// Serve static files from the "public" folder
 app.use(express.static('public'));
 
 //////////////////////////////////////
@@ -177,66 +175,38 @@ app.post('/api/login', async (req, res) => {
 });
 
 //////////////////////////////////////
-// DASHBOARD / WATCH HISTORY / RATINGS
+// WATCH HISTORY
 //////////////////////////////////////
-app.get('/api/title/providers', authenticateToken, async (req, res) => {
-    const { id, type } = req.query;
-
-    if (!id || !type) {
-        return res.status(400).json({ message: 'id and type are required.' });
-    }
-
-    if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
-        return res.status(503).json({ message: 'TMDB API key not configured.' });
-    }
-
+app.get('/api/dashboard/watch-history', authenticateToken, async (req, res) => {
     try {
-        const tmdbType = type === 'show' ? 'tv' : 'movie';
-        const url = `https://api.themoviedb.org/3/${tmdbType}/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`;
-
-        const tmdbRes = await fetch(url);
-
-        if (!tmdbRes.ok) {
-            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
-        }
-
-        const data = await tmdbRes.json();
-
-        const regionData =
-            data?.results?.US ||
-            data?.results?.CA ||
-            data?.results?.GB ||
-            Object.values(data?.results || {})[0] ||
-            null;
-
-        if (!regionData) {
-            return res.status(200).json({
-                available: false,
-                providers: [],
-                streamingProviders: [],
-                label: 'Availability unavailable'
-            });
-        }
-
-        const streamingProviders = (regionData.flatrate || []).map((p) => p.provider_name);
-        const rentProviders = (regionData.rent || []).map((p) => p.provider_name);
-        const buyProviders = (regionData.buy || []).map((p) => p.provider_name);
-
-        const allProviders = [...streamingProviders, ...rentProviders, ...buyProviders];
-        const uniqueProviders = [...new Set(allProviders)];
-        const uniqueStreamingProviders = [...new Set(streamingProviders)];
-
-        return res.status(200).json({
-            available: uniqueProviders.length > 0,
-            providers: uniqueProviders,
-            streamingProviders: uniqueStreamingProviders,
-            label: uniqueProviders.length > 0
-                ? uniqueProviders.slice(0, 3).join(', ')
-                : 'Availability unavailable'
-        });
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT wh.id, wh.title, wh.type, wh.watched_at, r.rating, r.review
+             FROM watch_history wh
+             LEFT JOIN rating r ON r.user_email = wh.user_email AND r.title = wh.title AND r.type = wh.type
+             WHERE wh.user_email = ?
+             ORDER BY wh.watched_at DESC
+             LIMIT 50`,
+            [req.user.email]
+        );
+        const [ratingOnlyRows] = await connection.execute(
+            `SELECT r.id, r.title, r.type, r.rated_at as watched_at, r.rating, r.review
+             FROM rating r
+             WHERE r.user_email = ?
+             AND NOT EXISTS (SELECT 1 FROM watch_history wh WHERE wh.user_email = r.user_email AND wh.title = r.title AND wh.type = r.type)
+             ORDER BY r.rated_at DESC`,
+            [req.user.email]
+        );
+        await connection.end();
+        const fromWh = rows.map(r => ({ ...r, watched_at: r.watched_at }));
+        const fromRatings = ratingOnlyRows.map(r => ({ ...r, id: r.id + 1000000 }));
+        const watchHistory = [...fromWh, ...fromRatings]
+            .sort((a, b) => new Date(b.watched_at) - new Date(a.watched_at))
+            .slice(0, 50);
+        res.status(200).json({ watchHistory });
     } catch (error) {
         console.error(error);
-        return res.status(500).json({ message: 'Error loading providers.' });
+        res.status(500).json({ message: 'Error retrieving watch history.' });
     }
 });
 
@@ -289,32 +259,28 @@ app.delete('/api/dashboard/watch-history', authenticateToken, async (req, res) =
 
     try {
         const connection = await createConnection();
-
         const [result] = await connection.execute(
             'DELETE FROM watch_history WHERE user_email = ? AND title = ? AND type = ?',
             [req.user.email, titleTrim, contentType]
         );
-
         await connection.end();
-        res.status(200).json({
-            message: 'Removed from watch history.',
-            deleted: result.affectedRows > 0
-        });
+        res.status(200).json({ message: 'Removed from watch history.', deleted: result.affectedRows > 0 });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error deleting from watch history.' });
     }
 });
 
+//////////////////////////////////////
+// RATINGS
+//////////////////////////////////////
 app.get('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
-
         const [rows] = await connection.execute(
             'SELECT id, title, type, rating, review, rated_at FROM rating WHERE user_email = ? ORDER BY rated_at DESC',
             [req.user.email]
         );
-
         await connection.end();
         res.status(200).json({ ratings: rows });
     } catch (error) {
@@ -340,10 +306,33 @@ app.post('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
 
+        // Add the rating
         await connection.execute(
             'INSERT INTO rating (user_email, title, type, rating, review) VALUES (?, ?, ?, ?, ?)',
             [req.user.email, title, contentType, r, review || null]
         );
+
+        // Also add to watch history
+        try {
+            await connection.execute(
+                'INSERT INTO watch_history (user_email, title, type) VALUES (?, ?, ?)',
+                [req.user.email, title, contentType]
+            );
+        } catch (whErr) {
+            // ignore duplicate entry errors
+        }
+
+        // Also mark as completed in watch_status
+        try {
+            await connection.execute(
+                `INSERT INTO watch_status (user_email, title, type, status)
+                 VALUES (?, ?, ?, 'completed')
+                 ON DUPLICATE KEY UPDATE status = 'completed'`,
+                [req.user.email, title, contentType]
+            );
+        } catch (statusErr) {
+            if (statusErr.code !== 'ER_NO_SUCH_TABLE') console.error('watch_status:', statusErr.message);
+        }
 
         await connection.end();
         res.status(201).json({ message: 'Rating added.' });
@@ -370,7 +359,6 @@ app.put('/api/dashboard/ratings', authenticateToken, async (req, res) => {
 
     try {
         const connection = await createConnection();
-
         const [result] = await connection.execute(
             'UPDATE rating SET rating = ?, review = ? WHERE user_email = ? AND title = ? AND type = ?',
             [r, review || null, req.user.email, titleTrim, contentType]
@@ -402,17 +390,12 @@ app.delete('/api/dashboard/ratings', authenticateToken, async (req, res) => {
 
     try {
         const connection = await createConnection();
-
         const [result] = await connection.execute(
             'DELETE FROM rating WHERE user_email = ? AND title = ? AND type = ?',
             [req.user.email, titleTrim, contentType]
         );
-
         await connection.end();
-        res.status(200).json({
-            message: 'Rating removed.',
-            deleted: result.affectedRows > 0
-        });
+        res.status(200).json({ message: 'Rating removed.', deleted: result.affectedRows > 0 });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error deleting rating.' });
@@ -431,12 +414,10 @@ app.post('/api/dashboard/lists', authenticateToken, async (req, res) => {
 
     try {
         const connection = await createConnection();
-
         const [result] = await connection.execute(
             'INSERT INTO list (user_email, name) VALUES (?, ?)',
             [req.user.email, name]
         );
-
         await connection.end();
         return res.status(201).json({ message: 'List created.', listId: result.insertId });
     } catch (error) {
@@ -455,7 +436,6 @@ app.post('/api/dashboard/lists/:listId/items', authenticateToken, async (req, re
 
     try {
         const connection = await createConnection();
-
         const [lists] = await connection.execute(
             'SELECT id FROM list WHERE id = ? AND user_email = ?',
             [listId, req.user.email]
@@ -490,7 +470,6 @@ app.delete('/api/dashboard/lists/:listId/items', authenticateToken, async (req, 
 
     try {
         const connection = await createConnection();
-
         const [lists] = await connection.execute(
             'SELECT id FROM list WHERE id = ? AND user_email = ?',
             [listId, req.user.email]
@@ -507,10 +486,7 @@ app.delete('/api/dashboard/lists/:listId/items', authenticateToken, async (req, 
         );
 
         await connection.end();
-        res.status(200).json({
-            message: 'Item removed from list.',
-            deleted: result.affectedRows > 0
-        });
+        res.status(200).json({ message: 'Item removed from list.', deleted: result.affectedRows > 0 });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error removing from list.' });
@@ -520,7 +496,6 @@ app.delete('/api/dashboard/lists/:listId/items', authenticateToken, async (req, 
 app.get('/api/dashboard/lists', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
-
         const [lists] = await connection.execute(
             'SELECT id, name, created_at FROM list WHERE user_email = ? ORDER BY created_at ASC',
             [req.user.email]
@@ -556,7 +531,6 @@ app.get('/api/dashboard/status', authenticateToken, async (req, res) => {
                 'SELECT title, type FROM watch_history WHERE user_email = ?',
                 [email]
             );
-
             for (const row of whRows) {
                 await connection.execute(
                     `INSERT INTO watch_status (user_email, title, type, status)
@@ -603,7 +577,6 @@ app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
 
     try {
         const connection = await createConnection();
-
         await connection.execute(
             `INSERT INTO watch_status (user_email, title, type, status)
              VALUES (?, ?, ?, ?)
@@ -613,7 +586,6 @@ app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
                updated_at = CURRENT_TIMESTAMP`,
             [req.user.email, title, t, status]
         );
-
         await connection.end();
         return res.status(200).json({ message: 'Status saved.' });
     } catch (err) {
@@ -632,17 +604,12 @@ app.delete('/api/dashboard/status', authenticateToken, async (req, res) => {
 
     try {
         const connection = await createConnection();
-
         const [result] = await connection.execute(
             'DELETE FROM watch_status WHERE user_email = ? AND title = ?',
             [req.user.email, titleTrim]
         );
-
         await connection.end();
-        return res.status(200).json({
-            message: 'Status removed.',
-            deleted: result.affectedRows > 0
-        });
+        return res.status(200).json({ message: 'Status removed.', deleted: result.affectedRows > 0 });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ message: 'Error deleting status.' });
@@ -655,12 +622,10 @@ app.delete('/api/dashboard/status', authenticateToken, async (req, res) => {
 app.get('/api/profile', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
-
         const [rows] = await connection.execute(
             'SELECT email, username, first_name AS firstName, last_name AS lastName, bio, profile_picture AS profilePicture FROM user WHERE email = ?',
             [req.user.email]
         );
-
         await connection.end();
 
         if (rows.length === 0) {
@@ -685,7 +650,6 @@ app.put('/api/profile', authenticateToken, upload.single('profilePicture'), asyn
                 'SELECT email FROM user WHERE username = ? AND email != ?',
                 [username.trim(), req.user.email]
             );
-
             if (existing.length > 0) {
                 await connection.end();
                 return res.status(409).json({ message: 'Username is already taken.' });
@@ -711,9 +675,7 @@ app.put('/api/profile', authenticateToken, upload.single('profilePicture'), asyn
         params.push(req.user.email);
 
         await connection.execute(
-            `UPDATE user
-             SET username = ?, first_name = ?, last_name = ?, bio = ?${passwordClause}${picClause}
-             WHERE email = ?`,
+            `UPDATE user SET username = ?, first_name = ?, last_name = ?, bio = ?${passwordClause}${picClause} WHERE email = ?`,
             params
         );
 
@@ -741,11 +703,8 @@ app.get('/api/suggestions', authenticateToken, async (req, res) => {
         const [toRateRows] = await connection.execute(
             `SELECT wh.title, wh.type
              FROM watch_history wh
-             LEFT JOIN rating r
-               ON r.user_email = wh.user_email
-              AND LOWER(r.title) = LOWER(wh.title)
-             WHERE wh.user_email = ?
-               AND r.id IS NULL
+             LEFT JOIN rating r ON r.user_email = wh.user_email AND LOWER(r.title) = LOWER(wh.title)
+             WHERE wh.user_email = ? AND r.id IS NULL
              LIMIT 10`,
             [email]
         );
@@ -756,10 +715,8 @@ app.get('/api/suggestions', authenticateToken, async (req, res) => {
              WHERE r.user_email != ?
                AND r.rating >= 4
                AND NOT EXISTS (
-                   SELECT 1
-                   FROM rating r2
-                   WHERE r2.user_email = ?
-                     AND LOWER(r2.title) = LOWER(r.title)
+                   SELECT 1 FROM rating r2
+                   WHERE r2.user_email = ? AND LOWER(r2.title) = LOWER(r.title)
                )
              GROUP BY r.title, r.type
              ORDER BY avg_rating DESC
@@ -792,7 +749,6 @@ app.get('/api/users', authenticateToken, async (req, res) => {
         const connection = await createConnection();
         const [rows] = await connection.execute('SELECT email FROM user');
         await connection.end();
-
         const emailList = rows.map((row) => row.email);
         res.status(200).json({ emails: emailList });
     } catch (error) {
@@ -808,11 +764,7 @@ app.get('/api/trending/movies', authenticateToken, async (req, res) => {
     try {
         const url = `https://api.themoviedb.org/3/trending/movie/day?api_key=${process.env.TMDB_API_KEY}`;
         const tmdbRes = await fetch(url);
-
-        if (!tmdbRes.ok) {
-            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
-        }
-
+        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -825,11 +777,7 @@ app.get('/api/trending/shows', authenticateToken, async (req, res) => {
     try {
         const url = `https://api.themoviedb.org/3/trending/tv/day?api_key=${process.env.TMDB_API_KEY}`;
         const tmdbRes = await fetch(url);
-
-        if (!tmdbRes.ok) {
-            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
-        }
-
+        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -850,11 +798,7 @@ app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
         const tmdbType = type === 'tv' ? 'tv' : 'movie';
         const url = `https://api.themoviedb.org/3/search/${tmdbType}?api_key=${process.env.TMDB_API_KEY}&query=${encodeURIComponent(q)}`;
         const tmdbRes = await fetch(url);
-
-        if (!tmdbRes.ok) {
-            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
-        }
-
+        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -877,16 +821,10 @@ app.get('/api/title/providers', authenticateToken, async (req, res) => {
     try {
         const tmdbType = type === 'show' ? 'tv' : 'movie';
         const url = `https://api.themoviedb.org/3/${tmdbType}/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`;
-
         const tmdbRes = await fetch(url);
-
-        if (!tmdbRes.ok) {
-            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
-        }
-
+        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
         const data = await tmdbRes.json();
 
-        // US region first, then fallback to any available region
         const regionData =
             data?.results?.US ||
             data?.results?.CA ||
@@ -895,60 +833,37 @@ app.get('/api/title/providers', authenticateToken, async (req, res) => {
             null;
 
         if (!regionData) {
-            return res.status(200).json({
-                available: false,
-                providers: [],
-                label: 'Availability unavailable'
-            });
+            return res.status(200).json({ available: false, providers: [], streamingProviders: [], label: 'Availability unavailable' });
         }
 
-        const allProviders = [
-            ...(regionData.flatrate || []),
-            ...(regionData.rent || []),
-            ...(regionData.buy || [])
-        ];
-
-        const uniqueProviders = [];
-        const seen = new Set();
-
-        for (const p of allProviders) {
-            if (!seen.has(p.provider_name)) {
-                seen.add(p.provider_name);
-                uniqueProviders.push(p.provider_name);
-            }
-        }
+        const streamingProviders = (regionData.flatrate || []).map(p => p.provider_name);
+        const rentProviders = (regionData.rent || []).map(p => p.provider_name);
+        const buyProviders = (regionData.buy || []).map(p => p.provider_name);
+        const allProviders = [...new Set([...streamingProviders, ...rentProviders, ...buyProviders])];
+        const uniqueStreamingProviders = [...new Set(streamingProviders)];
 
         return res.status(200).json({
-            available: uniqueProviders.length > 0,
-            providers: uniqueProviders,
-            label: uniqueProviders.length > 0
-                ? uniqueProviders.slice(0, 3).join(', ')
-                : 'Availability unavailable'
+            available: allProviders.length > 0,
+            providers: allProviders,
+            streamingProviders: uniqueStreamingProviders,
+            label: allProviders.length > 0 ? allProviders.slice(0, 3).join(', ') : 'Availability unavailable'
         });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: 'Error loading providers.' });
     }
 });
+
 app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
     const { genreId } = req.query;
-
-    if (!genreId) {
-        return res.status(400).json({ message: 'genreId is required.' });
-    }
-
+    if (!genreId) return res.status(400).json({ message: 'genreId is required.' });
     if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
         return res.status(503).json({ message: 'TMDB API key not configured.' });
     }
-
     try {
         const url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}`;
         const tmdbRes = await fetch(url);
-
-        if (!tmdbRes.ok) {
-            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
-        }
-
+        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -957,582 +872,47 @@ app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
     }
 });
 
-//////////////////////////////////////
-// FRIENDS
-//////////////////////////////////////
-app.get('/api/friends/search', authenticateToken, async (req, res) => {
-    const query = (req.query.q || '').trim();
-
-    if (!query) {
-        return res.status(400).json({ message: 'Query required.' });
-    }
-
-    try {
-        const connection = await createConnection();
-
-        const [rows] = await connection.execute(
-            `SELECT email, username, first_name AS firstName, last_name AS lastName, profile_picture AS profilePicture
-             FROM user
-             WHERE (username LIKE ? OR email LIKE ?) AND email != ?
-             LIMIT 10`,
-            [`%${query}%`, `%${query}%`, req.user.email]
-        );
-
-        await connection.end();
-        res.status(200).json({ users: rows });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error searching users.' });
-    }
-});
-
-app.post('/api/friends/request', authenticateToken, async (req, res) => {
-    const { receiverEmail } = req.body;
-
-    if (!receiverEmail) {
-        return res.status(400).json({ message: 'Receiver email required.' });
-    }
-
-    if (receiverEmail === req.user.email) {
-        return res.status(400).json({ message: 'You cannot add yourself.' });
-    }
-
-    try {
-        const connection = await createConnection();
-
-        const [existing] = await connection.execute(
-            `SELECT id
-             FROM friend_request
-             WHERE sender_email = ? AND receiver_email = ? AND status = 'pending'`,
-            [req.user.email, receiverEmail]
-        );
-
-        if (existing.length > 0) {
-            await connection.end();
-            return res.status(409).json({ message: 'Friend request already sent.' });
-        }
-
-        const [alreadyFriends] = await connection.execute(
-            `SELECT id
-             FROM friend_request
-             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
-               AND status = 'accepted'`,
-            [req.user.email, receiverEmail, receiverEmail, req.user.email]
-        );
-
-        if (alreadyFriends.length > 0) {
-            await connection.end();
-            return res.status(409).json({ message: 'Already friends.' });
-        }
-
-        await connection.execute(
-            'INSERT INTO friend_request (sender_email, receiver_email) VALUES (?, ?)',
-            [req.user.email, receiverEmail]
-        );
-
-        await connection.end();
-        res.status(201).json({ message: 'Friend request sent.' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error sending friend request.' });
-    }
-});
-
-app.get('/api/friends/requests', authenticateToken, async (req, res) => {
-    try {
-        const connection = await createConnection();
-
-        const [rows] = await connection.execute(
-            `SELECT fr.id, fr.sender_email, fr.created_at,
-                    u.username, u.first_name AS firstName, u.last_name AS lastName, u.profile_picture AS profilePicture
-             FROM friend_request fr
-             JOIN user u ON u.email = fr.sender_email
-             WHERE fr.receiver_email = ? AND fr.status = 'pending'
-             ORDER BY fr.created_at DESC`,
-            [req.user.email]
-        );
-
-        await connection.end();
-        res.status(200).json({ requests: rows });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error retrieving requests.' });
-    }
-});
-
-app.get('/api/friends/requests/count', authenticateToken, async (req, res) => {
-    try {
-        const connection = await createConnection();
-
-        const [[row]] = await connection.execute(
-            'SELECT COUNT(*) AS count FROM friend_request WHERE receiver_email = ? AND status = ?',
-            [req.user.email, 'pending']
-        );
-
-        await connection.end();
-        res.status(200).json({ count: row?.count ?? 0 });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ count: 0 });
-    }
-});
-
-app.put('/api/friends/request/:id', authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    if (!['accepted', 'declined'].includes(status)) {
-        return res.status(400).json({ message: 'Invalid status.' });
-    }
-
-    try {
-        const connection = await createConnection();
-
-        const [result] = await connection.execute(
-            `UPDATE friend_request SET status = ? WHERE id = ? AND receiver_email = ?`,
-            [status, id, req.user.email]
-        );
-
-        await connection.end();
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: 'Request not found.' });
-        }
-
-        res.status(200).json({ message: `Request ${status}.` });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error updating request.' });
-    }
-});
-
-app.get('/api/friends', authenticateToken, async (req, res) => {
-    try {
-        const connection = await createConnection();
-
-        const [rows] = await connection.execute(
-            `SELECT u.email, u.username, u.first_name AS firstName, u.last_name AS lastName, u.profile_picture AS profilePicture
-             FROM friend_request fr
-             JOIN user u ON u.email = CASE
-                 WHEN fr.sender_email = ? THEN fr.receiver_email
-                 ELSE fr.sender_email
-             END
-             WHERE (fr.sender_email = ? OR fr.receiver_email = ?) AND fr.status = 'accepted'`,
-            [req.user.email, req.user.email, req.user.email]
-        );
-
-        await connection.end();
-        res.status(200).json({ friends: rows });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error retrieving friends.' });
-    }
-});
-
-app.delete('/api/friends/:email', authenticateToken, async (req, res) => {
-    const { email } = req.params;
-
-    if (!email || email === req.user.email) {
-        return res.status(400).json({ message: 'Invalid friend.' });
-    }
-
-    try {
-        const connection = await createConnection();
-
-        const [result] = await connection.execute(
-            `DELETE FROM friend_request
-             WHERE status = 'accepted'
-               AND ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))`,
-            [req.user.email, email, email, req.user.email]
-        );
-
-        await connection.end();
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ message: 'Friend not found.' });
-        }
-
-        return res.status(200).json({ message: 'Friend removed.' });
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Error removing friend.' });
-    }
-});
-
-app.get('/api/friends/:email/ratings', authenticateToken, async (req, res) => {
-    const { email } = req.params;
-
-    try {
-        const connection = await createConnection();
-
-        const [friendCheck] = await connection.execute(
-            `SELECT id
-             FROM friend_request
-             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
-               AND status = 'accepted'`,
-            [req.user.email, email, email, req.user.email]
-        );
-
-        if (friendCheck.length === 0) {
-            await connection.end();
-            return res.status(403).json({ message: 'Not friends.' });
-        }
-
-        const [rows] = await connection.execute(
-            'SELECT title, type, rating, review, rated_at FROM rating WHERE user_email = ? ORDER BY rated_at DESC',
-            [email]
-        );
-
-        await connection.end();
-        res.status(200).json({ ratings: rows });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error retrieving friend ratings.' });
-    }
-});
-
-app.get('/api/friends/:email/lists', authenticateToken, async (req, res) => {
-    const { email } = req.params;
-
-    try {
-        const connection = await createConnection();
-
-        const [friendCheck] = await connection.execute(
-            `SELECT id
-             FROM friend_request
-             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
-               AND status = 'accepted'`,
-            [req.user.email, email, email, req.user.email]
-        );
-
-        if (friendCheck.length === 0) {
-            await connection.end();
-            return res.status(403).json({ message: 'Not friends.' });
-        }
-
-        const [lists] = await connection.execute(
-            'SELECT id, name, created_at FROM list WHERE user_email = ? ORDER BY created_at ASC',
-            [email]
-        );
-
-        const listsWithItems = [];
-        for (const list of lists) {
-            const [items] = await connection.execute(
-                'SELECT id, title, added_at FROM list_item WHERE list_id = ? ORDER BY added_at DESC',
-                [list.id]
-            );
-            listsWithItems.push({ ...list, items });
-        }
-
-        await connection.end();
-        res.status(200).json({ lists: listsWithItems });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error retrieving friend lists.' });
-    }
-});
-
-app.post('/api/friends/message', authenticateToken, async (req, res) => {
-    const { receiverEmail, content } = req.body;
-
-    if (!receiverEmail || !content) {
-        return res.status(400).json({ message: 'Receiver and content required.' });
-    }
-
-    try {
-        const connection = await createConnection();
-
-        const [friendCheck] = await connection.execute(
-            `SELECT id
-             FROM friend_request
-             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
-               AND status = 'accepted'`,
-            [req.user.email, receiverEmail, receiverEmail, req.user.email]
-        );
-
-        if (friendCheck.length === 0) {
-            await connection.end();
-            return res.status(403).json({ message: 'Not friends.' });
-        }
-
-        await connection.execute(
-            'INSERT INTO message (sender_email, receiver_email, content) VALUES (?, ?, ?)',
-            [req.user.email, receiverEmail, content]
-        );
-
-        await connection.end();
-        res.status(201).json({ message: 'Message sent.' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error sending message.' });
-    }
-});
-
-app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
-    const { email } = req.params;
-
-    try {
-        const connection = await createConnection();
-        const [rows] = await connection.execute(
-            `SELECT id, sender_email, receiver_email, content, sent_at, read_at
-             FROM message
-             WHERE (sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?)
-             ORDER BY sent_at ASC`,
-            [req.user.email, email, email, req.user.email]
-        );
-
-        await connection.end();
-        res.status(200).json({ messages: rows });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error retrieving messages.' });
-    }
-});
-// Get messages between current user and a friend
-app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
-    const { email } = req.params;
-
-    try {
-        const connection = await createConnection();
-        const [rows] = await connection.execute(
-            `SELECT id, sender_email, receiver_email, content, sent_at, read_at
-             FROM message
-             WHERE (sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?)
-             ORDER BY sent_at ASC`,
-            [req.user.email, email, email, req.user.email]
-        );
-
-        await connection.end();
-        res.status(200).json({ messages: rows });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error retrieving messages.' });
-    }
-});
-
-// Unread message count (requires message.read_at — run friends_message_read_migration.sql)
-// Optional ?from=friend@email counts only messages sent by that friend to the current user.
-app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res) => {
-    const fromEmail = (req.query.from || '').trim() || null;
-
-    try {
-        const connection = await createConnection();
-
-        if (fromEmail) {
-            const [friendCheck] = await connection.execute(
-                `SELECT id FROM friend_request
-                 WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
-                 AND status = 'accepted'`,
-                [req.user.email, fromEmail, fromEmail, req.user.email]
-            );
-            if (friendCheck.length === 0) {
-                await connection.end();
-                return res.status(403).json({ message: 'Not friends.' });
-            }
-
-            const [[row]] = await connection.execute(
-                `SELECT COUNT(*) AS count
-                 FROM message
-                 WHERE receiver_email = ? AND sender_email = ? AND read_at IS NULL`,
-                [req.user.email, fromEmail]
-            );
-
-            await connection.end();
-            return res.status(200).json({ count: row?.count ?? 0 });
-        }
-
-        const [[row]] = await connection.execute(
-            `SELECT COUNT(*) AS count
-             FROM message
-             WHERE receiver_email = ? AND read_at IS NULL`,
-            [req.user.email]
-        );
-
-        await connection.end();
-        return res.status(200).json({ count: row?.count ?? 0 });
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Error counting unread messages.', count: 0 });
-    }
-});
-
-// Mark all messages from :email → current user as read
-app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res) => {
-    const { email } = req.params;
-
-    if (!email || email === req.user.email) {
-        return res.status(400).json({ message: 'Invalid friend.' });
-    }
-
-    try {
-        const connection = await createConnection();
-
-        const [friendCheck] = await connection.execute(
-            `SELECT id FROM friend_request
-             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
-             AND status = 'accepted'`,
-            [req.user.email, email, email, req.user.email]
-        );
-
-        if (friendCheck.length === 0) {
-            await connection.end();
-            return res.status(403).json({ message: 'Not friends.' });
-        }
-
-        const [result] = await connection.execute(
-            `UPDATE message
-             SET read_at = UTC_TIMESTAMP()
-             WHERE receiver_email = ? AND sender_email = ? AND read_at IS NULL`,
-            [req.user.email, email]
-        );
-
-    await connection.end();
-    return res.status(200).json({ marked: result.affectedRows });
-
-        const providers = rows.map(r => r.provider_key);
-
-        res.json(providers);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json([]);
-    }
-});
-// ================= TMDB DISCOVER MOVIES =================
 app.get('/api/discover/movies', authenticateToken, async (req, res) => {
-  const page = req.query.page || 1;
-  const providers = req.query.providers; // "8,15,337"
-
-  if (!process.env.TMDB_API_KEY) {
-    return res.status(500).json({ message: 'TMDB API key missing' });
-  }
-
-  try {
-    let url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&page=${page}&watch_region=US`;
-
-    // ONLY add provider filter if selected
-    if (providers) {
-      url += `&with_watch_providers=${providers}`;
+    const page = req.query.page || 1;
+    const providers = req.query.providers;
+    if (!process.env.TMDB_API_KEY) return res.status(500).json({ message: 'TMDB API key missing' });
+    try {
+        let url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&page=${page}&watch_region=US`;
+        if (providers) url += `&with_watch_providers=${providers}`;
+        const tmdbRes = await fetch(url);
+        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
+        const data = await tmdbRes.json();
+        res.status(200).json(data);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error fetching discover movies' });
     }
-
-    const tmdbRes = await fetch(url);
-
-    if (!tmdbRes.ok) {
-      return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
-    }
-
-    const data = await tmdbRes.json();
-    res.status(200).json(data);
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error fetching discover movies' });
-  }
 });
 
-
-// ================= TMDB PROVIDERS FOR A MOVIE =================
 app.get('/api/movie/:id/providers', authenticateToken, async (req, res) => {
-  const { id } = req.params;
-
-  if (!process.env.TMDB_API_KEY) {
-    return res.status(500).json({ message: 'TMDB API key missing' });
-  }
-
-  try {
-    const url = `https://api.themoviedb.org/3/movie/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`;
-
-    const tmdbRes = await fetch(url);
-
-    if (!tmdbRes.ok) {
-      return res.status(tmdbRes.status).json({ message: 'Provider fetch failed' });
-    }
-
-    const data = await tmdbRes.json();
-    res.status(200).json(data);
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error fetching providers' });
-  }
-});
-
-app.post('/api/subscriptions', authenticateToken, async (req, res) => {
-    const userEmail = req.user.email;
-    const { providers } = req.body;
-
+    const { id } = req.params;
+    if (!process.env.TMDB_API_KEY) return res.status(500).json({ message: 'TMDB API key missing' });
     try {
-        const connection = await createConnection();
-
-        console.log("Saving for:", userEmail);
-        console.log("Providers:", providers);
-
-        // clear old
-        await connection.execute(
-            'DELETE FROM user_subscription WHERE user_email = ?',
-            [userEmail]
-        );
-
-        // insert new
-        for (const provider of providers) {
-            await connection.execute(
-                'INSERT INTO user_subscription (user_email, provider_key) VALUES (?, ?)',
-                [userEmail, provider]
-            );
-        }
-
-        await connection.end();
-
-        res.json({ ok: true });
-
-    } catch (err) {
-        console.error("SUBSCRIPTION ERROR:", err); 
-        res.status(500).json({ ok: false, error: err.message });
-    }
-});
-
-app.get('/api/subscriptions', authenticateToken, async (req, res) => {
-    const userEmail = req.user.email;
-
-    try {
-        const connection = await createConnection();
-
-        const [rows] = await connection.execute(
-            'SELECT provider_key FROM user_subscription WHERE user_email = ?',
-            [userEmail]
-        );
-
-        await connection.end();
-
-        const providers = rows.map(r => r.provider_key);
-
-        res.json(providers);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json([]);
+        const url = `https://api.themoviedb.org/3/movie/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`;
+        const tmdbRes = await fetch(url);
+        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'Provider fetch failed' });
+        const data = await tmdbRes.json();
+        res.status(200).json(data);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error fetching providers' });
     }
 });
 
 app.get('/api/discover/tv', authenticateToken, async (req, res) => {
     const page = req.query.page || 1;
     const providers = req.query.providers;
-
-    if (!process.env.TMDB_API_KEY) {
-        return res.status(500).json({ message: 'TMDB API key missing' });
-    }
-
+    if (!process.env.TMDB_API_KEY) return res.status(500).json({ message: 'TMDB API key missing' });
     try {
         let url = `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}&page=${page}&watch_region=US`;
-
-        if (providers) {
-            url += `&with_watch_providers=${providers}`;
-        }
-
+        if (providers) url += `&with_watch_providers=${providers}`;
         const tmdbRes = await fetch(url);
-
-        if (!tmdbRes.ok) {
-            return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
-        }
-
+        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -1543,10 +923,7 @@ app.get('/api/discover/tv', authenticateToken, async (req, res) => {
 
 app.get('/api/trending/tv', async (req, res) => {
     try {
-        const response = await fetch(
-            `https://api.themoviedb.org/3/trending/tv/week?api_key=${process.env.TMDB_API_KEY}`
-        );
-
+        const response = await fetch(`https://api.themoviedb.org/3/trending/tv/week?api_key=${process.env.TMDB_API_KEY}`);
         const data = await response.json();
         res.json(data);
     } catch (error) {
@@ -1558,11 +935,7 @@ app.get('/api/trending/tv', async (req, res) => {
 app.get('/api/tv/:id/providers', async (req, res) => {
     try {
         const { id } = req.params;
-
-        const response = await fetch(
-            `https://api.themoviedb.org/3/tv/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`
-        );
-
+        const response = await fetch(`https://api.themoviedb.org/3/tv/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`);
         const data = await response.json();
         res.json(data);
     } catch (error) {
@@ -1571,12 +944,308 @@ app.get('/api/tv/:id/providers', async (req, res) => {
     }
 });
 
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+//////////////////////////////////////
+// SUBSCRIPTIONS
+//////////////////////////////////////
+app.post('/api/subscriptions', authenticateToken, async (req, res) => {
+    const userEmail = req.user.email;
+    const { providers } = req.body;
+    try {
+        const connection = await createConnection();
+        await connection.execute('DELETE FROM user_subscription WHERE user_email = ?', [userEmail]);
+        for (const provider of providers) {
+            await connection.execute(
+                'INSERT INTO user_subscription (user_email, provider_key) VALUES (?, ?)',
+                [userEmail, provider]
+            );
+        }
+        await connection.end();
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('SUBSCRIPTION ERROR:', err);
+        res.status(500).json({ ok: false, error: err.message });
+    }
 });
+
+app.get('/api/subscriptions', authenticateToken, async (req, res) => {
+    const userEmail = req.user.email;
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            'SELECT provider_key FROM user_subscription WHERE user_email = ?',
+            [userEmail]
+        );
+        await connection.end();
+        const providers = rows.map(r => r.provider_key);
+        res.json(providers);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json([]);
+    }
+});
+
 //////////////////////////////////////
-// END ROUTES TO HANDLE API REQUESTS
+// FRIENDS
 //////////////////////////////////////
+app.get('/api/friends/search', authenticateToken, async (req, res) => {
+    const query = (req.query.q || '').trim();
+    if (!query) return res.status(400).json({ message: 'Query required.' });
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT email, username, first_name AS firstName, last_name AS lastName, profile_picture AS profilePicture
+             FROM user
+             WHERE (username LIKE ? OR email LIKE ?) AND email != ?
+             LIMIT 10`,
+            [`%${query}%`, `%${query}%`, req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ users: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error searching users.' });
+    }
+});
 
+app.post('/api/friends/request', authenticateToken, async (req, res) => {
+    const { receiverEmail } = req.body;
+    if (!receiverEmail) return res.status(400).json({ message: 'Receiver email required.' });
+    if (receiverEmail === req.user.email) return res.status(400).json({ message: 'You cannot add yourself.' });
+    try {
+        const connection = await createConnection();
+        const [existing] = await connection.execute(
+            `SELECT id FROM friend_request WHERE sender_email = ? AND receiver_email = ? AND status = 'pending'`,
+            [req.user.email, receiverEmail]
+        );
+        if (existing.length > 0) {
+            await connection.end();
+            return res.status(409).json({ message: 'Friend request already sent.' });
+        }
+        const [alreadyFriends] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, receiverEmail, receiverEmail, req.user.email]
+        );
+        if (alreadyFriends.length > 0) {
+            await connection.end();
+            return res.status(409).json({ message: 'Already friends.' });
+        }
+        await connection.execute(
+            'INSERT INTO friend_request (sender_email, receiver_email) VALUES (?, ?)',
+            [req.user.email, receiverEmail]
+        );
+        await connection.end();
+        res.status(201).json({ message: 'Friend request sent.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error sending friend request.' });
+    }
+});
 
+app.get('/api/friends/requests', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT fr.id, fr.sender_email, fr.created_at,
+                    u.username, u.first_name AS firstName, u.last_name AS lastName, u.profile_picture AS profilePicture
+             FROM friend_request fr
+             JOIN user u ON u.email = fr.sender_email
+             WHERE fr.receiver_email = ? AND fr.status = 'pending'
+             ORDER BY fr.created_at DESC`,
+            [req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ requests: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving requests.' });
+    }
+});
 
+app.get('/api/friends/requests/count', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [[row]] = await connection.execute(
+            'SELECT COUNT(*) AS count FROM friend_request WHERE receiver_email = ? AND status = ?',
+            [req.user.email, 'pending']
+        );
+        await connection.end();
+        res.status(200).json({ count: row?.count ?? 0 });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ count: 0 });
+    }
+});
+
+app.put('/api/friends/request/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!['accepted', 'declined'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status.' });
+    }
+    try {
+        const connection = await createConnection();
+        const [result] = await connection.execute(
+            `UPDATE friend_request SET status = ? WHERE id = ? AND receiver_email = ?`,
+            [status, id, req.user.email]
+        );
+        await connection.end();
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Request not found.' });
+        res.status(200).json({ message: `Request ${status}.` });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error updating request.' });
+    }
+});
+
+app.get('/api/friends', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT u.email, u.username, u.first_name AS firstName, u.last_name AS lastName, u.profile_picture AS profilePicture
+             FROM friend_request fr
+             JOIN user u ON u.email = CASE
+                 WHEN fr.sender_email = ? THEN fr.receiver_email
+                 ELSE fr.sender_email
+             END
+             WHERE (fr.sender_email = ? OR fr.receiver_email = ?) AND fr.status = 'accepted'`,
+            [req.user.email, req.user.email, req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ friends: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving friends.' });
+    }
+});
+
+app.delete('/api/friends/:email', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    if (!email || email === req.user.email) return res.status(400).json({ message: 'Invalid friend.' });
+    try {
+        const connection = await createConnection();
+        const [result] = await connection.execute(
+            `DELETE FROM friend_request
+             WHERE status = 'accepted'
+             AND ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))`,
+            [req.user.email, email, email, req.user.email]
+        );
+        await connection.end();
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Friend not found.' });
+        return res.status(200).json({ message: 'Friend removed.' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error removing friend.' });
+    }
+});
+
+app.get('/api/friends/:email/ratings', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    try {
+        const connection = await createConnection();
+        const [friendCheck] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, email, email, req.user.email]
+        );
+        if (friendCheck.length === 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'Not friends.' });
+        }
+        const [rows] = await connection.execute(
+            'SELECT title, type, rating, review, rated_at FROM rating WHERE user_email = ? ORDER BY rated_at DESC',
+            [email]
+        );
+        await connection.end();
+        res.status(200).json({ ratings: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving friend ratings.' });
+    }
+});
+
+app.get('/api/friends/:email/lists', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    try {
+        const connection = await createConnection();
+        const [friendCheck] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, email, email, req.user.email]
+        );
+        if (friendCheck.length === 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'Not friends.' });
+        }
+        const [lists] = await connection.execute(
+            'SELECT id, name, created_at FROM list WHERE user_email = ? ORDER BY created_at ASC',
+            [email]
+        );
+        const listsWithItems = [];
+        for (const list of lists) {
+            const [items] = await connection.execute(
+                'SELECT id, title, added_at FROM list_item WHERE list_id = ? ORDER BY added_at DESC',
+                [list.id]
+            );
+            listsWithItems.push({ ...list, items });
+        }
+        await connection.end();
+        res.status(200).json({ lists: listsWithItems });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving friend lists.' });
+    }
+});
+
+app.post('/api/friends/message', authenticateToken, async (req, res) => {
+    const { receiverEmail, content } = req.body;
+    if (!receiverEmail || !content) return res.status(400).json({ message: 'Receiver and content required.' });
+    try {
+        const connection = await createConnection();
+        const [friendCheck] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, receiverEmail, receiverEmail, req.user.email]
+        );
+        if (friendCheck.length === 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'Not friends.' });
+        }
+        await connection.execute(
+            'INSERT INTO message (sender_email, receiver_email, content) VALUES (?, ?, ?)',
+            [req.user.email, receiverEmail, content]
+        );
+        await connection.end();
+        res.status(201).json({ message: 'Message sent.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error sending message.' });
+    }
+});
+
+app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT id, sender_email, receiver_email, content, sent_at
+             FROM message
+             WHERE (sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?)
+             ORDER BY sent_at ASC`,
+            [req.user.email, email, email, req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ messages: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving messages.' });
+    }
+});
+
+app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`);
+});
