@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    DataModel.setToken(token);
+
     const logoutButton = document.getElementById('logoutButton');
     const trendingRow = document.getElementById('moviesRow');
     const actionRow = document.getElementById('actionMoviesRow');
@@ -15,9 +17,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const searchInput = document.getElementById('movieSearch');
     const searchBtn = document.getElementById('movieSearchBtn');
     const sectionTitle = document.getElementById('moviesSectionTitle');
-    const clearFilterBtn = document.getElementById('clearFilterBtn');
 
-    const FILTER_STORAGE_KEY = 'movieFilters';
+    const clearFilterBtn = document.getElementById('clearFilterBtn');
+    const saveBtn = document.getElementById('saveFilterBtn');
 
     if (!trendingRow) return;
 
@@ -65,12 +67,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         ).map((cb) => cb.value);
     }
 
-    function saveSelectedFilters() {
-        localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(getSelectedSubscriptions()));
+    async function saveSelectedFilters() {
+        const selected = getSelectedSubscriptions();
+        await DataModel.saveSubscriptions(selected);
     }
 
-    function restoreSavedFilters() {
-        const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '[]');
+    async function restoreSavedFilters() {
+        const result = await DataModel.getSubscriptions();
+        const saved = result.subscriptions || result || [];
 
         document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach((cb) => {
             cb.checked = saved.includes(cb.value);
@@ -104,47 +108,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function fetchAvailabilityData(id, type) {
-        if (!id) {
-            return {
-                label: 'Availability unavailable',
-                providers: [],
-                streamingProviders: [],
-                available: false
-            };
-        }
-
         try {
             const res = await fetch(`/api/title/providers?id=${id}&type=${type}`, {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
+                headers: { Authorization: `Bearer ${token}` }
             });
 
-            if (!res.ok) {
-                return {
-                    label: 'Availability unavailable',
-                    providers: [],
-                    streamingProviders: [],
-                    available: false
-                };
+            if (res.status === 401) {
+                localStorage.removeItem('jwtToken');
+                window.location.href = '/';
+                return;
             }
 
             const data = await res.json();
 
             return {
                 label: data.label || 'Availability unavailable',
-                providers: Array.isArray(data.providers) ? data.providers : [],
-                streamingProviders: Array.isArray(data.streamingProviders) ? data.streamingProviders : [],
-                available: !!data.available
+                streamingProviders: Array.isArray(data.streamingProviders) ? data.streamingProviders : []
             };
-        } catch (error) {
-            console.error('Availability error:', error);
-            return {
-                label: 'Availability unavailable',
-                providers: [],
-                streamingProviders: [],
-                available: false
-            };
+        } catch {
+            return { label: 'Unavailable', streamingProviders: [] };
         }
     }
 
@@ -156,7 +138,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const availabilityData = await fetchAvailabilityData(movie.id, type);
 
         card.innerHTML = `
-            <img src="https://image.tmdb.org/t/p/w342${movie.poster_path}" alt="${title}">
+            <img 
+                src="${movie.poster_path 
+                    ? `https://image.tmdb.org/t/p/w342${movie.poster_path}` 
+                    : '/images/no-poster.png'}"
+                alt="${title}"
+                onerror="this.onerror=null; this.src='/images/no-poster.png';"
+            >
             <p class="media-title">${title}</p>
             <p class="provider-label">${availabilityData.label}</p>
         `;
@@ -168,25 +156,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function renderMoviesToRow(targetRow, movies, selectedFilters = []) {
-        if (!targetRow) return;
-
         targetRow.innerHTML = '';
 
         const usableMovies = movies.filter((movie) => movie.poster_path);
 
-        if (!usableMovies.length) {
-            targetRow.innerHTML = `<p style="color:#fff;padding:20px">No movies found.</p>`;
-            return;
-        }
-
         let visibleCount = 0;
 
         for (const movie of usableMovies) {
-            const { card, streamingProviders } = await createMovieCard(movie, 'movie');
+            const { card, streamingProviders } = await createMovieCard(movie);
 
-            if (!matchesSubscriptionFilter(streamingProviders, selectedFilters)) {
-                continue;
-            }
+            if (!matchesSubscriptionFilter(streamingProviders, selectedFilters)) continue;
 
             targetRow.appendChild(card);
             visibleCount++;
@@ -198,80 +177,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function loadTrendingMovies() {
-        const query = searchInput?.value?.trim();
         const selectedFilters = getSelectedSubscriptions();
-        trendingRow.innerHTML = '';
 
-        if (query && query.length >= MIN_CHARS) {
-            sectionTitle.textContent = `Results for "${query}"`;
+        const res = await fetch('/api/trending/movies', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
 
-            try {
-                const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+        const data = await res.json();
 
-                const data = await res.json();
-
-                if (!res.ok) {
-                    throw new Error(data.message || 'Search failed');
-                }
-
-                await renderMoviesToRow(trendingRow, data.results || [], selectedFilters);
-            } catch (err) {
-                console.error(err);
-                trendingRow.innerHTML = `<p style="color:#dc3545;padding:20px">${err.message}</p>`;
-            }
-        } else {
-            sectionTitle.textContent = 'Trending';
-
-            try {
-                const res = await fetch('/api/trending/movies', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-
-                const data = await res.json();
-
-                if (!res.ok) {
-                    throw new Error(data.message || 'Failed to load');
-                }
-
-                await renderMoviesToRow(trendingRow, data.results || [], selectedFilters);
-            } catch (err) {
-                console.error(err);
-                trendingRow.innerHTML = `<p style="color:#dc3545;padding:20px">Failed to load movies.</p>`;
-            }
-        }
+        await renderMoviesToRow(trendingRow, data.results || [], selectedFilters);
     }
 
     async function loadGenreMovies(targetRow, genreId) {
-        if (!targetRow) return;
-
         const selectedFilters = getSelectedSubscriptions();
-        targetRow.innerHTML = '';
 
-        try {
-            const res = await fetch(`/api/movies/by-genre?genreId=${genreId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+        const res = await fetch(`/api/movies/by-genre?genreId=${genreId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
 
-            const text = await res.text();
-            let data;
+        const data = await res.json();
 
-            try {
-                data = JSON.parse(text);
-            } catch {
-                throw new Error(`Server returned non-JSON response for genre ${genreId}`);
-            }
-
-            if (!res.ok) {
-                throw new Error(data.message || 'Failed to load genre movies');
-            }
-
-            await renderMoviesToRow(targetRow, data.results || [], selectedFilters);
-        } catch (err) {
-            console.error(err);
-            targetRow.innerHTML = `<p style="color:#dc3545;padding:20px">${err.message}</p>`;
-        }
+        await renderMoviesToRow(targetRow, data.results || [], selectedFilters);
     }
 
     async function reloadAllRows() {
@@ -288,23 +214,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         ]);
     }
 
+    saveBtn?.addEventListener('click', async () => {
+        await saveSelectedFilters();
+        alert('Saved!');
+    });
+
+    clearFilterBtn?.addEventListener('click', async () => {
+        document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach(cb => cb.checked = false);
+        await DataModel.saveSubscriptions([]);
+        await reloadAllRows();
+    });
+
     document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach((cb) => {
         cb.addEventListener('change', async () => {
-            saveSelectedFilters();
             await reloadAllRows();
         });
     });
 
-    clearFilterBtn?.addEventListener('click', async () => {
-        document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach((cb) => {
-            cb.checked = false;
-        });
-
-        localStorage.removeItem(FILTER_STORAGE_KEY);
-        await reloadAllRows();
-    });
-
     setupScrollButtons();
-    restoreSavedFilters();
+    await restoreSavedFilters();
     await reloadAllRows();
 });
