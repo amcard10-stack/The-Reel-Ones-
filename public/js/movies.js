@@ -24,6 +24,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const DEBOUNCE_MS = 400;
     const MIN_CHARS = 2;
+    const MAX_PAGES_TO_SCAN = 5;
+    const TARGET_ROW_COUNT = 8;
 
     if (!trendingRow) return;
 
@@ -164,12 +166,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    async function createMovieCard(movie, type = 'movie') {
+    function createCardElement(movie, label) {
         const card = document.createElement('div');
         card.className = 'media-card';
 
         const title = movie.title || movie.name || 'Untitled';
-        const availabilityData = await fetchAvailabilityData(movie.id, type);
 
         card.innerHTML = `
             <img
@@ -180,76 +181,102 @@ document.addEventListener('DOMContentLoaded', async () => {
                 onerror="this.onerror=null; this.src='/images/no-poster.png';"
             >
             <p class="media-title">${title}</p>
-            <p class="provider-label">${availabilityData.label}</p>
+            <p class="provider-label">${label}</p>
         `;
 
-        return {
-            card,
-            streamingProviders: availabilityData.streamingProviders
-        };
+        return card;
     }
 
-    async function renderMoviesToRow(targetRow, movies, selectedFilters = []) {
+async function buildFilteredMovieResults(movies, selectedFilters, limit = TARGET_ROW_COUNT) {
+    const usableMovies = Array.isArray(movies)
+        ? movies.filter((movie) => movie?.poster_path && movie?.id)
+        : [];
+
+    const results = [];
+    const BATCH_SIZE = 6;
+
+    for (let i = 0; i < usableMovies.length; i += BATCH_SIZE) {
+        const batch = usableMovies.slice(i, i + BATCH_SIZE);
+
+        const batchResults = await Promise.all(
+            batch.map(async (movie) => {
+                const availabilityData = await fetchAvailabilityData(movie.id, 'movie');
+                return {
+                    movie,
+                    label: availabilityData.label,
+                    streamingProviders: availabilityData.streamingProviders
+                };
+            })
+        );
+
+        for (const item of batchResults) {
+            if (!selectedFilters.length || matchesSubscriptionFilter(item.streamingProviders, selectedFilters)) {
+                results.push({
+                    movie: item.movie,
+                    label: item.label
+                });
+            }
+
+            if (results.length >= limit) {
+                return results;
+            }
+        }
+    }
+
+    return results;
+}
+    async function renderPreparedResults(targetRow, preparedResults) {
         if (!targetRow) return;
 
         targetRow.innerHTML = '';
 
-        const usableMovies = Array.isArray(movies)
-            ? movies.filter((movie) => movie.poster_path)
-            : [];
-
-        if (!usableMovies.length) {
-            targetRow.innerHTML = `<p style="color:#fff;padding:20px">No movies found.</p>`;
+        if (!preparedResults.length) {
+            targetRow.innerHTML = `<p style="color:#fff;padding:20px">No movies matched this filter.</p>`;
             return;
         }
 
-        let visibleCount = 0;
-
-        for (const movie of usableMovies) {
-            const { card, streamingProviders } = await createMovieCard(movie, 'movie');
-
-            if (!matchesSubscriptionFilter(streamingProviders, selectedFilters)) {
-                continue;
-            }
-
+        for (const item of preparedResults) {
+            const card = createCardElement(item.movie, item.label);
             targetRow.appendChild(card);
-            visibleCount++;
-        }
-
-        if (visibleCount === 0) {
-            targetRow.innerHTML = `<p style="color:#fff;padding:20px">No movies matched this filter.</p>`;
         }
     }
 
-    async function loadTrendingMovies() {
-        const selectedFilters = getSelectedSubscriptions();
-        const query = searchInput?.value?.trim() || '';
+async function loadTrendingMovies() {
+    const selectedFilters = getSelectedSubscriptions();
+    const query = searchInput?.value?.trim() || '';
 
-        try {
-            if (query.length >= MIN_CHARS) {
-                sectionTitle.textContent = `Results for "${query}"`;
+    try {
+        let allMovies = [];
 
-                const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+        if (query.length >= MIN_CHARS) {
+            sectionTitle.textContent = `Results for "${query}"`;
 
-                if (res.status === 401) {
-                    localStorage.removeItem('jwtToken');
-                    window.location.href = '/';
-                    return;
-                }
+            const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-                const data = await res.json();
+            if (res.status === 401) {
+                localStorage.removeItem('jwtToken');
+                window.location.href = '/';
+                return;
+            }
 
-                if (!res.ok) {
-                    throw new Error(data.message || 'Search failed');
-                }
+            const data = await res.json();
 
-                await renderMoviesToRow(trendingRow, data.results || [], selectedFilters);
-            } else {
-                sectionTitle.textContent = 'Trending';
+            if (!res.ok) {
+                throw new Error(data.message || 'Search failed');
+            }
 
-                const res = await fetch('/api/trending/movies', {
+            allMovies = data.results || [];
+        } else {
+            sectionTitle.textContent = 'Trending';
+
+            const collected = [];
+            const seenIds = new Set();
+            const pagesToScan = selectedFilters.length ? 3 : 1;
+
+            for (let page = 1; page <= pagesToScan; page++) {
+                const res = await fetch(`/api/trending/movies?page=${page}`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
@@ -265,21 +292,43 @@ document.addEventListener('DOMContentLoaded', async () => {
                     throw new Error(data.message || 'Failed to load trending movies');
                 }
 
-                await renderMoviesToRow(trendingRow, data.results || [], selectedFilters);
+                for (const movie of data.results || []) {
+                    if (!seenIds.has(movie.id)) {
+                        seenIds.add(movie.id);
+                        collected.push(movie);
+                    }
+                }
             }
-        } catch (error) {
-            console.error('Trending error:', error);
-            trendingRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
+
+            allMovies = collected;
         }
+
+        const preparedResults = await buildFilteredMovieResults(
+            allMovies,
+            selectedFilters,
+            TARGET_ROW_COUNT
+        );
+
+        await renderPreparedResults(trendingRow, preparedResults);
+    } catch (error) {
+        console.error('Trending error:', error);
+        trendingRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
     }
+}
 
     async function loadGenreMovies(targetRow, genreId) {
-        if (!targetRow) return;
+    if (!targetRow) return;
 
-        const selectedFilters = getSelectedSubscriptions();
+    const selectedFilters = getSelectedSubscriptions();
 
-        try {
-            const res = await fetch(`/api/movies/by-genre?genreId=${genreId}`, {
+    try {
+        const collected = [];
+        const seenIds = new Set();
+
+        const pagesToScan = selectedFilters.length ? 3 : 1;
+
+        for (let page = 1; page <= pagesToScan; page++) {
+            const res = await fetch(`/api/movies/by-genre?genreId=${genreId}&page=${page}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -295,13 +344,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 throw new Error(data.message || `Failed to load genre ${genreId}`);
             }
 
-            await renderMoviesToRow(targetRow, data.results || [], selectedFilters);
-        } catch (error) {
-            console.error(`Genre ${genreId} error:`, error);
-            targetRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
+            for (const movie of data.results || []) {
+                if (!seenIds.has(movie.id)) {
+                    seenIds.add(movie.id);
+                    collected.push(movie);
+                }
+            }
         }
-    }
 
+        const preparedResults = await buildFilteredMovieResults(
+            collected,
+            selectedFilters,
+            TARGET_ROW_COUNT
+        );
+
+        await renderPreparedResults(targetRow, preparedResults);
+    } catch (error) {
+        console.error(`Genre ${genreId} error:`, error);
+        targetRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
+    }
+}
     async function reloadAllRows() {
         showLoading(trendingRow);
         showLoading(actionRow);
@@ -332,7 +394,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         await reloadAllRows();
     });
 
-    // совместимость, если кнопки всё ещё есть в HTML
     applyBtn?.addEventListener('click', async () => {
         await saveSelectedFilters();
         await reloadAllRows();

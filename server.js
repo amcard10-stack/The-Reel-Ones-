@@ -855,15 +855,24 @@ app.get('/api/title/providers', authenticateToken, async (req, res) => {
 });
 
 app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
-    const { genreId } = req.query;
-    if (!genreId) return res.status(400).json({ message: 'genreId is required.' });
+    const { genreId, page = 1 } = req.query;
+
+    if (!genreId) {
+        return res.status(400).json({ message: 'genreId is required.' });
+    }
+
     if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
         return res.status(503).json({ message: 'TMDB API key not configured.' });
     }
+
     try {
-        const url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}`;
+        const url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}&page=${page}`;
         const tmdbRes = await fetch(url);
-        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+        }
+
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -871,7 +880,6 @@ app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
         return res.status(500).json({ message: 'Error loading genre movies.' });
     }
 });
-
 app.get('/api/discover/movies', authenticateToken, async (req, res) => {
     const page = req.query.page || 1;
     const providers = req.query.providers;
