@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const DEBOUNCE_MS = 400;
     const MIN_CHARS = 2;
-    const TARGET_ROW_COUNT = 8;
+    const TARGET_ROW_COUNT = 50;
 
     let currentGenre = 'trending';
     let debounceTimer = null;
@@ -195,10 +195,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         movie: item.movie,
                         label: item.label
                     });
-                }
-
-                if (results.length >= limit) {
-                    return results;
                 }
             }
         }
