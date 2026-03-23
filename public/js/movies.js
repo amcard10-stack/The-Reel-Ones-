@@ -46,24 +46,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, DEBOUNCE_MS);
     });
 
-    function setupScrollButtons() {
-        const rowContainer = document.querySelector('.row-container');
-        if (!rowContainer) return;
-
-        const row = rowContainer.querySelector('.movie-row');
-        const leftBtn = rowContainer.querySelector('.scroll-btn.left');
-        const rightBtn = rowContainer.querySelector('.scroll-btn.right');
-
-        if (!row) return;
-
-        leftBtn?.addEventListener('click', () => {
-            row.scrollBy({ left: -400, behavior: 'smooth' });
-        });
-
-        rightBtn?.addEventListener('click', () => {
-            row.scrollBy({ left: 400, behavior: 'smooth' });
-        });
-    }
 
     function getSelectedSubscriptions() {
         return Array.from(
@@ -410,7 +392,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         await saveSelectedFilters();
     });
 
-    setupScrollButtons();
     await restoreSavedFilters();
     await loadSelectedGenre();
 });
