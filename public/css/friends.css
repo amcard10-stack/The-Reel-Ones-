@@ -133,6 +133,26 @@ body {
     display: inline-block;
 }
 
+.messages-unread-badge {
+    min-width: 14px;
+    height: 14px;
+    padding: 0 4px;
+    margin-left: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 14px;
+    text-align: center;
+    color: #0d1b2a;
+    background: #4ecdc4;
+    border-radius: 7px;
+    vertical-align: middle;
+    display: none;
+}
+
+.messages-unread-badge.has-count {
+    display: inline-block;
+}
+
 .tab-message-badge {
     min-width: 16px;
     height: 16px;
@@ -566,6 +586,7 @@ body {
 }
 
 .tab-inline-btn {
+    position: relative;
     padding: 6px 14px;
     border-radius: 8px;
     border: none;

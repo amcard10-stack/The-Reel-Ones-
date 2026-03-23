@@ -170,8 +170,15 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         DataModel.setToken(token);
         renderDashboard();
-        updateFriendsNavBadges();
-        setInterval(updateFriendsNavBadges, 10000);
+        function tickDashboardFriendBadges() {
+            if (document.visibilityState === 'hidden') return;
+            updateFriendsNavBadges();
+        }
+        tickDashboardFriendBadges();
+        setInterval(tickDashboardFriendBadges, 6000);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') tickDashboardFriendBadges();
+        });
 
 // profile popup
     async function checkProfileComplete() {
@@ -225,7 +232,12 @@ async function updateFriendMessageBadge() {
         const res = await fetch('/api/friends/messages/unread/count', {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('jwtToken')}` }
         });
-        const data = await res.json();
+        if (!res.ok) {
+            badge.textContent = '';
+            badge.classList.remove('has-count');
+            return;
+        }
+        const data = await res.json().catch(() => ({}));
         const count = data.count ?? 0;
         badge.textContent = count > 0 ? (count > 99 ? '99+' : String(count)) : '';
         badge.classList.toggle('has-count', count > 0);
