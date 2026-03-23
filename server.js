@@ -1290,8 +1290,19 @@ app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res
             return res.status(200).json({ count: Number(row?.cnt ?? 0) });
         }
 
+        // Only count unread from people who are still accepted friends (matches per-friend badges on UI).
         const [[row]] = await connection.execute(
-            `SELECT COUNT(*) AS cnt FROM message WHERE receiver_email = ? AND read_at IS NULL`,
+            `SELECT COUNT(*) AS cnt
+             FROM message m
+             WHERE m.receiver_email = ? AND m.read_at IS NULL
+             AND EXISTS (
+               SELECT 1 FROM friend_request fr
+               WHERE fr.status = 'accepted'
+               AND (
+                 (fr.sender_email = m.sender_email AND fr.receiver_email = m.receiver_email)
+                 OR (fr.sender_email = m.receiver_email AND fr.receiver_email = m.sender_email)
+               )
+             )`,
             [req.user.email]
         );
         await connection.end();
@@ -1316,10 +1327,18 @@ app.get('/api/friends/messages/unread/summary', authenticateToken, async (req, r
     try {
         connection = await createConnection();
         const [rows] = await connection.execute(
-            `SELECT sender_email AS senderEmail, COUNT(*) AS cnt
-             FROM message
-             WHERE receiver_email = ? AND read_at IS NULL
-             GROUP BY sender_email`,
+            `SELECT m.sender_email AS senderEmail, COUNT(*) AS cnt
+             FROM message m
+             WHERE m.receiver_email = ? AND m.read_at IS NULL
+             AND EXISTS (
+               SELECT 1 FROM friend_request fr
+               WHERE fr.status = 'accepted'
+               AND (
+                 (fr.sender_email = m.sender_email AND fr.receiver_email = m.receiver_email)
+                 OR (fr.sender_email = m.receiver_email AND fr.receiver_email = m.sender_email)
+               )
+             )
+             GROUP BY m.sender_email`,
             [req.user.email]
         );
         await connection.end();
