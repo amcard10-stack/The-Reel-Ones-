@@ -1,7 +1,7 @@
 body {
     margin: 0;
     font-family: Arial, sans-serif;
-    background-color: #0A1A2F;
+    background-color: #031f45;
     color: #F2F4F7;
 }
 
@@ -52,7 +52,7 @@ body {
 }
 
 .subtitle a {
-    color: #E26A6A; 
+    color: #E26A6A;
     text-decoration: underline;
 }
 
@@ -87,8 +87,8 @@ body {
 }
 
 .card {
-    background-color: #1E3A5F;
-    padding: 40px;  
+    background-color: #274979;
+    padding: 40px;
     border-radius: 16px;
 }
 
@@ -111,11 +111,11 @@ input {
     background-color: #1A1C20;
     color: #F2F4F7;
     font-size: 16px;
-    box-sizing: border-box;   
+    box-sizing: border-box;
 }
 
 input:disabled {
-    background-color: #1A1C20; 
+    background-color: #1A1C20;
     color: #D9DEE4;
     opacity: 0.85;
 }
@@ -170,31 +170,27 @@ input:disabled {
 }
 
 .bio-card {
-    background-color: #1E3A5F;
-    padding:  25px 40px;        
+    background-color: #274979;
+    padding: 25px 40px;
     border-radius: 16px;
     margin: 20px 0 28px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.25);
 }
 
-.input-group {
-  margin-bottom: 18px;    
-}
-
 .bio-card textarea {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 120px;       
-  resize: vertical;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid #2B2F36;
-  background-color: #1A1C20;
-  color: #F2F4F7;
-  font-size: 14px;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 120px;
+    resize: vertical;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid #2B2F36;
+    background-color: #1A1C20;
+    color: #F2F4F7;
+    font-size: 14px;
 }
 
 .bio-card textarea:focus {
-  outline: none;
-  border-color: #3A6EA5;
+    outline: none;
+    border-color: #3A6EA5;
 }

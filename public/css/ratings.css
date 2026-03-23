@@ -1,6 +1,6 @@
 body {
     font-family: Arial, sans-serif;
-    background-color: #0A1A2F;
+    background-color: #031f45;
     margin: 0;
     color: #F2F4F7;
 }
@@ -33,7 +33,7 @@ body {
 
 .section {
     margin-top: 35px;
-    background-color: #1E3A5F;
+    background-color: #274979;
     padding: 25px;
     border-radius: 18px;
 }
@@ -151,8 +151,11 @@ textarea {
 }
 
 .rating-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
     padding: 14px;
-    background: #2B2F36;
+    background: #1a2f4e;
     border-radius: 10px;
     margin-bottom: 10px;
 }
@@ -171,27 +174,20 @@ textarea {
     padding-right: 8px;
 }
 
-.rating-list::-webkit-scrollbar {
-    width: 8px;
-}
-
+.rating-list::-webkit-scrollbar { width: 8px; }
 .rating-list::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255,255,255,0.06);
     border-radius: 4px;
 }
-
 .rating-list::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255,255,255,0.2);
     border-radius: 4px;
 }
-
 .rating-list::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(255,255,255,0.3);
 }
 
-.tmdb-search-input {
-    min-width: 220px;
-}
+.tmdb-search-input { min-width: 220px; }
 
 .tmdb-results-grid {
     display: flex;
@@ -247,12 +243,6 @@ textarea {
     padding: 12px;
 }
 
-.rating-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-}
-
 .rating-poster {
     width: 60px;
     min-width: 60px;
@@ -269,6 +259,4 @@ textarea {
     border-radius: 6px;
 }
 
-.rating-details {
-    flex: 1;
-}
+.rating-details { flex: 1; }
