@@ -33,6 +33,11 @@
         <button onclick="window.location.href='/suggestions'">Suggestions</button>
     </nav>
 
+    <div id="messageBadgeSchemaHint" class="schema-hint-banner" style="display:none;" role="status">
+        <span>Message badges need a one-time DB update on <strong>this</strong> server: run <code>npm run migrate:friends</code> (adds <code>message.read_at</code>). Chat still works; only counts stay at 0 until then.</span>
+        <button type="button" class="schema-hint-dismiss" id="messageBadgeSchemaHintDismiss" aria-label="Dismiss">&times;</button>
+    </div>
+
     <!-- SEARCH -->
     <div class="section">
         <h2>Find Friends</h2>

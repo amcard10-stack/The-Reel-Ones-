@@ -46,41 +46,58 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    async function refreshUnreadBadges() {
+    function updateMessageBadgeSchemaHint(data) {
+        const el = document.getElementById('messageBadgeSchemaHint');
+        if (!el) return;
+        if (data && data.migrated === false && !sessionStorage.getItem('hideMessageBadgeSchemaHint')) {
+            el.style.display = 'flex';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+
+    /** Parse count from API row (count vs cnt, string, BigInt-safe). */
+    function threadRowCount(row) {
+        const v = row.count ?? row.cnt;
+        if (v == null || v === '') return 0;
+        if (typeof v === 'bigint') return Number(v);
+        const n = Number(v);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    /**
+     * One request: nav teal badge = sum(thread counts), each Messages button = that thread.
+     * Avoids mismatch from calling /count and /summary at different times.
+     */
+    async function syncMessageBadgesFromSummary() {
         try {
-            const res = await fetch('/api/friends/messages/unread/count', {
+            const res = await fetch('/api/friends/messages/unread/summary', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!res.ok) {
                 setMessageNavBadge(0);
                 return;
             }
-            const data = await res.json().catch(() => ({}));
-            setMessageNavBadge(data.count ?? 0);
-        } catch (err) {
-            setMessageNavBadge(0);
-        }
-    }
-
-    async function updateInlineUnreadBadgesOnly() {
-        try {
-            const res = await fetch('/api/friends/messages/unread/summary', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!res.ok) return;
             const data = await res.json().catch(() => ({ threads: [] }));
+            updateMessageBadgeSchemaHint(data);
+            const threads = data.threads || [];
+            let total = 0;
             const map = new Map();
-            for (const row of data.threads || []) {
+            for (const row of threads) {
                 const em = String(row.senderEmail || '').trim().toLowerCase();
-                if (em) map.set(em, Number(row.count) || 0);
+                if (!em) continue;
+                const c = threadRowCount(row);
+                total += c;
+                map.set(em, c);
             }
+            setMessageNavBadge(total);
             document.querySelectorAll('.friend-card[data-friend-email]').forEach((card) => {
                 const email = String(card.getAttribute('data-friend-email') || '').trim().toLowerCase();
                 const btn = card.querySelector('.messages-btn');
                 if (email && btn) setInlineMessagesBadge(btn, map.get(email) || 0);
             });
         } catch (err) {
-            /* ignore */
+            setMessageNavBadge(0);
         }
     }
 
@@ -96,8 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function tickFriendNotifications() {
         if (document.visibilityState === 'hidden') return;
         pollPendingRequestCount();
-        refreshUnreadBadges();
-        updateInlineUnreadBadgesOnly();
+        syncMessageBadgesFromSummary();
     }
 
     // =========================
@@ -210,7 +226,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (requests.length === 0) {
                 pendingList.innerHTML = '<p class="empty-message">No pending requests.</p>';
-                refreshUnreadBadges();
+                syncMessageBadgesFromSummary();
                 return;
             }
 
@@ -278,7 +294,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 });
                 pendingList.appendChild(div);
             });
-            refreshUnreadBadges();
+            syncMessageBadgesFromSummary();
         } catch (err) {
             console.error(err);
         }
@@ -340,17 +356,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             ]);
             const data = await friendsRes.json();
             const summaryData = await summaryRes.json().catch(() => ({ threads: [] }));
+            updateMessageBadgeSchemaHint(summaryData);
             const friends = data.friends || [];
             const unreadByEmail = new Map();
             for (const row of summaryData.threads || []) {
                 const em = String(row.senderEmail || '').trim().toLowerCase();
-                if (em) unreadByEmail.set(em, Number(row.count) || 0);
+                if (em) unreadByEmail.set(em, threadRowCount(row));
             }
+            const navTotalFromSummary = [...unreadByEmail.values()].reduce((a, b) => a + b, 0);
+            setMessageNavBadge(navTotalFromSummary);
             friendsList.innerHTML = '';
 
             if (friends.length === 0) {
                 friendsList.innerHTML = '<p class="empty-message">No friends yet. Search for users to add.</p>';
-                refreshUnreadBadges();
                 return;
             }
 
@@ -489,7 +507,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 friendsList.appendChild(div);
             });
-            refreshUnreadBadges();
         } catch (err) {
             console.error(err);
         }
@@ -595,8 +612,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.error(readErr);
             }
             setInlineMessagesBadge(messagesBtn, 0);
-            await refreshUnreadBadges();
-            await updateInlineUnreadBadgesOnly();
+            await syncMessageBadgesFromSummary();
         } catch (err) {
             contentEl.innerHTML = '<p class="empty-message">Failed to load messages.</p>';
         }
@@ -634,6 +650,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =========================
     // INIT
     // =========================
+    document.getElementById('messageBadgeSchemaHintDismiss')?.addEventListener('click', () => {
+        sessionStorage.setItem('hideMessageBadgeSchemaHint', '1');
+        const el = document.getElementById('messageBadgeSchemaHint');
+        if (el) el.style.display = 'none';
+    });
+
     loadPendingRequests();
     loadFriends();
 });
