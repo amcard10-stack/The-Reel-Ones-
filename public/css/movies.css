@@ -280,3 +280,42 @@ body {
 .genre-tab.active {
     background: #76a7df;
 }
+.movies-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 22px;
+    margin-top: 20px;
+    align-items: start;
+}
+
+.media-card {
+    width: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.media-card img {
+    width: 170px;
+    height: 255px;
+    object-fit: cover;
+    border-radius: 14px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.media-title {
+    color: white;
+    font-weight: 700;
+    font-size: 16px;
+    margin: 10px 6px 6px 6px;
+    text-align: center;
+}
+
+.provider-label {
+    color: #dbe8f8;
+    font-size: 14px;
+    line-height: 1.35;
+    margin: 0 6px 8px 6px;
+    text-align: center;
+}

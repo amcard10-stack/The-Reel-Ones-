@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const DEBOUNCE_MS = 400;
     const MIN_CHARS = 2;
-    const TARGET_ROW_COUNT = 8;
+    const TARGET_ROW_COUNT = 50;
 
     let currentGenre = 'trending';
     let debounceTimer = null;
@@ -46,24 +46,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, DEBOUNCE_MS);
     });
 
-    function setupScrollButtons() {
-        const rowContainer = document.querySelector('.row-container');
-        if (!rowContainer) return;
-
-        const row = rowContainer.querySelector('.movie-row');
-        const leftBtn = rowContainer.querySelector('.scroll-btn.left');
-        const rightBtn = rowContainer.querySelector('.scroll-btn.right');
-
-        if (!row) return;
-
-        leftBtn?.addEventListener('click', () => {
-            row.scrollBy({ left: -400, behavior: 'smooth' });
-        });
-
-        rightBtn?.addEventListener('click', () => {
-            row.scrollBy({ left: 400, behavior: 'smooth' });
-        });
-    }
 
     function getSelectedSubscriptions() {
         return Array.from(
@@ -213,10 +195,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         movie: item.movie,
                         label: item.label
                     });
-                }
-
-                if (results.length >= limit) {
-                    return results;
                 }
             }
         }
@@ -410,7 +388,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         await saveSelectedFilters();
     });
 
-    setupScrollButtons();
     await restoreSavedFilters();
     await loadSelectedGenre();
 });
