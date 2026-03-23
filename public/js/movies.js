@@ -9,61 +9,59 @@ document.addEventListener('DOMContentLoaded', async () => {
     DataModel.setToken(token);
 
     const logoutButton = document.getElementById('logoutButton');
-    const trendingRow = document.getElementById('moviesRow');
-    const actionRow = document.getElementById('actionMoviesRow');
-    const comedyRow = document.getElementById('comedyMoviesRow');
-    const horrorRow = document.getElementById('horrorMoviesRow');
-
+    const moviesRow = document.getElementById('moviesRow');
     const searchInput = document.getElementById('movieSearch');
     const searchBtn = document.getElementById('movieSearchBtn');
     const sectionTitle = document.getElementById('moviesSectionTitle');
 
     const clearFilterBtn = document.getElementById('clearFilterBtn');
     const saveBtn = document.getElementById('saveFilterBtn');
-    const applyBtn = document.getElementById('applyFilterBtn');
+
+    const genreTabs = document.querySelectorAll('.genre-tab');
 
     const DEBOUNCE_MS = 400;
     const MIN_CHARS = 2;
-    const MAX_PAGES_TO_SCAN = 5;
     const TARGET_ROW_COUNT = 8;
 
-    if (!trendingRow) return;
+    let currentGenre = 'trending';
+    let debounceTimer = null;
+
+    if (!moviesRow) return;
 
     logoutButton?.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
         window.location.href = '/';
     });
 
-    let debounceTimer = null;
-
-    searchBtn?.addEventListener('click', () => loadTrendingMovies());
+    searchBtn?.addEventListener('click', () => loadSelectedGenre());
 
     searchInput?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') loadTrendingMovies();
+        if (e.key === 'Enter') loadSelectedGenre();
     });
 
     searchInput?.addEventListener('input', () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
-            loadTrendingMovies();
+            loadSelectedGenre();
         }, DEBOUNCE_MS);
     });
 
     function setupScrollButtons() {
-        document.querySelectorAll('.row-container').forEach((container) => {
-            const row = container.querySelector('.movie-row');
-            const leftBtn = container.querySelector('.scroll-btn.left');
-            const rightBtn = container.querySelector('.scroll-btn.right');
+        const rowContainer = document.querySelector('.row-container');
+        if (!rowContainer) return;
 
-            if (!row) return;
+        const row = rowContainer.querySelector('.movie-row');
+        const leftBtn = rowContainer.querySelector('.scroll-btn.left');
+        const rightBtn = rowContainer.querySelector('.scroll-btn.right');
 
-            leftBtn?.addEventListener('click', () => {
-                row.scrollBy({ left: -400, behavior: 'smooth' });
-            });
+        if (!row) return;
 
-            rightBtn?.addEventListener('click', () => {
-                row.scrollBy({ left: 400, behavior: 'smooth' });
-            });
+        leftBtn?.addEventListener('click', () => {
+            row.scrollBy({ left: -400, behavior: 'smooth' });
+        });
+
+        rightBtn?.addEventListener('click', () => {
+            row.scrollBy({ left: 400, behavior: 'smooth' });
         });
     }
 
@@ -187,44 +185,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         return card;
     }
 
-async function buildFilteredMovieResults(movies, selectedFilters, limit = TARGET_ROW_COUNT) {
-    const usableMovies = Array.isArray(movies)
-        ? movies.filter((movie) => movie?.poster_path && movie?.id)
-        : [];
+    async function buildFilteredMovieResults(movies, selectedFilters, limit = TARGET_ROW_COUNT) {
+        const usableMovies = Array.isArray(movies)
+            ? movies.filter((movie) => movie?.poster_path && movie?.id)
+            : [];
 
-    const results = [];
-    const BATCH_SIZE = 6;
+        const results = [];
+        const BATCH_SIZE = 6;
 
-    for (let i = 0; i < usableMovies.length; i += BATCH_SIZE) {
-        const batch = usableMovies.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < usableMovies.length; i += BATCH_SIZE) {
+            const batch = usableMovies.slice(i, i + BATCH_SIZE);
 
-        const batchResults = await Promise.all(
-            batch.map(async (movie) => {
-                const availabilityData = await fetchAvailabilityData(movie.id, 'movie');
-                return {
-                    movie,
-                    label: availabilityData.label,
-                    streamingProviders: availabilityData.streamingProviders
-                };
-            })
-        );
+            const batchResults = await Promise.all(
+                batch.map(async (movie) => {
+                    const availabilityData = await fetchAvailabilityData(movie.id, 'movie');
+                    return {
+                        movie,
+                        label: availabilityData.label,
+                        streamingProviders: availabilityData.streamingProviders
+                    };
+                })
+            );
 
-        for (const item of batchResults) {
-            if (!selectedFilters.length || matchesSubscriptionFilter(item.streamingProviders, selectedFilters)) {
-                results.push({
-                    movie: item.movie,
-                    label: item.label
-                });
-            }
+            for (const item of batchResults) {
+                if (!selectedFilters.length || matchesSubscriptionFilter(item.streamingProviders, selectedFilters)) {
+                    results.push({
+                        movie: item.movie,
+                        label: item.label
+                    });
+                }
 
-            if (results.length >= limit) {
-                return results;
+                if (results.length >= limit) {
+                    return results;
+                }
             }
         }
+
+        return results;
     }
 
-    return results;
-}
     async function renderPreparedResults(targetRow, preparedResults) {
         if (!targetRow) return;
 
@@ -241,42 +240,17 @@ async function buildFilteredMovieResults(movies, selectedFilters, limit = TARGET
         }
     }
 
-async function loadTrendingMovies() {
-    const selectedFilters = getSelectedSubscriptions();
-    const query = searchInput?.value?.trim() || '';
+    async function loadTrendingMovies() {
+        const selectedFilters = getSelectedSubscriptions();
+        const query = searchInput?.value?.trim() || '';
 
-    try {
-        let allMovies = [];
+        try {
+            let allMovies = [];
 
-        if (query.length >= MIN_CHARS) {
-            sectionTitle.textContent = `Results for "${query}"`;
+            if (query.length >= MIN_CHARS) {
+                sectionTitle.textContent = `Results for "${query}"`;
 
-            const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-
-            if (res.status === 401) {
-                localStorage.removeItem('jwtToken');
-                window.location.href = '/';
-                return;
-            }
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.message || 'Search failed');
-            }
-
-            allMovies = data.results || [];
-        } else {
-            sectionTitle.textContent = 'Trending';
-
-            const collected = [];
-            const seenIds = new Set();
-            const pagesToScan = selectedFilters.length ? 3 : 1;
-
-            for (let page = 1; page <= pagesToScan; page++) {
-                const res = await fetch(`/api/trending/movies?page=${page}`, {
+                const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, {
                     headers: { Authorization: `Bearer ${token}` }
                 });
 
@@ -289,7 +263,81 @@ async function loadTrendingMovies() {
                 const data = await res.json();
 
                 if (!res.ok) {
-                    throw new Error(data.message || 'Failed to load trending movies');
+                    throw new Error(data.message || 'Search failed');
+                }
+
+                allMovies = data.results || [];
+            } else {
+                sectionTitle.textContent = 'Trending';
+
+                const collected = [];
+                const seenIds = new Set();
+                const pagesToScan = selectedFilters.length ? 3 : 1;
+
+                for (let page = 1; page <= pagesToScan; page++) {
+                    const res = await fetch(`/api/trending/movies?page=${page}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+
+                    if (res.status === 401) {
+                        localStorage.removeItem('jwtToken');
+                        window.location.href = '/';
+                        return;
+                    }
+
+                    const data = await res.json();
+
+                    if (!res.ok) {
+                        throw new Error(data.message || 'Failed to load trending movies');
+                    }
+
+                    for (const movie of data.results || []) {
+                        if (!seenIds.has(movie.id)) {
+                            seenIds.add(movie.id);
+                            collected.push(movie);
+                        }
+                    }
+                }
+
+                allMovies = collected;
+            }
+
+            const preparedResults = await buildFilteredMovieResults(
+                allMovies,
+                selectedFilters,
+                TARGET_ROW_COUNT
+            );
+
+            await renderPreparedResults(moviesRow, preparedResults);
+        } catch (error) {
+            console.error('Trending error:', error);
+            moviesRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
+        }
+    }
+
+    async function loadGenreMovies(genreId) {
+        const selectedFilters = getSelectedSubscriptions();
+
+        try {
+            const collected = [];
+            const seenIds = new Set();
+            const pagesToScan = selectedFilters.length ? 3 : 1;
+
+            for (let page = 1; page <= pagesToScan; page++) {
+                const res = await fetch(`/api/movies/by-genre?genreId=${genreId}&page=${page}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                if (res.status === 401) {
+                    localStorage.removeItem('jwtToken');
+                    window.location.href = '/';
+                    return;
+                }
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.message || `Failed to load genre ${genreId}`);
                 }
 
                 for (const movie of data.results || []) {
@@ -300,88 +348,52 @@ async function loadTrendingMovies() {
                 }
             }
 
-            allMovies = collected;
+            const preparedResults = await buildFilteredMovieResults(
+                collected,
+                selectedFilters,
+                TARGET_ROW_COUNT
+            );
+
+            await renderPreparedResults(moviesRow, preparedResults);
+        } catch (error) {
+            console.error(`Genre ${genreId} error:`, error);
+            moviesRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
+        }
+    }
+
+    async function loadSelectedGenre() {
+        showLoading(moviesRow);
+
+        if (currentGenre === 'trending') {
+            sectionTitle.textContent = 'Trending';
+            await loadTrendingMovies();
+            return;
         }
 
-        const preparedResults = await buildFilteredMovieResults(
-            allMovies,
-            selectedFilters,
-            TARGET_ROW_COUNT
-        );
+        const genreMap = {
+            '28': 'Action',
+            '35': 'Comedy',
+            '27': 'Horror'
+        };
 
-        await renderPreparedResults(trendingRow, preparedResults);
-    } catch (error) {
-        console.error('Trending error:', error);
-        trendingRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
+        sectionTitle.textContent = genreMap[currentGenre] || 'Movies';
+        await loadGenreMovies(currentGenre);
     }
-}
 
-    async function loadGenreMovies(targetRow, genreId) {
-    if (!targetRow) return;
+    genreTabs.forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            genreTabs.forEach((b) => b.classList.remove('active'));
+            btn.classList.add('active');
 
-    const selectedFilters = getSelectedSubscriptions();
-
-    try {
-        const collected = [];
-        const seenIds = new Set();
-
-        const pagesToScan = selectedFilters.length ? 3 : 1;
-
-        for (let page = 1; page <= pagesToScan; page++) {
-            const res = await fetch(`/api/movies/by-genre?genreId=${genreId}&page=${page}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-
-            if (res.status === 401) {
-                localStorage.removeItem('jwtToken');
-                window.location.href = '/';
-                return;
-            }
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.message || `Failed to load genre ${genreId}`);
-            }
-
-            for (const movie of data.results || []) {
-                if (!seenIds.has(movie.id)) {
-                    seenIds.add(movie.id);
-                    collected.push(movie);
-                }
-            }
-        }
-
-        const preparedResults = await buildFilteredMovieResults(
-            collected,
-            selectedFilters,
-            TARGET_ROW_COUNT
-        );
-
-        await renderPreparedResults(targetRow, preparedResults);
-    } catch (error) {
-        console.error(`Genre ${genreId} error:`, error);
-        targetRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
-    }
-}
-    async function reloadAllRows() {
-        showLoading(trendingRow);
-        showLoading(actionRow);
-        showLoading(comedyRow);
-        showLoading(horrorRow);
-
-        await Promise.all([
-            loadTrendingMovies(),
-            loadGenreMovies(actionRow, 28),
-            loadGenreMovies(comedyRow, 35),
-            loadGenreMovies(horrorRow, 27)
-        ]);
-    }
+            currentGenre = btn.dataset.genre;
+            await loadSelectedGenre();
+        });
+    });
 
     document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach((cb) => {
         cb.addEventListener('change', async () => {
             await saveSelectedFilters();
-            await reloadAllRows();
+            await loadSelectedGenre();
         });
     });
 
@@ -391,12 +403,7 @@ async function loadTrendingMovies() {
         });
 
         await saveSelectedFilters();
-        await reloadAllRows();
-    });
-
-    applyBtn?.addEventListener('click', async () => {
-        await saveSelectedFilters();
-        await reloadAllRows();
+        await loadSelectedGenre();
     });
 
     saveBtn?.addEventListener('click', async () => {
@@ -405,5 +412,5 @@ async function loadTrendingMovies() {
 
     setupScrollButtons();
     await restoreSavedFilters();
-    await reloadAllRows();
+    await loadSelectedGenre();
 });
