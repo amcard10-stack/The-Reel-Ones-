@@ -1282,7 +1282,9 @@ app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res
             }
             const [[row]] = await connection.execute(
                 `SELECT COUNT(*) AS cnt FROM message
-                 WHERE receiver_email = ? AND sender_email = ? AND read_at IS NULL`,
+                 WHERE LOWER(TRIM(receiver_email)) = LOWER(TRIM(?))
+                 AND LOWER(TRIM(sender_email)) = LOWER(TRIM(?))
+                 AND read_at IS NULL`,
                 [req.user.email, fromEmail]
             );
             await connection.end();
@@ -1290,17 +1292,17 @@ app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res
             return res.status(200).json({ count: Number(row?.cnt ?? 0) });
         }
 
-        // Only count unread from people who are still accepted friends (matches per-friend badges on UI).
+        // Only unread where you are receiver; sender must still be an accepted friend (case-insensitive emails).
         const [[row]] = await connection.execute(
             `SELECT COUNT(*) AS cnt
              FROM message m
-             WHERE m.receiver_email = ? AND m.read_at IS NULL
+             WHERE LOWER(TRIM(m.receiver_email)) = LOWER(TRIM(?)) AND m.read_at IS NULL
              AND EXISTS (
                SELECT 1 FROM friend_request fr
                WHERE fr.status = 'accepted'
                AND (
-                 (fr.sender_email = m.sender_email AND fr.receiver_email = m.receiver_email)
-                 OR (fr.sender_email = m.receiver_email AND fr.receiver_email = m.sender_email)
+                 (LOWER(TRIM(fr.sender_email)) = LOWER(TRIM(m.sender_email)) AND LOWER(TRIM(fr.receiver_email)) = LOWER(TRIM(m.receiver_email)))
+                 OR (LOWER(TRIM(fr.sender_email)) = LOWER(TRIM(m.receiver_email)) AND LOWER(TRIM(fr.receiver_email)) = LOWER(TRIM(m.sender_email)))
                )
              )`,
             [req.user.email]
@@ -1327,24 +1329,24 @@ app.get('/api/friends/messages/unread/summary', authenticateToken, async (req, r
     try {
         connection = await createConnection();
         const [rows] = await connection.execute(
-            `SELECT m.sender_email AS senderEmail, COUNT(*) AS cnt
+            `SELECT LOWER(TRIM(m.sender_email)) AS senderEmail, COUNT(*) AS cnt
              FROM message m
-             WHERE m.receiver_email = ? AND m.read_at IS NULL
+             WHERE LOWER(TRIM(m.receiver_email)) = LOWER(TRIM(?)) AND m.read_at IS NULL
              AND EXISTS (
                SELECT 1 FROM friend_request fr
                WHERE fr.status = 'accepted'
                AND (
-                 (fr.sender_email = m.sender_email AND fr.receiver_email = m.receiver_email)
-                 OR (fr.sender_email = m.receiver_email AND fr.receiver_email = m.sender_email)
+                 (LOWER(TRIM(fr.sender_email)) = LOWER(TRIM(m.sender_email)) AND LOWER(TRIM(fr.receiver_email)) = LOWER(TRIM(m.receiver_email)))
+                 OR (LOWER(TRIM(fr.sender_email)) = LOWER(TRIM(m.receiver_email)) AND LOWER(TRIM(fr.receiver_email)) = LOWER(TRIM(m.sender_email)))
                )
              )
-             GROUP BY m.sender_email`,
+             GROUP BY LOWER(TRIM(m.sender_email))`,
             [req.user.email]
         );
         await connection.end();
         connection = null;
         const threads = (rows || []).map((r) => ({
-            senderEmail: String(r.senderEmail || r.senderemail || ''),
+            senderEmail: String(r.senderEmail || r.senderemail || '').trim().toLowerCase(),
             count: Number(r.cnt ?? r.count ?? 0)
         })).filter((t) => t.senderEmail);
         return res.status(200).json({ threads });
@@ -1383,7 +1385,9 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
         }
         const [result] = await connection.execute(
             `UPDATE message SET read_at = UTC_TIMESTAMP()
-             WHERE receiver_email = ? AND sender_email = ? AND read_at IS NULL`,
+             WHERE LOWER(TRIM(receiver_email)) = LOWER(TRIM(?))
+             AND LOWER(TRIM(sender_email)) = LOWER(TRIM(?))
+             AND read_at IS NULL`,
             [req.user.email, email]
         );
         await connection.end();
