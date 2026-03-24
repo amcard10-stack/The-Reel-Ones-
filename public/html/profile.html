@@ -23,7 +23,6 @@
             Manage your personal information below.
         </p>
 
- 
         <div class="profile-picture-section">
             <img id="profilePic"
                 src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='40' r='25' fill='%23ddd'/%3E%3Cellipse cx='50' cy='95' rx='35' ry='25' fill='%23ddd'/%3E%3C/svg%3E"
@@ -39,17 +38,15 @@
             </label>
         </div>
 
-         <!-- BIO SECTION -->
+        <!-- BIO SECTION -->
         <div class="bio-card">
-
-        <div class="input-group">
-            <label for="bioInput">Bio</label>
-            <textarea 
-               id="bioInput"
-                placeholder="Tell others about your movie and show tastes..."
-            ></textarea>
-        </div>
-
+            <div class="input-group">
+                <label for="bioInput">Bio</label>
+                <textarea
+                    id="bioInput"
+                    placeholder="Tell others about your movie and show tastes..."
+                ></textarea>
+            </div>
         </div>
 
         <!-- PERSONAL INFO CARD -->
@@ -57,7 +54,7 @@
 
             <div class="input-group">
                 <label for="firstNameInput">First Name</label>
-                <input type="text" id="firstNameInput">     
+                <input type="text" id="firstNameInput">
             </div>
 
             <div class="input-group">
@@ -95,13 +92,18 @@
 
             <div class="input-group">
                 <label for="confirmPasswordInput">Confirm New Password</label>
-                <input type="password" id="confirmPasswordInput">   
+                <input type="password" id="confirmPasswordInput">
             </div>
 
         </div>
 
-        <!-- SAVE BUTTON -->
+        <hr class="divider">
+
+        <!-- SAVE + DELETE -->
         <div class="save-container">
+            <button id="deleteAccountBtn" class="delete-btn">
+                Delete Account
+            </button>
             <button id="saveChangesBtn" class="primary-btn">
                 Save Changes
             </button>

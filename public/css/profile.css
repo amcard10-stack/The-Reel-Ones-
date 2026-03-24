@@ -151,6 +151,8 @@ input:disabled {
 .save-container {
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    gap: 16px;
     margin-top: 40px;
 }
 
@@ -193,4 +195,29 @@ input:disabled {
 .bio-card textarea:focus {
     outline: none;
     border-color: #3A6EA5;
+}
+
+.danger-header {
+    color: #E26A6A;
+}
+
+.danger-zone {
+    margin-top: 10px;
+    margin-bottom: 40px;
+}
+
+.delete-btn {
+    padding: 12px 24px;
+    border-radius: 12px;
+    background-color: transparent;
+    border: 2px solid #E26A6A;
+    color: #E26A6A;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.delete-btn:hover {
+    background-color: #E26A6A;
+    color: #fff;
 }

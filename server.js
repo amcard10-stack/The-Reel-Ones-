@@ -693,6 +693,38 @@ app.put('/api/profile', authenticateToken, upload.single('profilePicture'), asyn
     }
 });
 
+app.delete('/api/profile', authenticateToken, async (req, res) => {
+    const email = req.user.email;
+    try {
+        const connection = await createConnection();
+
+        // Delete all associated data first (foreign key order)
+        await connection.execute('DELETE FROM message WHERE sender_email = ? OR receiver_email = ?', [email, email]);
+        await connection.execute('DELETE FROM friend_request WHERE sender_email = ? OR receiver_email = ?', [email, email]);
+        await connection.execute('DELETE FROM user_subscription WHERE user_email = ?', [email]);
+        await connection.execute('DELETE FROM watch_status WHERE user_email = ?', [email]);
+
+        // Delete list items for user's lists, then lists
+        const [lists] = await connection.execute('SELECT id FROM list WHERE user_email = ?', [email]);
+        for (const list of lists) {
+            await connection.execute('DELETE FROM list_item WHERE list_id = ?', [list.id]);
+        }
+        await connection.execute('DELETE FROM list WHERE user_email = ?', [email]);
+
+        await connection.execute('DELETE FROM rating WHERE user_email = ?', [email]);
+        await connection.execute('DELETE FROM watch_history WHERE user_email = ?', [email]);
+
+        // Finally delete the user
+        await connection.execute('DELETE FROM user WHERE email = ?', [email]);
+
+        await connection.end();
+        return res.status(200).json({ message: 'Account deleted successfully.' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error deleting account.' });
+    }
+});
+
 //////////////////////////////////////
 // SUGGESTIONS
 //////////////////////////////////////

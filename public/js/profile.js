@@ -126,4 +126,39 @@ document.addEventListener("DOMContentLoaded", async () => {
             alert("Something went wrong.");
         }
     });
+
+    /* =========================
+   DELETE ACCOUNT
+==========================*/
+document.getElementById("deleteAccountBtn").addEventListener("click", async () => {
+    const confirmed = confirm(
+        "Are you sure you want to permanently delete your account?\n\nThis will remove all your data including ratings, watch history, lists, and friends. This action cannot be undone."
+    );
+    if (!confirmed) return;
+
+    // Second confirmation for safety
+    const doubleConfirmed = confirm(
+        "Last chance — are you sure? Your account will be gone forever."
+    );
+    if (!doubleConfirmed) return;
+
+    try {
+        const response = await fetch("/api/profile", {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+            localStorage.removeItem("jwtToken");
+            alert("Your account has been deleted.");
+            window.location.href = "/";
+        } else {
+            const result = await response.json();
+            alert(result.message || "Error deleting account.");
+        }
+    } catch (error) {
+        console.error(error);
+        alert("Something went wrong. Please try again.");
+    }
+});
 });
