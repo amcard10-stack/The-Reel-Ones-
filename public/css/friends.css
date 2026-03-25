@@ -517,3 +517,87 @@ body {
     border: 1px solid rgba(226, 106, 106, 0.4);
     background: rgba(226, 106, 106, 0.08);
 }
+
+/* Two-column layout: main + friend activity */
+.friends-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 28px;
+    align-items: start;
+}
+
+@media (min-width: 1024px) {
+    .friends-layout {
+        grid-template-columns: 1fr minmax(260px, 300px);
+    }
+
+    .friends-activity-aside {
+        position: sticky;
+        top: 20px;
+    }
+}
+
+.friends-main-column {
+    min-width: 0;
+}
+
+.friends-activity-aside {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 14px;
+    padding: 20px 18px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.friends-activity-heading {
+    margin: 0 0 8px 0;
+    font-size: 1.15rem;
+    color: #F2F4F7;
+}
+
+.friends-activity-hint {
+    margin: 0 0 14px 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: rgba(242, 244, 247, 0.6);
+}
+
+.friends-activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: min(70vh, 520px);
+    overflow-y: auto;
+}
+
+.friends-activity-item {
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.friends-activity-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.friends-activity-line {
+    margin: 0 0 6px 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #e8eef4;
+}
+
+.friends-activity-line em {
+    font-style: normal;
+    color: #a8d4ff;
+}
+
+.friends-activity-time {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.friends-activity-loading,
+.friends-activity-empty {
+    font-size: 13px;
+    margin: 0;
+}

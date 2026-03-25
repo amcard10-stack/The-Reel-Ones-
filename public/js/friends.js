@@ -103,6 +103,58 @@ document.addEventListener('DOMContentLoaded', async () => {
             .replace(/"/g, '&quot;');
     }
 
+    const friendsActivityList = document.getElementById('friendsActivityList');
+
+    function formatActivityRow(a) {
+        const who = escapeHtml(a.actorLabel || a.actorEmail || 'Friend');
+        const title = escapeHtml(a.title || 'Unknown title');
+        const when = new Date(a.occurredAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        let line = '';
+        if (a.kind === 'rating') {
+            const typeLabel = a.mediaType === 'show' ? 'show' : 'movie';
+            const n = Math.min(5, Math.max(1, Number(a.rating) || 0));
+            const stars = '★'.repeat(n) + '☆'.repeat(5 - n);
+            line = `<strong>${who}</strong> rated <em>${title}</em> (${typeLabel}) ${stars}`;
+        } else if (a.kind === 'list_add') {
+            line = `<strong>${who}</strong> added <em>${title}</em> to "${escapeHtml(a.listName || 'a list')}"`;
+        } else if (a.kind === 'status') {
+            const verb =
+                a.status === 'watching'
+                    ? 'is watching'
+                    : a.status === 'completed'
+                      ? 'marked completed'
+                      : a.status === 'want_to_watch'
+                        ? 'wants to watch'
+                        : `updated status (${escapeHtml(String(a.status || ''))})`;
+            const typeLabel = a.mediaType === 'show' ? 'show' : 'movie';
+            line = `<strong>${who}</strong> ${verb} <em>${title}</em> (${typeLabel})`;
+        } else {
+            line = `<strong>${who}</strong> did something on the app`;
+        }
+        return `<div class="friends-activity-item"><p class="friends-activity-line">${line}</p><span class="friends-activity-time">${escapeHtml(when)}</span></div>`;
+    }
+
+    async function loadFriendActivity() {
+        if (!friendsActivityList) return;
+        friendsActivityList.innerHTML = '<p class="friends-activity-loading empty-message">Loading…</p>';
+        try {
+            const res = await fetch('/api/friends/activity?limit=40', {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error('bad');
+            const data = await res.json();
+            const items = data.activities || [];
+            if (items.length === 0) {
+                friendsActivityList.innerHTML =
+                    '<p class="friends-activity-empty empty-message">No recent activity from friends yet.</p>';
+                return;
+            }
+            friendsActivityList.innerHTML = items.map(formatActivityRow).join('');
+        } catch (err) {
+            friendsActivityList.innerHTML = '<p class="empty-message">Could not load activity.</p>';
+        }
+    }
+
     function tickFriendNotifications() {
         if (document.visibilityState === 'hidden') return;
         pollPendingRequestCount();
@@ -322,6 +374,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!res.ok) { alert(data.message || 'Failed to remove friend.'); return; }
             await loadFriends();
             await loadPublicUsers();
+            await loadFriendActivity();
         } catch (err) {
             console.error(err);
             alert('Failed to remove friend.');
@@ -720,4 +773,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadPendingRequests();
     loadFriends();
     loadPublicUsers();
+    loadFriendActivity();
 });

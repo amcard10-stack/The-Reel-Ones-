@@ -173,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         function tickDashboardFriendBadges() {
             if (document.visibilityState === 'hidden') return;
             updateFriendsNavBadges();
+            updateFriendActivityTeaser();
         }
         tickDashboardFriendBadges();
         setInterval(tickDashboardFriendBadges, 6000);
@@ -249,6 +250,31 @@ async function updateFriendMessageBadge() {
 
 async function updateFriendsNavBadges() {
     await Promise.all([updateFriendRequestBadge(), updateFriendMessageBadge()]);
+}
+
+async function updateFriendActivityTeaser() {
+    const wrap = document.getElementById('friendActivityTeaser');
+    const textEl = document.getElementById('friendActivityTeaserText');
+    if (!wrap || !textEl) return;
+    try {
+        const res = await fetch('/api/friends/activity/summary?days=7', {
+            headers: { Authorization: `Bearer ${localStorage.getItem('jwtToken')}` },
+        });
+        if (!res.ok) {
+            wrap.style.display = 'none';
+            return;
+        }
+        const data = await res.json().catch(() => ({}));
+        const count = Number(data.count) || 0;
+        if (count > 0) {
+            textEl.textContent = `${count} friend update${count === 1 ? '' : 's'} this week — see all on Friends`;
+            wrap.style.display = 'block';
+        } else {
+            wrap.style.display = 'none';
+        }
+    } catch (err) {
+        wrap.style.display = 'none';
+    }
 }
 
 //////////////////////////////////////////

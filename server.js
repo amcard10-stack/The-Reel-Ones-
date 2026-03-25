@@ -1455,6 +1455,165 @@ app.get('/api/friends', authenticateToken, async (req, res) => {
     }
 });
 
+const friendAcceptedPairSql = (actorCol) =>
+    `EXISTS (
+        SELECT 1 FROM friend_request fr
+        WHERE fr.status = 'accepted'
+        AND (
+            (fr.sender_email = ? AND fr.receiver_email = ${actorCol})
+            OR (fr.receiver_email = ? AND fr.sender_email = ${actorCol})
+        )
+    )`;
+
+// Aggregated activity from accepted friends (ratings, list adds, watch status updates)
+app.get('/api/friends/activity', authenticateToken, async (req, res) => {
+    const me = req.user.email;
+    const limit = Math.min(60, Math.max(1, parseInt(String(req.query.limit || '35'), 10) || 35));
+
+    try {
+        const connection = await createConnection();
+        const friendParams = [me, me];
+
+        const [ratingRows] = await connection.execute(
+            `SELECT r.user_email AS actorEmail,
+                    COALESCE(NULLIF(TRIM(u.username), ''), r.user_email) AS actorLabel,
+                    r.title, r.type AS mediaType, r.rating, r.rated_at AS occurredAt, 'rating' AS kind
+             FROM rating r
+             INNER JOIN user u ON u.email = r.user_email
+             WHERE r.user_email <> ? AND ${friendAcceptedPairSql('r.user_email')}
+             ORDER BY r.rated_at DESC
+             LIMIT 60`,
+            [me, ...friendParams]
+        );
+
+        const [listRows] = await connection.execute(
+            `SELECT l.user_email AS actorEmail,
+                    COALESCE(NULLIF(TRIM(u.username), ''), l.user_email) AS actorLabel,
+                    li.title, l.name AS listName, li.added_at AS occurredAt, 'list_add' AS kind
+             FROM list_item li
+             INNER JOIN list l ON l.id = li.list_id
+             INNER JOIN user u ON u.email = l.user_email
+             WHERE l.user_email <> ? AND ${friendAcceptedPairSql('l.user_email')}
+             ORDER BY li.added_at DESC
+             LIMIT 60`,
+            [me, ...friendParams]
+        );
+
+        let statusRows = [];
+        try {
+            const [rows] = await connection.execute(
+                `SELECT ws.user_email AS actorEmail,
+                        COALESCE(NULLIF(TRIM(u.username), ''), ws.user_email) AS actorLabel,
+                        ws.title, ws.type AS mediaType, ws.status, ws.updated_at AS occurredAt, 'status' AS kind
+                 FROM watch_status ws
+                 INNER JOIN user u ON u.email = ws.user_email
+                 WHERE ws.user_email <> ? AND ${friendAcceptedPairSql('ws.user_email')}
+                 ORDER BY ws.updated_at DESC
+                 LIMIT 60`,
+                [me, ...friendParams]
+            );
+            statusRows = rows;
+        } catch (e) {
+            if (e.code !== 'ER_NO_SUCH_TABLE') console.error('friends activity watch_status:', e.message);
+        }
+
+        await connection.end();
+
+        const merged = [];
+        for (const row of ratingRows) {
+            merged.push({
+                kind: 'rating',
+                actorEmail: row.actorEmail,
+                actorLabel: row.actorLabel,
+                title: row.title,
+                mediaType: row.mediaType,
+                rating: row.rating,
+                occurredAt: row.occurredAt,
+            });
+        }
+        for (const row of listRows) {
+            merged.push({
+                kind: 'list_add',
+                actorEmail: row.actorEmail,
+                actorLabel: row.actorLabel,
+                title: row.title,
+                listName: row.listName,
+                occurredAt: row.occurredAt,
+            });
+        }
+        for (const row of statusRows) {
+            merged.push({
+                kind: 'status',
+                actorEmail: row.actorEmail,
+                actorLabel: row.actorLabel,
+                title: row.title,
+                mediaType: row.mediaType,
+                status: row.status,
+                occurredAt: row.occurredAt,
+            });
+        }
+
+        merged.sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt));
+        const activities = merged.slice(0, limit);
+
+        res.status(200).json({ activities });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error loading friend activity.' });
+    }
+});
+
+// Count of friend activity events in the last N days (for dashboard teaser)
+app.get('/api/friends/activity/summary', authenticateToken, async (req, res) => {
+    const me = req.user.email;
+    const days = Math.min(30, Math.max(1, parseInt(String(req.query.days || '7'), 10) || 7));
+
+    try {
+        const connection = await createConnection();
+        const friendParams = [me, me];
+
+        const [[ratingCount]] = await connection.execute(
+            `SELECT COUNT(*) AS c
+             FROM rating r
+             WHERE r.user_email <> ? AND ${friendAcceptedPairSql('r.user_email')}
+             AND r.rated_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)`,
+            [me, ...friendParams]
+        );
+
+        const [[listCount]] = await connection.execute(
+            `SELECT COUNT(*) AS c
+             FROM list_item li
+             INNER JOIN list l ON l.id = li.list_id
+             WHERE l.user_email <> ? AND ${friendAcceptedPairSql('l.user_email')}
+             AND li.added_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)`,
+            [me, ...friendParams]
+        );
+
+        let statusC = 0;
+        try {
+            const [[row]] = await connection.execute(
+                `SELECT COUNT(*) AS c
+                 FROM watch_status ws
+                 WHERE ws.user_email <> ? AND ${friendAcceptedPairSql('ws.user_email')}
+                 AND ws.updated_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)`,
+                [me, ...friendParams]
+            );
+            statusC = Number(row.c) || 0;
+        } catch (e) {
+            if (e.code !== 'ER_NO_SUCH_TABLE') console.error('friends activity summary watch_status:', e.message);
+        }
+
+        await connection.end();
+
+        const count =
+            (Number(ratingCount.c) || 0) + (Number(listCount.c) || 0) + statusC;
+        res.status(200).json({ count, windowDays: days });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error loading friend activity summary.' });
+    }
+});
+
 app.delete('/api/friends/:email', authenticateToken, async (req, res) => {
     const { email } = req.params;
     if (!email || email === req.user.email) return res.status(400).json({ message: 'Invalid friend.' });
