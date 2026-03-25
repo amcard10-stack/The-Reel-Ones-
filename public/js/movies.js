@@ -94,40 +94,41 @@ const clearBtn = document.getElementById('clearFilterBtn');
         addLoadMoreButton(selectedFilters);
     }
 
-    function createCardElement(movie) {
-        const card = document.createElement('div');
-        card.className = 'media-card';
-        const label = movie.title || movie.name || 'Title';
-        card.setAttribute('role', 'button');
-        card.setAttribute('tabindex', '0');
-        card.setAttribute('aria-label', `View details: ${label}`);
+ function createCardElement(movie) {
+    const card = document.createElement('div');
+    card.className = 'media-card';
 
-        const img = document.createElement('img');
-        img.src = movie.poster_path
-            ? `https://image.tmdb.org/t/p/w342${movie.poster_path}`
-            : 'https://via.placeholder.com/300x450?text=No+Image';
+    const label = movie.title || movie.name || 'Title';
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', `View details: ${label}`);
 
-        const title = document.createElement('p');
-        title.textContent = label;
+    const img = document.createElement('img');
+    img.src = movie.poster_path
+        ? `https://image.tmdb.org/t/p/w342${movie.poster_path}`
+        : 'https://via.placeholder.com/300x450?text=No+Image';
 
-        card.appendChild(img);
-        card.appendChild(title);
+    const title = document.createElement('p');
+    title.className = 'media-title';
+    title.textContent = label;
 
-        const openDetail = () => {
-            if (typeof openTitleDetailModal === 'function') {
-                openTitleDetailModal(movie, 'movie');
-            }
-        };
-        card.addEventListener('click', openDetail);
-        card.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                openDetail();
-            }
-        });
+    card.appendChild(img);
+    card.appendChild(title);
 
-        return card;
-    }
+    const openDetail = () => {
+        window.location.href = `/title-details?id=${movie.id}&type=movie`;
+    };
+
+    card.addEventListener('click', openDetail);
+    card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openDetail();
+        }
+    });
+
+    return card;
+}
 
     function addLoadMoreButton(selectedFilters) {
         const existing = document.querySelector('.load-more-wrap');
