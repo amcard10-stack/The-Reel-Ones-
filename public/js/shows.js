@@ -134,18 +134,46 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderTrending(shows.slice(0, 10)); 
     }
 
+    function createShowCard(show, extraClass) {
+        const card = document.createElement('div');
+        card.className = extraClass ? `media-card ${extraClass}` : 'media-card';
+        const name = show.name || 'Show';
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.setAttribute('aria-label', `View details: ${name}`);
+
+        const img = document.createElement('img');
+        img.src = `https://image.tmdb.org/t/p/w342${show.poster_path}`;
+        img.alt = name;
+
+        const title = document.createElement('p');
+        title.textContent = name;
+
+        card.appendChild(img);
+        card.appendChild(title);
+
+        const openDetail = () => {
+            if (typeof openTitleDetailModal === 'function') {
+                openTitleDetailModal(show, 'tv');
+            }
+        };
+        card.addEventListener('click', openDetail);
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openDetail();
+            }
+        });
+
+        return card;
+    }
+
     function renderTrending(shows) {
         trendingRow.innerHTML = '';
 
         shows.forEach(show => {
             if (!show.poster_path) return;
-
-            trendingRow.innerHTML += `
-                <div class="media-card">
-                    <img src="https://image.tmdb.org/t/p/w342${show.poster_path}" alt="${show.name}">
-                    <p>${show.name}</p>
-                </div>
-            `;
+            trendingRow.appendChild(createShowCard(show, ''));
         });
     }
 
@@ -154,13 +182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         shows.forEach(show => {
             if (!show.poster_path) return;
-
-            showsGrid.innerHTML += `
-                <div class="media-card grid-card">
-                    <img src="https://image.tmdb.org/t/p/w342${show.poster_path}" alt="${show.name}">
-                    <p>${show.name}</p>
-                </div>
-            `;
+            showsGrid.appendChild(createShowCard(show, 'grid-card'));
         });
     }
 

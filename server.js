@@ -967,6 +967,59 @@ app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
     }
 });
 
+// TMDB movie or TV details (genres, runtime, seasons) for title modal pills
+app.get('/api/tmdb/details', authenticateToken, async (req, res) => {
+    const rawId = req.query.id;
+    const type = String(req.query.type || 'movie').toLowerCase() === 'tv' ? 'tv' : 'movie';
+
+    if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+        return res.status(503).json({ message: 'TMDB API key not configured.' });
+    }
+
+    const id = parseInt(String(rawId), 10);
+    if (!Number.isFinite(id) || id < 1) {
+        return res.status(400).json({ message: 'Valid numeric id is required.' });
+    }
+
+    try {
+        const url = `https://api.themoviedb.org/3/${type}/${id}?api_key=${process.env.TMDB_API_KEY}`;
+        const tmdbRes = await fetch(url);
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+        }
+        const d = await tmdbRes.json();
+
+        if (type === 'movie') {
+            return res.status(200).json({
+                type: 'movie',
+                genres: (d.genres || []).map((g) => g.name).filter(Boolean),
+                runtime: typeof d.runtime === 'number' && d.runtime > 0 ? d.runtime : null,
+                vote_average: typeof d.vote_average === 'number' ? d.vote_average : null,
+                release_date: d.release_date || null,
+            });
+        }
+
+        const ert = d.episode_run_time;
+        let episodeRuntime = null;
+        if (Array.isArray(ert) && ert.length > 0) {
+            const sum = ert.reduce((a, n) => a + (Number(n) || 0), 0);
+            episodeRuntime = Math.round(sum / ert.length) || null;
+        }
+
+        return res.status(200).json({
+            type: 'tv',
+            genres: (d.genres || []).map((g) => g.name).filter(Boolean),
+            episode_runtime_minutes: episodeRuntime,
+            number_of_seasons: typeof d.number_of_seasons === 'number' ? d.number_of_seasons : null,
+            vote_average: typeof d.vote_average === 'number' ? d.vote_average : null,
+            first_air_date: d.first_air_date || null,
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error loading TMDB details.' });
+    }
+});
+
 app.get('/api/title/providers', authenticateToken, async (req, res) => {
     const { id, type } = req.query;
 
