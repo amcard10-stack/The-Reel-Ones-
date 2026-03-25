@@ -95,11 +95,43 @@ document.addEventListener('DOMContentLoaded', () => {
         withPoster.forEach(item => {
             const card = document.createElement('div');
             card.className = 'tmdb-result-card';
-            card.innerHTML = `
-                <img src="https://image.tmdb.org/t/p/w154${item.poster_path}" alt="${item._title || ''}">
-                <p>${item._title || 'Untitled'}</p>
-                <span class="add-hint">Click to select</span>
-            `;
+
+            const img = document.createElement('img');
+            img.src = `https://image.tmdb.org/t/p/w154${item.poster_path}`;
+            img.alt = item._title || '';
+
+            const titleP = document.createElement('p');
+            titleP.textContent = item._title || 'Untitled';
+
+            const preview = document.createElement('p');
+            preview.className = 'tmdb-overview-preview';
+            const ov = (item.overview && String(item.overview).trim()) || '';
+            preview.textContent = ov || 'No description yet.';
+
+            const actions = document.createElement('div');
+            actions.className = 'tmdb-card-actions';
+            const infoBtn = document.createElement('button');
+            infoBtn.type = 'button';
+            infoBtn.className = 'tmdb-info-btn';
+            infoBtn.textContent = 'Details';
+            infoBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (typeof openTitleDetailModal === 'function') {
+                    openTitleDetailModal(item, item._type === 'show' ? 'tv' : 'movie');
+                }
+            });
+            actions.appendChild(infoBtn);
+
+            const hint = document.createElement('span');
+            hint.className = 'add-hint';
+            hint.textContent = 'Click card to select';
+
+            card.appendChild(img);
+            card.appendChild(titleP);
+            card.appendChild(preview);
+            card.appendChild(actions);
+            card.appendChild(hint);
+
             card.addEventListener('click', () => {
                 ratingTitle.value = item._title;
                 ratingType.value = item._type;

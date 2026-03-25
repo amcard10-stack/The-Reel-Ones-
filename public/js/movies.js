@@ -52,11 +52,11 @@ const clearBtn = document.getElementById('clearFilterBtn');
 
 
     clearBtn?.addEventListener('click', async () => {
-    document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach(box => {
-        box.checked = false;
+        document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach(box => {
+            box.checked = false;
+        });
+        await loadSelectedGenre();
     });
-    await loadSelectedGenre
-});
 
     // MAIN FIX: build URL with providers + genre
     function buildUrl(page) {
@@ -97,6 +97,10 @@ const clearBtn = document.getElementById('clearFilterBtn');
     function createCardElement(movie) {
         const card = document.createElement('div');
         card.className = 'media-card';
+        const label = movie.title || movie.name || 'Title';
+        card.setAttribute('role', 'button');
+        card.setAttribute('tabindex', '0');
+        card.setAttribute('aria-label', `View details: ${label}`);
 
         const img = document.createElement('img');
         img.src = movie.poster_path
@@ -104,10 +108,23 @@ const clearBtn = document.getElementById('clearFilterBtn');
             : 'https://via.placeholder.com/300x450?text=No+Image';
 
         const title = document.createElement('p');
-        title.textContent = movie.title || movie.name;
+        title.textContent = label;
 
         card.appendChild(img);
         card.appendChild(title);
+
+        const openDetail = () => {
+            if (typeof openTitleDetailModal === 'function') {
+                openTitleDetailModal(movie, 'movie');
+            }
+        };
+        card.addEventListener('click', openDetail);
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openDetail();
+            }
+        });
 
         return card;
     }

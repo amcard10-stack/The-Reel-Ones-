@@ -180,6 +180,22 @@ body {
     margin-top: 6px;
 }
 
+.media-card[role='button'] {
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: center;
+}
+
+.media-card[role='button']:focus-visible {
+    outline: 2px solid #7eb8ff;
+    outline-offset: 4px;
+    border-radius: 14px;
+}
+
 .scroll-btn {
     border: none;
     background: #4d82be;
