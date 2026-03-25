@@ -10,396 +10,162 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const logoutButton = document.getElementById('logoutButton');
     const moviesRow = document.getElementById('moviesRow');
-    const searchInput = document.getElementById('movieSearch');
-    const searchBtn = document.getElementById('movieSearchBtn');
     const sectionTitle = document.getElementById('moviesSectionTitle');
-
-    const clearFilterBtn = document.getElementById('clearFilterBtn');
-    const saveBtn = document.getElementById('saveFilterBtn');
 
     const genreTabs = document.querySelectorAll('.genre-tab');
 
-    const DEBOUNCE_MS = 400;
-    const MIN_CHARS = 2;
-    const TARGET_ROW_COUNT = 50;
+    const LOAD_BATCH = 20;
+    const MAX_TRENDING_PAGES = 3;
 
+    let currentPage = 1;
+    let isLoadingMore = false;
     let currentGenre = 'all';
-    let debounceTimer = null;
 
     if (!moviesRow) return;
+
+    const PROVIDER_IDS = {
+        netflix: ['8'],
+        prime: ['9'],
+        hulu: ['15'],
+        disney: ['337'],
+        max: ['384', '189', '1899']
+    };
 
     logoutButton?.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
         window.location.href = '/';
     });
 
-    searchBtn?.addEventListener('click', () => loadSelectedGenre());
-
-    searchInput?.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') loadSelectedGenre();
-    });
-
-    searchInput?.addEventListener('input', () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            loadSelectedGenre();
-        }, DEBOUNCE_MS);
-    });
-
-
     function getSelectedSubscriptions() {
         return Array.from(
             document.querySelectorAll('#filterPanel input[type="checkbox"]:checked')
-        ).map((cb) => cb.value);
+        ).map(cb => cb.value);
     }
 
-    async function saveSelectedFilters() {
-        const selected = getSelectedSubscriptions();
-        try {
-            await DataModel.saveSubscriptions(selected);
-        } catch (error) {
-            console.error('Failed to save subscriptions:', error);
+    // MAIN FIX: build URL with providers + genre
+    function buildUrl(page) {
+        const selectedFilters = getSelectedSubscriptions();
+        const providerIds = selectedFilters.flatMap(f => PROVIDER_IDS[f] || []);
+
+        const providerQuery = providerIds.length
+            ? `&with_watch_providers=${providerIds.join('|')}&watch_region=US`
+            : '';
+
+        if (currentGenre === 'all') {
+            return `/api/discover/movies?page=${page}${providerQuery}`;
+        } else if (currentGenre === 'trending') {
+            return `/api/trending/movies?page=${page}`; // TMDB limitation
+        } else {
+            return `/api/movies/by-genre?genreId=${currentGenre}&page=${page}${providerQuery}`;
         }
     }
 
-    async function restoreSavedFilters() {
-        try {
-            const result = await DataModel.getSubscriptions();
-            const saved = Array.isArray(result?.subscriptions)
-                ? result.subscriptions
-                : Array.isArray(result)
-                    ? result
-                    : [];
-
-            document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach((cb) => {
-                cb.checked = saved.includes(cb.value);
-            });
-        } catch (error) {
-            console.error('Failed to restore subscriptions:', error);
+    async function renderMoviesWithFilter(movies, selectedFilters, reset = true) {
+        if (reset) {
+            moviesRow.innerHTML = '';
         }
-    }
 
-    function providerMatchesFilter(providerName, filter) {
-        const name = (providerName || '').toLowerCase();
+        let added = 0;
 
-        if (filter === 'netflix') return name.includes('netflix');
-        if (filter === 'hulu') return name.includes('hulu');
-        if (filter === 'disney') return name.includes('disney');
-        if (filter === 'max') return name.includes('max') || name.includes('hbo');
-        if (filter === 'prime') return name.includes('amazon') || name.includes('prime');
+        for (const movie of movies) {
+            if (added >= LOAD_BATCH) break;
 
-        return false;
-    }
-
-    function matchesSubscriptionFilter(streamingProviders, selectedFilters) {
-        if (!selectedFilters.length) return true;
-        if (!Array.isArray(streamingProviders) || !streamingProviders.length) return false;
-
-        return selectedFilters.some((filter) =>
-            streamingProviders.some((provider) => providerMatchesFilter(provider, filter))
-        );
-    }
-
-    function showLoading(row) {
-        if (!row) return;
-        row.innerHTML = `<p style="color:#fff;padding:20px">Loading...</p>`;
-    }
-
-    async function fetchAvailabilityData(id, type) {
-        try {
-            const res = await fetch(`/api/title/providers?id=${id}&type=${type}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-
-            if (res.status === 401) {
-                localStorage.removeItem('jwtToken');
-                window.location.href = '/';
-                return {
-                    label: 'Availability unavailable',
-                    streamingProviders: []
-                };
-            }
-
-            const data = await res.json();
-
-            if (!res.ok) {
-                return {
-                    label: 'Availability unavailable',
-                    streamingProviders: []
-                };
-            }
-
-            return {
-                label: data.label || 'Availability unavailable',
-                streamingProviders: Array.isArray(data.streamingProviders)
-                    ? data.streamingProviders
-                    : Array.isArray(data.providers)
-                        ? data.providers
-                        : []
-            };
-        } catch (error) {
-            console.error('Availability error:', error);
-            return {
-                label: 'Availability unavailable',
-                streamingProviders: []
-            };
+            const card = createCardElement(movie);
+            moviesRow.appendChild(card);
+            added++;
         }
+
+        addLoadMoreButton(selectedFilters);
     }
 
-    function createCardElement(movie, label) {
+    function createCardElement(movie) {
         const card = document.createElement('div');
         card.className = 'media-card';
 
-        const title = movie.title || movie.name || 'Untitled';
+        const img = document.createElement('img');
+        img.src = movie.poster_path
+            ? `https://image.tmdb.org/t/p/w342${movie.poster_path}`
+            : 'https://via.placeholder.com/300x450?text=No+Image';
 
-        card.innerHTML = `
-            <img
-                src="${movie.poster_path
-                    ? `https://image.tmdb.org/t/p/w342${movie.poster_path}`
-                    : '/images/no-poster.png'}"
-                alt="${title}"
-                onerror="this.onerror=null; this.src='/images/no-poster.png';"
-            >
-            <p class="media-title">${title}</p>
-            <p class="provider-label">${label}</p>
-        `;
+        const title = document.createElement('p');
+        title.textContent = movie.title || movie.name;
+
+        card.appendChild(img);
+        card.appendChild(title);
 
         return card;
     }
 
-    // ADDED: Fast render with progressive filtering
-async function renderMoviesWithFilter(movies, selectedFilters) {
-    moviesRow.innerHTML = '';
+    function addLoadMoreButton(selectedFilters) {
+        const existing = document.querySelector('.load-more-wrap');
+        if (existing) existing.remove();
 
-    const LIMIT = 20; // keeps it fast
+        const wrap = document.createElement('div');
+        wrap.className = 'load-more-wrap';
 
-    for (const movie of movies.slice(0, LIMIT)) {
-        const shouldShowImmediately = selectedFilters.length === 0;
+        const btn = document.createElement('button');
+        btn.id = 'loadMoreBtn';
+        btn.textContent = 'Load More';
 
-        const card = createCardElement(
-            movie,
-            shouldShowImmediately ? '' : 'Checking...'
-        );
+        btn.onclick = async () => {
+            if (isLoadingMore) return;
+            isLoadingMore = true;
 
-        // show instantly if no filters
-        if (shouldShowImmediately) {
-            moviesRow.appendChild(card);
-        }
+            currentPage++;
 
-        // fetch providers in background
-        fetchAvailabilityData(movie.id, 'movie').then(data => {
-            const matches = matchesSubscriptionFilter(
-                data.streamingProviders,
-                selectedFilters
-            );
-
-            if (matches) {
-                card.querySelector('.provider-label').textContent = data.label;
-
-                if (!shouldShowImmediately) {
-                    moviesRow.appendChild(card);
-                }
+            if (currentGenre === 'trending' && currentPage > MAX_TRENDING_PAGES) {
+                btn.textContent = 'No More Results';
+                btn.disabled = true;
+                isLoadingMore = false;
+                return;
             }
-        });
-    }
-}
 
-    async function buildFilteredMovieResults(movies, selectedFilters, limit = TARGET_ROW_COUNT) {
-        const usableMovies = Array.isArray(movies)
-            ? movies.filter((movie) => movie?.poster_path && movie?.id)
-            : [];
+            const url = buildUrl(currentPage);
 
-        const results = [];
-        const BATCH_SIZE = 6;
+            const res = await fetch(url, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
-        for (let i = 0; i < usableMovies.length; i += BATCH_SIZE) {
-            const batch = usableMovies.slice(i, i + BATCH_SIZE);
+            const data = await res.json();
+            const newMovies = data.results || [];
 
-            const batchResults = await Promise.all(
-                batch.map(async (movie) => {
-                    const availabilityData = await fetchAvailabilityData(movie.id, 'movie');
-                    return {
-                        movie,
-                        label: availabilityData.label,
-                        streamingProviders: availabilityData.streamingProviders
-                    };
-                })
-            );
-
-            for (const item of batchResults) {
-                if (!selectedFilters.length || matchesSubscriptionFilter(item.streamingProviders, selectedFilters)) {
-                    results.push({
-                        movie: item.movie,
-                        label: item.label
-                    });
-                }
+            if (!newMovies.length) {
+                wrap.remove();
+                return;
             }
-        }
 
-        return results;
+            await renderMoviesWithFilter(newMovies, selectedFilters, false);
+
+            isLoadingMore = false;
+        };
+
+        wrap.appendChild(btn);
+        moviesRow.parentElement.appendChild(wrap);
     }
 
-    // ADDED: All Movies default section
-async function loadAllMovies() {
-    const selectedFilters = getSelectedSubscriptions();
+    async function loadSelectedGenre() {
+        moviesRow.innerHTML = `<p style="padding:20px">Loading...</p>`;
 
-    try {
-        const res = await fetch(`/api/trending/movies?page=1`, {
+        currentPage = 1;
+
+        if (currentGenre === 'all') {
+            sectionTitle.textContent = 'All Movies';
+        } else if (currentGenre === 'trending') {
+            sectionTitle.textContent = 'Trending';
+        } else {
+            sectionTitle.textContent = 'Movies';
+        }
+
+        const url = buildUrl(1);
+
+        const res = await fetch(url, {
             headers: { Authorization: `Bearer ${token}` }
         });
 
         const data = await res.json();
 
-        if (!res.ok) {
-            throw new Error('Failed to load movies');
-        }
-
-        const allMovies = data.results || [];
-
-        await renderMoviesWithFilter(allMovies, selectedFilters);
-
-    } catch (error) {
-        console.error(error);
-        moviesRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
+        await renderMoviesWithFilter(data.results || [], getSelectedSubscriptions(), true);
     }
-}
-    async function loadTrendingMovies() {
-        const selectedFilters = getSelectedSubscriptions();
-        const query = searchInput?.value?.trim() || '';
-
-        try {
-            let allMovies = [];
-
-            if (query.length >= MIN_CHARS) {
-                sectionTitle.textContent = `Results for "${query}"`;
-
-                const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-
-                if (res.status === 401) {
-                    localStorage.removeItem('jwtToken');
-                    window.location.href = '/';
-                    return;
-                }
-
-                const data = await res.json();
-
-                if (!res.ok) {
-                    throw new Error(data.message || 'Search failed');
-                }
-
-                allMovies = data.results || [];
-            } else {
-                sectionTitle.textContent = 'Trending';
-
-                const collected = [];
-                const seenIds = new Set();
-                const pagesToScan = selectedFilters.length ? 3 : 1;
-
-                for (let page = 1; page <= pagesToScan; page++) {
-                    const res = await fetch(`/api/trending/movies?page=${page}`, {
-                        headers: { Authorization: `Bearer ${token}` }
-                    });
-
-                    if (res.status === 401) {
-                        localStorage.removeItem('jwtToken');
-                        window.location.href = '/';
-                        return;
-                    }
-
-                    const data = await res.json();
-
-                    if (!res.ok) {
-                        throw new Error(data.message || 'Failed to load trending movies');
-                    }
-
-                    for (const movie of data.results || []) {
-                        if (!seenIds.has(movie.id)) {
-                            seenIds.add(movie.id);
-                            collected.push(movie);
-                        }
-                    }
-                }
-
-                allMovies = collected;
-            }
-
-            // ADDED: fast rendering
-await renderMoviesWithFilter(allMovies, selectedFilters);
-        } catch (error) {
-            console.error('Trending error:', error);
-            moviesRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
-        }
-    }
-
-    async function loadGenreMovies(genreId) {
-        const selectedFilters = getSelectedSubscriptions();
-
-        try {
-            const collected = [];
-            const seenIds = new Set();
-            const pagesToScan = selectedFilters.length ? 3 : 1;
-
-            for (let page = 1; page <= pagesToScan; page++) {
-                const res = await fetch(`/api/movies/by-genre?genreId=${genreId}&page=${page}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-
-                if (res.status === 401) {
-                    localStorage.removeItem('jwtToken');
-                    window.location.href = '/';
-                    return;
-                }
-
-                const data = await res.json();
-
-                if (!res.ok) {
-                    throw new Error(data.message || `Failed to load genre ${genreId}`);
-                }
-
-                for (const movie of data.results || []) {
-                    if (!seenIds.has(movie.id)) {
-                        seenIds.add(movie.id);
-                        collected.push(movie);
-                    }
-                }
-            }
-
-            // ADDED: fast rendering
-await renderMoviesWithFilter(collected, selectedFilters);
-
-        } catch (error) {
-            console.error(`Genre ${genreId} error:`, error);
-            moviesRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
-        }
-    }
-
-    // ADDED: supports ALL + genres + filters
-async function loadSelectedGenre() {
-    moviesRow.innerHTML = `<p style="color:#fff;padding:20px">Loading movies...</p>`;
-
-    if (currentGenre === 'all') {
-        sectionTitle.textContent = 'All Movies';
-        await loadAllMovies();
-        return;
-    }
-
-    if (currentGenre === 'trending') {
-        sectionTitle.textContent = 'Trending';
-        await loadTrendingMovies();
-        return;
-    }
-
-    const genreMap = {
-        '28': 'Action',
-        '35': 'Comedy',
-        '27': 'Horror'
-    };
-
-    sectionTitle.textContent = genreMap[currentGenre] || 'Movies';
-    await loadGenreMovies(currentGenre);
-}
 
     genreTabs.forEach((btn) => {
         btn.addEventListener('click', async () => {
@@ -413,24 +179,9 @@ async function loadSelectedGenre() {
 
     document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach((cb) => {
         cb.addEventListener('change', async () => {
-            await saveSelectedFilters();
             await loadSelectedGenre();
         });
     });
 
-    clearFilterBtn?.addEventListener('click', async () => {
-        document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach((cb) => {
-            cb.checked = false;
-        });
-
-        await saveSelectedFilters();
-        await loadSelectedGenre();
-    });
-
-    saveBtn?.addEventListener('click', async () => {
-        await saveSelectedFilters();
-    });
-
-    await restoreSavedFilters();
     await loadSelectedGenre();
 });

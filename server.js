@@ -907,12 +907,21 @@ app.get('/api/users/:email/lists', authenticateToken, async (req, res) => {
 //////////////////////////////////////
 // TMDB
 //////////////////////////////////////
+// trending
 app.get('/api/trending/movies', authenticateToken, async (req, res) => {
     try {
-        const url = `https://api.themoviedb.org/3/trending/movie/day?api_key=${process.env.TMDB_API_KEY}`;
+        const page = req.query.page || 1; // ADDED
+
+        const url = `https://api.themoviedb.org/3/trending/movie/day?api_key=${process.env.TMDB_API_KEY}&page=${page}`; // ADDED
+
         const tmdbRes = await fetch(url);
-        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+        }
+
         const data = await tmdbRes.json();
+
         return res.status(200).json(data);
     } catch (error) {
         console.error(error);
@@ -983,11 +992,21 @@ app.get('/api/title/providers', authenticateToken, async (req, res) => {
             return res.status(200).json({ available: false, providers: [], streamingProviders: [], label: 'Availability unavailable' });
         }
 
-        const streamingProviders = (regionData.flatrate || []).map(p => p.provider_name);
-        const rentProviders = (regionData.rent || []).map(p => p.provider_name);
-        const buyProviders = (regionData.buy || []).map(p => p.provider_name);
-        const allProviders = [...new Set([...streamingProviders, ...rentProviders, ...buyProviders])];
-        const uniqueStreamingProviders = [...new Set(streamingProviders)];
+        const streamingProviders = (regionData.flatrate || []).map(p => ({
+    provider_id: String(p.provider_id),
+    provider_name: p.provider_name
+}));
+
+const rentProviders = (regionData.rent || []).map(p => p.provider_name);
+const buyProviders = (regionData.buy || []).map(p => p.provider_name);
+
+const allProviders = [
+    ...streamingProviders.map(p => p.provider_name),
+    ...rentProviders,
+    ...buyProviders
+];
+
+const uniqueStreamingProviders = streamingProviders;
 
         return res.status(200).json({
             available: allProviders.length > 0,
@@ -1002,7 +1021,7 @@ app.get('/api/title/providers', authenticateToken, async (req, res) => {
 });
 
 app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
-    const { genreId, page = 1 } = req.query;
+    const { genreId, page = 1, with_watch_providers } = req.query;
 
     if (!genreId) {
         return res.status(400).json({ message: 'genreId is required.' });
@@ -1013,7 +1032,11 @@ app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
     }
 
     try {
-        const url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}&page=${page}`;
+        let url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}&page=${page}&watch_region=US`;
+
+if (with_watch_providers) {
+    url += `&with_watch_providers=${with_watch_providers}`;
+}
         const tmdbRes = await fetch(url);
         if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
         const data = await tmdbRes.json();
@@ -1026,7 +1049,7 @@ app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
 
 app.get('/api/discover/movies', authenticateToken, async (req, res) => {
     const page = req.query.page || 1;
-    const providers = req.query.providers;
+    const providers = req.query.with_watch_providers;
     if (!process.env.TMDB_API_KEY) return res.status(500).json({ message: 'TMDB API key missing' });
     try {
         let url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&page=${page}&watch_region=US`;
