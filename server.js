@@ -64,6 +64,10 @@ app.get('/shows', (req, res) => {
     res.sendFile(__dirname + '/public/html/shows.html');
 });
 
+app.get('/title-details', (req, res) => {
+    res.sendFile(__dirname + '/public/html/title-details.html');
+});
+
 app.get('/suggestions', (req, res) => {
     res.sendFile(__dirname + '/public/html/suggestions.html');
 });

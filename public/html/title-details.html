@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Title Details</title>
+    <link rel="stylesheet" href="/css/title-details.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <button id="backButton" class="back-btn">← Back</button>
+            <button id="logoutButton" class="logout-btn">Log Out</button>
+        </div>
+
+        <section class="title-main">
+            <div class="poster-wrap">
+                <img id="titlePoster" src="" alt="Title poster">
+            </div>
+
+            <div class="title-info">
+                <h1 id="titleName">Loading...</h1>
+                <p id="titleType" class="meta"></p>
+                <p id="titleOverview" class="overview"></p>
+            </div>
+        </section>
+
+        <section class="related-section">
+            <h2>Connected Titles</h2>
+            <div id="relatedTitlesGrid" class="related-grid"></div>
+            <p id="relatedFallback" class="fallback-message" style="display:none;">
+                No related titles available.
+            </p>
+            <p id="relatedError" class="fallback-message error-message" style="display:none;">
+                Could not load connected titles.
+            </p>
+        </section>
+    </div>
+
+    <script src="/js/title-details.js"></script>
+</body>
+</html>

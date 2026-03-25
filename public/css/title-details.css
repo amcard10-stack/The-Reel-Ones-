@@ -1,0 +1,135 @@
+body {
+    font-family: Arial, sans-serif;
+    background: #031f45;
+    color: white;
+    margin: 0;
+}
+
+.container {
+    width: 88%;
+    margin: 30px auto 50px auto;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+}
+
+.back-btn,
+.logout-btn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 10px;
+    background: #4d82be;
+    color: white;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.back-btn:hover,
+.logout-btn:hover {
+    background: #5b93d3;
+}
+
+.title-main {
+    display: flex;
+    gap: 28px;
+    background: #2f5488;
+    border-radius: 22px;
+    padding: 26px;
+    margin-bottom: 30px;
+    align-items: flex-start;
+}
+
+.poster-wrap img {
+    width: 230px;
+    height: 345px;
+    object-fit: cover;
+    border-radius: 16px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+.title-info {
+    flex: 1;
+}
+
+.title-info h1 {
+    margin: 0 0 12px 0;
+    font-size: 40px;
+    line-height: 1.1;
+}
+
+.meta {
+    margin: 0 0 18px 0;
+    font-size: 18px;
+    color: #dbe8f8;
+    text-transform: capitalize;
+}
+
+.overview {
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.6;
+    color: white;
+}
+
+.related-section {
+    background: #2f5488;
+    border-radius: 22px;
+    padding: 26px;
+}
+
+.related-section h2 {
+    margin: 0 0 20px 0;
+    font-size: 30px;
+}
+
+.related-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 22px;
+}
+
+.related-card {
+    cursor: pointer;
+    text-align: center;
+}
+
+.related-card img {
+    width: 170px;
+    height: 255px;
+    object-fit: cover;
+    border-radius: 14px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+    transition: transform 0.2s ease;
+}
+
+.related-card img:hover {
+    transform: scale(1.03);
+}
+
+.related-title {
+    margin: 10px 6px 4px 6px;
+    font-size: 16px;
+    font-weight: 700;
+    color: white;
+}
+
+.related-type {
+    margin: 0 6px;
+    font-size: 14px;
+    color: #dbe8f8;
+    text-transform: capitalize;
+}
+
+.fallback-message {
+    margin-top: 10px;
+    color: white;
+    font-size: 16px;
+}
+
+.error-message {
+    color: #ffd3d3;
+}
