@@ -12,6 +12,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const moviesRow = document.getElementById('moviesRow');
     const sectionTitle = document.getElementById('moviesSectionTitle');
 
+const saveBtn = document.getElementById('saveFilterBtn');
+const clearBtn = document.getElementById('clearFilterBtn');    
+
     const genreTabs = document.querySelectorAll('.genre-tab');
 
     const LOAD_BATCH = 20;
@@ -41,6 +44,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.querySelectorAll('#filterPanel input[type="checkbox"]:checked')
         ).map(cb => cb.value);
     }
+    saveBtn?.addEventListener('click', async () => {
+    const selected = getSelectedSubscriptions();
+    await DataModel.saveSubscriptions(selected);
+    alert('Saved!');
+});
+
+
+    clearBtn?.addEventListener('click', async () => {
+    document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach(box => {
+        box.checked = false;
+    });
+    await loadSelectedGenre
+});
 
     // MAIN FIX: build URL with providers + genre
     function buildUrl(page) {
@@ -142,7 +158,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         wrap.appendChild(btn);
         moviesRow.parentElement.appendChild(wrap);
     }
+async function loadSavedSubscriptions() {
+    const result = await DataModel.getSubscriptions();
+    const saved = result.subscriptions || result || [];
 
+    document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach(box => {
+        box.checked = saved.includes(box.value);
+    });
+}
     async function loadSelectedGenre() {
         moviesRow.innerHTML = `<p style="padding:20px">Loading...</p>`;
 
@@ -183,5 +206,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
+    await loadSavedSubscriptions();
     await loadSelectedGenre();
 });
