@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const friendsList = document.getElementById('friendsList');
     const pendingList = document.getElementById('pendingList');
     const pendingCount = document.getElementById('pendingCount');
+    const publicUsersList = document.getElementById('publicUsersList');
 
     logoutButton?.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
@@ -22,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let debounceTimer = null;
 
     // =========================
-    // MESSAGE NOTIFICATIONS (nav + per-friend Messages button)
+    // MESSAGE NOTIFICATIONS
     // =========================
     function setMessageNavBadge(count) {
         const el = document.getElementById('friendMessageBadge');
@@ -56,7 +57,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    /** Parse count from API row (count vs cnt, string, BigInt-safe). */
     function threadRowCount(row) {
         const v = row.count ?? row.cnt;
         if (v == null || v === '') return 0;
@@ -65,19 +65,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         return Number.isFinite(n) ? n : 0;
     }
 
-    /**
-     * One request: nav teal badge = sum(thread counts), each Messages button = that thread.
-     * Avoids mismatch from calling /count and /summary at different times.
-     */
     async function syncMessageBadgesFromSummary() {
         try {
             const res = await fetch('/api/friends/messages/unread/summary', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!res.ok) {
-                setMessageNavBadge(0);
-                return;
-            }
+            if (!res.ok) { setMessageNavBadge(0); return; }
             const data = await res.json().catch(() => ({ threads: [] }));
             updateMessageBadgeSchemaHint(data);
             const threads = data.threads || [];
@@ -117,6 +110,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // =========================
+    // PRIVATE PROFILE NOTICE
+    // =========================
+    function privateProfileHTML() {
+        return `
+            <div class="private-profile-notice">
+                <span class="lock-icon">🔒</span>
+                <p>This profile is private. Only approved friends can view this content.</p>
+            </div>
+        `;
+    }
+
+    // =========================
     // SEARCH
     // =========================
     async function runSearch() {
@@ -150,9 +155,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const pic = user.profilePicture
                     ? `<img src="${user.profilePicture}" class="friend-avatar">`
                     : `<div class="friend-avatar-placeholder"></div>`;
-                const displayName = user.firstName
-                    ? `${user.firstName} ${user.lastName}`
-                    : user.email;
+                const displayName = user.firstName ? `${user.firstName} ${user.lastName}` : user.email;
                 const username = user.username ? `@${user.username}` : '';
                 const alreadyFriend = friendEmails.has(user.email);
                 div.innerHTML = `
@@ -252,42 +255,33 @@ document.addEventListener('DOMContentLoaded', async () => {
                 div.querySelector('.accept-btn').addEventListener('click', async (e) => {
                     const acceptBtn = e.currentTarget;
                     const declineBtn = div.querySelector('.decline-btn');
-                    const originalAcceptText = acceptBtn.textContent;
-                    const originalDeclineText = declineBtn?.textContent;
                     acceptBtn.disabled = true;
                     if (declineBtn) declineBtn.disabled = true;
                     acceptBtn.textContent = 'Accepting...';
-                    if (declineBtn) declineBtn.textContent = 'Working...';
-
                     const result = await respondToRequest(req.id, 'accepted');
                     if (!result.ok) {
                         alert(result.message || 'Failed to accept request.');
                         acceptBtn.disabled = false;
                         if (declineBtn) declineBtn.disabled = false;
-                        acceptBtn.textContent = originalAcceptText;
-                        if (declineBtn) declineBtn.textContent = originalDeclineText;
+                        acceptBtn.textContent = 'Accept';
                         return;
                     }
                     await loadPendingRequests();
                     await loadFriends();
+                    await loadPublicUsers();
                 });
                 div.querySelector('.decline-btn').addEventListener('click', async (e) => {
                     const declineBtn = e.currentTarget;
                     const acceptBtn = div.querySelector('.accept-btn');
-                    const originalDeclineText = declineBtn.textContent;
-                    const originalAcceptText = acceptBtn?.textContent;
                     declineBtn.disabled = true;
                     if (acceptBtn) acceptBtn.disabled = true;
                     declineBtn.textContent = 'Declining...';
-                    if (acceptBtn) acceptBtn.textContent = 'Working...';
-
                     const result = await respondToRequest(req.id, 'declined');
                     if (!result.ok) {
                         alert(result.message || 'Failed to decline request.');
                         declineBtn.disabled = false;
                         if (acceptBtn) acceptBtn.disabled = false;
-                        declineBtn.textContent = originalDeclineText;
-                        if (acceptBtn) acceptBtn.textContent = originalAcceptText;
+                        declineBtn.textContent = 'Decline';
                         return;
                     }
                     await loadPendingRequests();
@@ -311,7 +305,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!res.ok) return { ok: false, message: data.message || 'Request failed.' };
             return { ok: true, message: data.message };
         } catch (err) {
-            console.error(err);
             return { ok: false, message: 'Network error.' };
         }
     }
@@ -319,34 +312,206 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function removeFriend(friendEmail, buttonEl) {
         if (!confirm('Remove this friend?')) return;
         const originalText = buttonEl?.textContent;
-        if (buttonEl) {
-            buttonEl.disabled = true;
-            buttonEl.textContent = 'Removing...';
-        }
+        if (buttonEl) { buttonEl.disabled = true; buttonEl.textContent = 'Removing...'; }
         try {
             const res = await fetch(`/api/friends/${encodeURIComponent(friendEmail)}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                alert(data.message || 'Failed to remove friend.');
-                return;
-            }
-            loadFriends();
+            if (!res.ok) { alert(data.message || 'Failed to remove friend.'); return; }
+            await loadFriends();
+            await loadPublicUsers();
         } catch (err) {
             console.error(err);
             alert('Failed to remove friend.');
         } finally {
-            if (buttonEl) {
-                buttonEl.disabled = false;
-                buttonEl.textContent = originalText;
-            }
+            if (buttonEl) { buttonEl.disabled = false; buttonEl.textContent = originalText; }
         }
     }
 
     // =========================
-    // FRIENDS LIST (INLINE)
+    // BUILD EXPANDABLE CARD
+    // =========================
+    function buildUserCard(user, { isFriend, isPublic, pendingEmails }) {
+        const div = document.createElement('div');
+        div.classList.add('friend-card');
+        div.setAttribute('data-friend-email', user.email);
+
+        const pic = user.profilePicture
+            ? `<img src="${user.profilePicture}" class="friend-avatar">`
+            : `<div class="friend-avatar-placeholder"></div>`;
+        const displayName = user.firstName ? `${user.firstName} ${user.lastName}` : user.email;
+        const username = user.username ? `@${user.username}` : '';
+
+        let actionBtn = '';
+        if (isFriend) {
+            actionBtn = `<button class="remove-friend-btn">Remove</button>`;
+        } else if (pendingEmails && pendingEmails.has(user.email)) {
+            actionBtn = `<button class="already-friend-btn" disabled>Requested</button>`;
+        } else {
+            actionBtn = `<button class="add-friend-btn">Add Friend</button>`;
+        }
+
+        const messageTab = isFriend
+            ? `<button type="button" class="tab-inline-btn messages-btn">Messages<span class="messages-unread-badge" aria-label="Unread messages"></span></button>`
+            : '';
+
+        // Private non-friends: show lock, no content tabs
+        // Public users or friends: show ratings + watchlists tabs
+        const isPrivateNonFriend = !isFriend && !isPublic;
+        const contentTabs = isPrivateNonFriend
+            ? `<span class="private-badge">🔒 Private</span>`
+            : `<button class="tab-inline-btn ratings-btn">Ratings</button>
+               <button class="tab-inline-btn watchlists-btn">Watchlists</button>
+               ${messageTab}`;
+
+        div.innerHTML = `
+            <div class="friend-card-header">
+                ${pic}
+                <div class="friend-info">
+                    <strong>${displayName}</strong>
+                    <span class="meta">${username}</span>
+                </div>
+                <div class="friend-actions">
+                    ${contentTabs}
+                    ${actionBtn}
+                </div>
+            </div>
+            <div class="friend-inline-content"></div>
+        `;
+
+        const contentEl = div.querySelector('.friend-inline-content');
+        let activeTab = null;
+
+        const ratingsBtn = div.querySelector('.ratings-btn');
+        const watchlistsBtn = div.querySelector('.watchlists-btn');
+        const messagesBtn = div.querySelector('.messages-btn');
+
+        function setActiveBtn(btn) {
+            [ratingsBtn, watchlistsBtn, messagesBtn].forEach(b => b && b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+        }
+
+        if (ratingsBtn) {
+            ratingsBtn.addEventListener('click', async () => {
+                if (activeTab === 'ratings') {
+                    contentEl.innerHTML = '';
+                    activeTab = null;
+                    setActiveBtn(null);
+                    return;
+                }
+                activeTab = 'ratings';
+                setActiveBtn(ratingsBtn);
+                contentEl.innerHTML = '<p class="empty-message">Loading...</p>';
+                try {
+                    const endpoint = isFriend
+                        ? `/api/friends/${encodeURIComponent(user.email)}/ratings`
+                        : `/api/users/${encodeURIComponent(user.email)}/ratings`;
+                    const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}` } });
+                    if (res.status === 403) { contentEl.innerHTML = privateProfileHTML(); return; }
+                    const data = await res.json();
+                    const ratings = data.ratings || [];
+                    if (ratings.length === 0) {
+                        contentEl.innerHTML = '<p class="empty-message">No ratings yet.</p>';
+                        return;
+                    }
+                    contentEl.innerHTML = ratings.map(r => {
+                        const date = new Date(r.rated_at).toLocaleDateString();
+                        return `
+                            <div class="friend-rating-item">
+                                <strong>${r.title}</strong>
+                                <span class="type-badge">${r.type === 'show' ? 'TV Show' : 'Movie'}</span>
+                                <span class="rating-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
+                                <span class="meta">· ${date}</span>
+                                ${r.review ? `<p class="review-text">${r.review}</p>` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                } catch (err) {
+                    contentEl.innerHTML = '<p class="empty-message">Failed to load ratings.</p>';
+                }
+            });
+        }
+
+        if (watchlistsBtn) {
+            watchlistsBtn.addEventListener('click', async () => {
+                if (activeTab === 'watchlists') {
+                    contentEl.innerHTML = '';
+                    activeTab = null;
+                    setActiveBtn(null);
+                    return;
+                }
+                activeTab = 'watchlists';
+                setActiveBtn(watchlistsBtn);
+                contentEl.innerHTML = '<p class="empty-message">Loading...</p>';
+                try {
+                    const endpoint = isFriend
+                        ? `/api/friends/${encodeURIComponent(user.email)}/lists`
+                        : `/api/users/${encodeURIComponent(user.email)}/lists`;
+                    const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}` } });
+                    if (res.status === 403) { contentEl.innerHTML = privateProfileHTML(); return; }
+                    const data = await res.json();
+                    const lists = data.lists || [];
+                    if (lists.length === 0) {
+                        contentEl.innerHTML = '<p class="empty-message">No lists yet.</p>';
+                        return;
+                    }
+                    contentEl.innerHTML = lists.map(list => {
+                        const items = list.items || [];
+                        const itemsHtml = items.length > 0
+                            ? items.map(i => `<span class="list-item-tag">${i.title}</span>`).join('')
+                            : '<span style="font-size:12px;opacity:0.6;">Empty list</span>';
+                        return `
+                            <div class="friend-list-card">
+                                <h4 class="friend-list-name">${list.name}</h4>
+                                <div class="friend-list-items">${itemsHtml}</div>
+                            </div>
+                        `;
+                    }).join('');
+                } catch (err) {
+                    contentEl.innerHTML = '<p class="empty-message">Failed to load lists.</p>';
+                }
+            });
+        }
+
+        if (messagesBtn) {
+            messagesBtn.addEventListener('click', async () => {
+                if (activeTab === 'messages') {
+                    contentEl.innerHTML = '';
+                    activeTab = null;
+                    setActiveBtn(null);
+                    return;
+                }
+                activeTab = 'messages';
+                setActiveBtn(messagesBtn);
+                await renderInlineMessages(user.email, contentEl, messagesBtn);
+            });
+        }
+
+        const addBtn = div.querySelector('.add-friend-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', async () => {
+                const result = await sendFriendRequest(user.email);
+                if (result.ok) {
+                    addBtn.textContent = 'Requested';
+                    addBtn.disabled = true;
+                } else {
+                    alert(result.message || 'Failed to send request.');
+                }
+            });
+        }
+
+        const removeBtn = div.querySelector('.remove-friend-btn');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', (e) => removeFriend(user.email, e.currentTarget));
+        }
+
+        return div;
+    }
+
+    // =========================
+    // FRIENDS LIST
     // =========================
     async function loadFriends() {
         try {
@@ -363,152 +528,65 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const em = String(row.senderEmail || '').trim().toLowerCase();
                 if (em) unreadByEmail.set(em, threadRowCount(row));
             }
-            const navTotalFromSummary = [...unreadByEmail.values()].reduce((a, b) => a + b, 0);
-            setMessageNavBadge(navTotalFromSummary);
+            setMessageNavBadge([...unreadByEmail.values()].reduce((a, b) => a + b, 0));
             friendsList.innerHTML = '';
 
             if (friends.length === 0) {
-                friendsList.innerHTML = '<p class="empty-message">No friends yet. Search for users to add.</p>';
+                friendsList.innerHTML = '<p class="empty-message">No friends yet. Search or browse users below to add some.</p>';
                 return;
             }
 
             friends.forEach(friend => {
-                const div = document.createElement('div');
-                div.classList.add('friend-card');
-                div.setAttribute('data-friend-email', friend.email);
-
-                const pic = friend.profilePicture
-                    ? `<img src="${friend.profilePicture}" class="friend-avatar">`
-                    : `<div class="friend-avatar-placeholder"></div>`;
-                const displayName = friend.firstName
-                    ? `${friend.firstName} ${friend.lastName}`
-                    : friend.email;
-                const username = friend.username ? `@${friend.username}` : '';
-
-                div.innerHTML = `
-                    <div class="friend-card-header">
-                        ${pic}
-                        <div class="friend-info">
-                            <strong>${displayName}</strong>
-                            <span class="meta">${username}</span>
-                        </div>
-                        <div class="friend-actions">
-                            <button class="tab-inline-btn ratings-btn">Ratings</button>
-                            <button class="tab-inline-btn watchlists-btn">Watchlists</button>
-                            <button type="button" class="tab-inline-btn messages-btn">Messages<span class="messages-unread-badge" aria-label="Unread messages"></span></button>
-                            <button class="remove-friend-btn">Remove</button>
-                        </div>
-                    </div>
-                    <div class="friend-inline-content"></div>
-                `;
-
-                const contentEl = div.querySelector('.friend-inline-content');
-                let activeTab = null;
-
-                const ratingsBtn = div.querySelector('.ratings-btn');
-                const watchlistsBtn = div.querySelector('.watchlists-btn');
-                const messagesBtn = div.querySelector('.messages-btn');
-                setInlineMessagesBadge(messagesBtn, unreadByEmail.get(String(friend.email).trim().toLowerCase()) || 0);
-
-                function setActiveBtn(btn) {
-                    [ratingsBtn, watchlistsBtn, messagesBtn].forEach(b => b.classList.remove('active'));
-                    if (btn) btn.classList.add('active');
-                }
-
-                ratingsBtn.addEventListener('click', async () => {
-                    if (activeTab === 'ratings') {
-                        contentEl.innerHTML = '';
-                        activeTab = null;
-                        setActiveBtn(null);
-                        return;
-                    }
-                    activeTab = 'ratings';
-                    setActiveBtn(ratingsBtn);
-                    contentEl.innerHTML = '<p class="empty-message">Loading...</p>';
-                    try {
-                        const res = await fetch(`/api/friends/${encodeURIComponent(friend.email)}/ratings`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        const data = await res.json();
-                        const ratings = data.ratings || [];
-                        if (ratings.length === 0) {
-                            contentEl.innerHTML = '<p class="empty-message">No ratings yet.</p>';
-                            return;
-                        }
-                        contentEl.innerHTML = ratings.map(r => {
-                            const date = new Date(r.rated_at).toLocaleDateString();
-                            return `
-                                <div class="friend-rating-item">
-                                    <strong>${r.title}</strong>
-                                    <span class="type-badge">${r.type === 'show' ? 'TV Show' : 'Movie'}</span>
-                                    <span class="rating-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
-                                    <span class="meta">· ${date}</span>
-                                    ${r.review ? `<p class="review-text">${r.review}</p>` : ''}
-                                </div>
-                            `;
-                        }).join('');
-                    } catch (err) {
-                        contentEl.innerHTML = '<p class="empty-message">Failed to load ratings.</p>';
-                    }
-                });
-
-                watchlistsBtn.addEventListener('click', async () => {
-                    if (activeTab === 'watchlists') {
-                        contentEl.innerHTML = '';
-                        activeTab = null;
-                        setActiveBtn(null);
-                        return;
-                    }
-                    activeTab = 'watchlists';
-                    setActiveBtn(watchlistsBtn);
-                    contentEl.innerHTML = '<p class="empty-message">Loading...</p>';
-                    try {
-                        const res = await fetch(`/api/friends/${encodeURIComponent(friend.email)}/lists`, {
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        const data = await res.json();
-                        const lists = data.lists || [];
-                        if (lists.length === 0) {
-                            contentEl.innerHTML = '<p class="empty-message">No lists yet.</p>';
-                            return;
-                        }
-                        contentEl.innerHTML = lists.map(list => {
-                            const items = list.items || [];
-                            const itemsHtml = items.length > 0
-                                ? items.map(i => `<span class="list-item-tag">${i.title}</span>`).join('')
-                                : '<span style="font-size:12px;opacity:0.6;">Empty list</span>';
-                            return `
-                                <div class="friend-list-card">
-                                    <h4 class="friend-list-name">${list.name}</h4>
-                                    <div class="friend-list-items">${itemsHtml}</div>
-                                </div>
-                            `;
-                        }).join('');
-                    } catch (err) {
-                        contentEl.innerHTML = '<p class="empty-message">Failed to load lists.</p>';
-                    }
-                });
-
-                messagesBtn.addEventListener('click', async () => {
-                    if (activeTab === 'messages') {
-                        contentEl.innerHTML = '';
-                        activeTab = null;
-                        setActiveBtn(null);
-                        return;
-                    }
-                    activeTab = 'messages';
-                    setActiveBtn(messagesBtn);
-                    await renderInlineMessages(friend.email, contentEl, messagesBtn);
-                });
-
-                div.querySelector('.remove-friend-btn').addEventListener('click', (e) => {
-                    removeFriend(friend.email, e.currentTarget);
-                });
-
-                friendsList.appendChild(div);
+                const card = buildUserCard(friend, { isFriend: true, isPublic: true, pendingEmails: new Set() });
+                const messagesBtn = card.querySelector('.messages-btn');
+                if (messagesBtn) setInlineMessagesBadge(messagesBtn, unreadByEmail.get(String(friend.email).trim().toLowerCase()) || 0);
+                friendsList.appendChild(card);
             });
         } catch (err) {
             console.error(err);
+        }
+    }
+
+    // =========================
+    // DISCOVER USERS LIST
+    // =========================
+    async function loadPublicUsers() {
+        try {
+            const [publicRes, friendsRes, pendingRes] = await Promise.all([
+                fetch('/api/users/public', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/friends', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/friends/requests/sent', { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+
+            const publicData = await publicRes.json();
+            const friendsData = await friendsRes.json();
+            const pendingData = await pendingRes.json();
+
+            const allUsers = publicData.users || [];
+            const friendEmails = new Set((friendsData.friends || []).map(f => f.email));
+            const pendingEmails = new Set((pendingData.requests || []).map(r => r.receiver_email));
+
+            publicUsersList.innerHTML = '';
+
+            const myEmail = getMyEmailFromToken();
+            const nonFriendUsers = allUsers.filter(u => u.email !== myEmail && !friendEmails.has(u.email));
+
+            if (nonFriendUsers.length === 0) {
+                publicUsersList.innerHTML = '<p class="empty-message">No other users found.</p>';
+                return;
+            }
+
+            nonFriendUsers.forEach(user => {
+                const card = buildUserCard(user, {
+                    isFriend: false,
+                    isPublic: !user.isPrivate,
+                    pendingEmails
+                });
+                publicUsersList.appendChild(card);
+            });
+        } catch (err) {
+            console.error(err);
+            publicUsersList.innerHTML = '<p class="empty-message">Failed to load users.</p>';
         }
     }
 
@@ -523,10 +601,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
             const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
             const decoded = atob(padded);
-            const jsonStr = decoded
-                .split('')
-                .map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
-                .join('');
+            const jsonStr = decoded.split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
             const payload = JSON.parse(decodeURIComponent(jsonStr));
             return payload?.email || null;
         } catch (e) {
@@ -540,14 +615,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             const res = await fetch(`/api/friends/${encodeURIComponent(email)}/messages`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!res.ok) {
-                contentEl.innerHTML = '<p class="empty-message">Failed to load messages.</p>';
-                return;
-            }
+            if (!res.ok) { contentEl.innerHTML = '<p class="empty-message">Failed to load messages.</p>'; return; }
             const data = await res.json();
             const messages = data.messages || [];
-            const myEmail = getMyEmailFromToken();
-            const myLower = myEmail ? String(myEmail).trim().toLowerCase() : '';
+            const myLower = (getMyEmailFromToken() || '').trim().toLowerCase();
 
             const messagesHtml = messages.length === 0
                 ? '<p class="empty-message">No messages yet. Say something!</p>'
@@ -592,7 +663,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                         alert(errData.message || 'Could not send message.');
                     }
                 } catch (err) {
-                    console.error(err);
                     alert('Could not send message.');
                 }
             };
@@ -601,16 +671,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             input?.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendMessage(); });
 
             try {
-                const readRes = await fetch(`/api/friends/${encodeURIComponent(email)}/messages/read`, {
+                await fetch(`/api/friends/${encodeURIComponent(email)}/messages/read`, {
                     method: 'PUT',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!readRes.ok) {
-                    console.warn('Mark read failed', readRes.status);
-                }
-            } catch (readErr) {
-                console.error(readErr);
-            }
+            } catch (_) {}
+
             setInlineMessagesBadge(messagesBtn, 0);
             await syncMessageBadgesFromSummary();
         } catch (err) {
@@ -629,17 +695,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             const data = await res.json();
             const count = data.count ?? 0;
-            if (lastPendingCount === null) {
-                lastPendingCount = count;
-                return;
-            }
+            if (lastPendingCount === null) { lastPendingCount = count; return; }
             if (count !== lastPendingCount) {
                 lastPendingCount = count;
                 await loadPendingRequests();
             }
-        } catch (err) {
-            // ignore
-        }
+        } catch (err) { /* ignore */ }
     }
 
     setInterval(tickFriendNotifications, 5000);
@@ -658,4 +719,5 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     loadPendingRequests();
     loadFriends();
+    loadPublicUsers();
 });

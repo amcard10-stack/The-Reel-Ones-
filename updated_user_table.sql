@@ -9,6 +9,7 @@ CREATE TABLE `user` (
   `bio` text DEFAULT NULL,
   `saved_provider` varchar(20) DEFAULT NULL,
   `username` varchar(50) DEFAULT NULL,
+  `is_private` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`email`),
   UNIQUE KEY `username` (`username`)
 ) 

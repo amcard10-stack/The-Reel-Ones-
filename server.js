@@ -23,7 +23,6 @@ const upload = multer({ storage });
 
 app.use(express.json());
 
-/** MySQL missing column (e.g. message.read_at before migration). */
 function isUnknownColumnError(err) {
     return Boolean(err && (err.code === 'ER_BAD_FIELD_ERROR' || Number(err.errno) === 1054));
 }
@@ -312,13 +311,11 @@ app.post('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
 
-        // Add the rating
         await connection.execute(
             'INSERT INTO rating (user_email, title, type, rating, review) VALUES (?, ?, ?, ?, ?)',
             [req.user.email, title, contentType, r, review || null]
         );
 
-        // Also add to watch history
         try {
             await connection.execute(
                 'INSERT INTO watch_history (user_email, title, type) VALUES (?, ?, ?)',
@@ -328,7 +325,6 @@ app.post('/api/dashboard/ratings', authenticateToken, async (req, res) => {
             // ignore duplicate entry errors
         }
 
-        // Also mark as completed in watch_status
         try {
             await connection.execute(
                 `INSERT INTO watch_status (user_email, title, type, status)
@@ -629,7 +625,7 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
         const [rows] = await connection.execute(
-            'SELECT email, username, first_name AS firstName, last_name AS lastName, bio, profile_picture AS profilePicture FROM user WHERE email = ?',
+            'SELECT email, username, first_name AS firstName, last_name AS lastName, bio, profile_picture AS profilePicture, is_private AS isPrivate FROM user WHERE email = ?',
             [req.user.email]
         );
         await connection.end();
@@ -646,7 +642,7 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
 });
 
 app.put('/api/profile', authenticateToken, upload.single('profilePicture'), async (req, res) => {
-    const { firstName, lastName, bio, newPassword, username } = req.body;
+    const { firstName, lastName, bio, newPassword, username, isPrivate } = req.body;
 
     try {
         const connection = await createConnection();
@@ -663,7 +659,7 @@ app.put('/api/profile', authenticateToken, upload.single('profilePicture'), asyn
         }
 
         let passwordClause = '';
-        const params = [username, firstName, lastName, bio];
+        const params = [username, firstName, lastName, bio, isPrivate === 'true' || isPrivate === true ? 1 : 0];
 
         if (newPassword && newPassword.trim().length >= 6) {
             const hashed = await bcrypt.hash(newPassword, 10);
@@ -681,7 +677,7 @@ app.put('/api/profile', authenticateToken, upload.single('profilePicture'), asyn
         params.push(req.user.email);
 
         await connection.execute(
-            `UPDATE user SET username = ?, first_name = ?, last_name = ?, bio = ?${passwordClause}${picClause} WHERE email = ?`,
+            `UPDATE user SET username = ?, first_name = ?, last_name = ?, bio = ?, is_private = ?${passwordClause}${picClause} WHERE email = ?`,
             params
         );
 
@@ -693,28 +689,62 @@ app.put('/api/profile', authenticateToken, upload.single('profilePicture'), asyn
     }
 });
 
+app.get('/api/profile/:email', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    try {
+        const connection = await createConnection();
+
+        const [rows] = await connection.execute(
+            'SELECT email, username, first_name AS firstName, last_name AS lastName, bio, profile_picture AS profilePicture, is_private FROM user WHERE email = ?',
+            [email]
+        );
+
+        if (rows.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        const target = rows[0];
+
+        if (target.is_private) {
+            const [friendCheck] = await connection.execute(
+                `SELECT id FROM friend_request
+                 WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+                 AND status = 'accepted'`,
+                [req.user.email, email, email, req.user.email]
+            );
+            if (friendCheck.length === 0 && req.user.email !== email) {
+                await connection.end();
+                return res.status(403).json({ message: 'This profile is private.', isPrivate: true });
+            }
+        }
+
+        await connection.end();
+        const { is_private, ...profileData } = target;
+        return res.status(200).json({ ...profileData, isPrivate: !!is_private });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error retrieving profile.' });
+    }
+});
+
 app.delete('/api/profile', authenticateToken, async (req, res) => {
     const email = req.user.email;
     try {
         const connection = await createConnection();
 
-        // Delete all associated data first (foreign key order)
         await connection.execute('DELETE FROM message WHERE sender_email = ? OR receiver_email = ?', [email, email]);
         await connection.execute('DELETE FROM friend_request WHERE sender_email = ? OR receiver_email = ?', [email, email]);
         await connection.execute('DELETE FROM user_subscription WHERE user_email = ?', [email]);
         await connection.execute('DELETE FROM watch_status WHERE user_email = ?', [email]);
 
-        // Delete list items for user's lists, then lists
         const [lists] = await connection.execute('SELECT id FROM list WHERE user_email = ?', [email]);
         for (const list of lists) {
             await connection.execute('DELETE FROM list_item WHERE list_id = ?', [list.id]);
         }
         await connection.execute('DELETE FROM list WHERE user_email = ?', [email]);
-
         await connection.execute('DELETE FROM rating WHERE user_email = ?', [email]);
         await connection.execute('DELETE FROM watch_history WHERE user_email = ?', [email]);
-
-        // Finally delete the user
         await connection.execute('DELETE FROM user WHERE email = ?', [email]);
 
         await connection.end();
@@ -792,6 +822,85 @@ app.get('/api/users', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error retrieving email addresses.' });
+    }
+});
+
+app.get('/api/users/public', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT email, username, first_name AS firstName, last_name AS lastName,
+                    profile_picture AS profilePicture, is_private AS isPrivate
+             FROM user
+             WHERE email != ?
+             ORDER BY username ASC`,
+            [req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ users: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving users.' });
+    }
+});
+
+app.get('/api/users/:email/ratings', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    try {
+        const connection = await createConnection();
+        const [privacyCheck] = await connection.execute(
+            'SELECT is_private FROM user WHERE email = ?', [email]
+        );
+        if (privacyCheck.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'User not found.' });
+        }
+        if (privacyCheck[0].is_private) {
+            await connection.end();
+            return res.status(403).json({ message: 'This profile is private.', isPrivate: true });
+        }
+        const [rows] = await connection.execute(
+            'SELECT title, type, rating, review, rated_at FROM rating WHERE user_email = ? ORDER BY rated_at DESC',
+            [email]
+        );
+        await connection.end();
+        res.status(200).json({ ratings: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving ratings.' });
+    }
+});
+
+app.get('/api/users/:email/lists', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    try {
+        const connection = await createConnection();
+        const [privacyCheck] = await connection.execute(
+            'SELECT is_private FROM user WHERE email = ?', [email]
+        );
+        if (privacyCheck.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'User not found.' });
+        }
+        if (privacyCheck[0].is_private) {
+            await connection.end();
+            return res.status(403).json({ message: 'This profile is private.', isPrivate: true });
+        }
+        const [lists] = await connection.execute(
+            'SELECT id, name, created_at FROM list WHERE user_email = ? ORDER BY created_at ASC', [email]
+        );
+        const listsWithItems = [];
+        for (const list of lists) {
+            const [items] = await connection.execute(
+                'SELECT id, title, added_at FROM list_item WHERE list_id = ? ORDER BY added_at DESC', [list.id]
+            );
+            listsWithItems.push({ ...list, items });
+        }
+        await connection.end();
+        res.status(200).json({ lists: listsWithItems });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving lists.' });
     }
 });
 
@@ -906,11 +1015,7 @@ app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
     try {
         const url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}&page=${page}`;
         const tmdbRes = await fetch(url);
-
-        if (!tmdbRes.ok) {
-            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
-        }
-
+        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -918,6 +1023,7 @@ app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
         return res.status(500).json({ message: 'Error loading genre movies.' });
     }
 });
+
 app.get('/api/discover/movies', authenticateToken, async (req, res) => {
     const page = req.query.page || 1;
     const providers = req.query.providers;
@@ -1089,6 +1195,36 @@ app.post('/api/friends/request', authenticateToken, async (req, res) => {
     }
 });
 
+app.get('/api/friends/requests/count', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [[row]] = await connection.execute(
+            'SELECT COUNT(*) AS count FROM friend_request WHERE receiver_email = ? AND status = ?',
+            [req.user.email, 'pending']
+        );
+        await connection.end();
+        res.status(200).json({ count: row?.count ?? 0 });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ count: 0 });
+    }
+});
+
+app.get('/api/friends/requests/sent', authenticateToken, async (req, res) => {
+    try {
+        const connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT receiver_email FROM friend_request WHERE sender_email = ? AND status = 'pending'`,
+            [req.user.email]
+        );
+        await connection.end();
+        res.status(200).json({ requests: rows });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error retrieving sent requests.' });
+    }
+});
+
 app.get('/api/friends/requests', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
@@ -1106,21 +1242,6 @@ app.get('/api/friends/requests', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error retrieving requests.' });
-    }
-});
-
-app.get('/api/friends/requests/count', authenticateToken, async (req, res) => {
-    try {
-        const connection = await createConnection();
-        const [[row]] = await connection.execute(
-            'SELECT COUNT(*) AS count FROM friend_request WHERE receiver_email = ? AND status = ?',
-            [req.user.email, 'pending']
-        );
-        await connection.end();
-        res.status(200).json({ count: row?.count ?? 0 });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ count: 0 });
     }
 });
 
@@ -1292,14 +1413,11 @@ app.get('/api/friends/:email/messages', authenticateToken, async (req, res) => {
     }
 });
 
-// --- Message notifications (read_at on `message`; run friends_message_read_migration.sql or npm run migrate:friends) ---
-
 app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res) => {
     const fromEmail = (req.query.from || '').trim() || null;
     let connection;
     try {
         connection = await createConnection();
-
         if (fromEmail) {
             const [friendCheck] = await connection.execute(
                 `SELECT id FROM friend_request
@@ -1323,8 +1441,6 @@ app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res
             connection = null;
             return res.status(200).json({ count: Number(row?.cnt ?? 0) });
         }
-
-        // Only unread where you are receiver; sender must still be an accepted friend (case-insensitive emails).
         const [[row]] = await connection.execute(
             `SELECT COUNT(*) AS cnt
              FROM message m
@@ -1343,14 +1459,8 @@ app.get('/api/friends/messages/unread/count', authenticateToken, async (req, res
         connection = null;
         return res.status(200).json({ count: Number(row?.cnt ?? 0) });
     } catch (error) {
-        if (connection) {
-            try {
-                await connection.end();
-            } catch (_) { /* ignore */ }
-        }
-        if (isUnknownColumnError(error)) {
-            return res.status(200).json({ count: 0, migrated: false });
-        }
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        if (isUnknownColumnError(error)) return res.status(200).json({ count: 0, migrated: false });
         console.error(error);
         return res.status(500).json({ message: 'Error counting unread messages.', count: 0 });
     }
@@ -1383,14 +1493,8 @@ app.get('/api/friends/messages/unread/summary', authenticateToken, async (req, r
         })).filter((t) => t.senderEmail);
         return res.status(200).json({ threads });
     } catch (error) {
-        if (connection) {
-            try {
-                await connection.end();
-            } catch (_) { /* ignore */ }
-        }
-        if (isUnknownColumnError(error)) {
-            return res.status(200).json({ threads: [], migrated: false });
-        }
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        if (isUnknownColumnError(error)) return res.status(200).json({ threads: [], migrated: false });
         console.error(error);
         return res.status(500).json({ message: 'Error loading unread summary.', threads: [] });
     }
@@ -1426,14 +1530,8 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
         connection = null;
         return res.status(200).json({ marked: result.affectedRows });
     } catch (error) {
-        if (connection) {
-            try {
-                await connection.end();
-            } catch (_) { /* ignore */ }
-        }
-        if (isUnknownColumnError(error)) {
-            return res.status(200).json({ marked: 0, migrated: false });
-        }
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        if (isUnknownColumnError(error)) return res.status(200).json({ marked: 0, migrated: false });
         console.error(error);
         return res.status(500).json({ message: 'Error marking messages read.' });
     }

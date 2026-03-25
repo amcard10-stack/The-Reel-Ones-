@@ -91,29 +91,6 @@ body {
     color: #0A1A2F;
 }
 
-.feature-nav {
-    margin-top: 25px;
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-.feature-nav button {
-    flex: 1;
-    min-width: 120px;
-    padding: 10px 16px;
-    border-radius: 14px;
-    border: none;
-    background-color: #274979;
-    color: #F2F4F7;
-    cursor: pointer;
-    transition: 0.2s ease;
-}
-
-.feature-nav button:hover {
-    background-color: #3A6EA5;
-}
-
 .nav-btn-with-badge { position: relative; }
 
 .friend-request-badge {
@@ -343,13 +320,13 @@ body {
 
 .decline-btn:hover { background-color: rgba(255,255,255,0.2); }
 
-.view-friend-btn { flex-shrink: 0; }
-
 .friend-actions {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .remove-friend-btn {
@@ -363,90 +340,61 @@ body {
 
 .remove-friend-btn:hover { background-color: rgba(200, 35, 51, 1); }
 
-/* Popup */
-.popup-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
-.popup-content {
-    background: #274979;
-    border-radius: 16px;
-    padding: 24px;
-    max-width: 480px;
-    width: 90%;
-    max-height: 90vh;
-    overflow-y: auto;
-    position: relative;
-    border: 1px solid rgba(255,255,255,0.1);
-}
-
-.popup-close {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    background: none;
-    border: none;
-    color: #D9DEE4;
-    font-size: 24px;
-    cursor: pointer;
-}
-
-.popup-header {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 20px;
-    align-items: center;
-}
-
-.popup-poster {
-    width: 60px;
-    height: 60px;
-    object-fit: cover;
-    border-radius: 50%;
-}
-
-.popup-poster-placeholder {
-    width: 60px;
-    height: 60px;
-    background: rgba(255,255,255,0.08);
-    border-radius: 50%;
-}
-
-.popup-info h3 { margin: 0 0 4px 0; }
-.popup-meta { color: #D9DEE4; font-size: 13px; margin: 0; }
-
-/* Tabs */
-.popup-tabs {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    padding-bottom: 12px;
-}
-
-.tab-btn {
-    padding: 8px 18px;
+.already-friend-btn {
+    padding: 6px 14px;
     border-radius: 8px;
     border: none;
-    background: rgba(255,255,255,0.06);
+    background-color: rgba(255,255,255,0.08);
     color: #D9DEE4;
-    cursor: pointer;
+    cursor: default;
+    font-size: 13px;
 }
 
-.tab-btn.active {
+/* Friend card (inline expandable) */
+.friend-card {
+    margin-bottom: 16px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    overflow: hidden;
+}
+
+.friend-card-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+}
+
+.tab-inline-btn {
+    position: relative;
+    padding: 6px 14px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(255,255,255,0.08);
+    color: #D9DEE4;
+    cursor: pointer;
+    font-size: 13px;
+    transition: 0.2s ease;
+}
+
+.tab-inline-btn:hover {
     background: #3A6EA5;
     color: #F2F4F7;
 }
 
-/* Ratings */
-.friend-ratings-list { max-height: 300px; overflow-y: auto; }
+.tab-inline-btn.active {
+    background: #3A6EA5;
+    color: #F2F4F7;
+}
 
+.friend-inline-content {
+    padding: 0 16px 16px 16px;
+}
+
+.friend-inline-content:empty { padding: 0; }
+
+/* Ratings */
 .friend-rating-item {
     padding: 12px;
     margin-bottom: 8px;
@@ -464,6 +412,35 @@ body {
 
 .rating-stars { color: #E26A6A; }
 .review-text { margin: 6px 0 0 0; font-size: 13px; color: #D9DEE4; }
+
+/* Lists */
+.friend-list-card {
+    padding: 12px;
+    margin-bottom: 10px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.06);
+}
+
+.friend-list-name {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #F2F4F7;
+}
+
+.friend-list-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.list-item-tag {
+    background: rgba(255,255,255,0.08);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #D9DEE4;
+}
 
 /* Messages */
 .messages-list {
@@ -512,86 +489,31 @@ body {
     color: #F2F4F7;
 }
 
-.friend-lists-list { max-height: 300px; overflow-y: auto; }
-
-.friend-list-card {
-    padding: 12px;
-    margin-bottom: 10px;
-    background: rgba(255,255,255,0.04);
-    border-radius: 10px;
-    border: 1px solid rgba(255,255,255,0.06);
-}
-
-.friend-list-name {
-    margin: 0 0 10px 0;
-    font-size: 14px;
-    color: #F2F4F7;
-}
-
-.friend-list-items {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.list-item-tag {
-    background: rgba(255,255,255,0.08);
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    color: #D9DEE4;
-}
-
-.already-friend-btn {
-    padding: 6px 14px;
-    border-radius: 8px;
-    border: none;
-    background-color: rgba(255,255,255,0.08);
-    color: #D9DEE4;
-    cursor: default;
-    font-size: 13px;
-}
-
-/* Friend card (inline) */
-.friend-card {
-    margin-bottom: 16px;
-    background: rgba(255,255,255,0.04);
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.06);
-    overflow: hidden;
-}
-
-.friend-card-header {
+/* Private profile */
+.private-profile-notice {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 14px 16px;
+    gap: 12px;
+    padding: 20px;
+    background-color: rgba(226, 106, 106, 0.1);
+    border: 1px solid #E26A6A;
+    border-radius: 12px;
+    margin: 12px 0;
+    color: #E26A6A;
 }
 
-.tab-inline-btn {
-    position: relative;
-    padding: 6px 14px;
+.private-profile-notice p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.lock-icon { font-size: 22px; flex-shrink: 0; }
+
+.private-badge {
+    font-size: 12px;
+    color: #E26A6A;
+    padding: 4px 10px;
     border-radius: 8px;
-    border: none;
-    background: rgba(255,255,255,0.08);
-    color: #D9DEE4;
-    cursor: pointer;
-    font-size: 13px;
-    transition: 0.2s ease;
+    border: 1px solid rgba(226, 106, 106, 0.4);
+    background: rgba(226, 106, 106, 0.08);
 }
-
-.tab-inline-btn:hover {
-    background: #3A6EA5;
-    color: #F2F4F7;
-}
-
-.tab-inline-btn.active {
-    background: #3A6EA5;
-    color: #F2F4F7;
-}
-
-.friend-inline-content {
-    padding: 0 16px 16px 16px;
-}
-
-.friend-inline-content:empty { padding: 0; }
