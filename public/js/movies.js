@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const MIN_CHARS = 2;
     const TARGET_ROW_COUNT = 50;
 
-    let currentGenre = 'trending';
+    let currentGenre = 'all';
     let debounceTimer = null;
 
     if (!moviesRow) return;
@@ -167,6 +167,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         return card;
     }
 
+    // ADDED: Fast render with progressive filtering
+async function renderMoviesWithFilter(movies, selectedFilters) {
+    moviesRow.innerHTML = '';
+
+    const LIMIT = 20; // keeps it fast
+
+    for (const movie of movies.slice(0, LIMIT)) {
+        const shouldShowImmediately = selectedFilters.length === 0;
+
+        const card = createCardElement(
+            movie,
+            shouldShowImmediately ? '' : 'Checking...'
+        );
+
+        // show instantly if no filters
+        if (shouldShowImmediately) {
+            moviesRow.appendChild(card);
+        }
+
+        // fetch providers in background
+        fetchAvailabilityData(movie.id, 'movie').then(data => {
+            const matches = matchesSubscriptionFilter(
+                data.streamingProviders,
+                selectedFilters
+            );
+
+            if (matches) {
+                card.querySelector('.provider-label').textContent = data.label;
+
+                if (!shouldShowImmediately) {
+                    moviesRow.appendChild(card);
+                }
+            }
+        });
+    }
+}
+
     async function buildFilteredMovieResults(movies, selectedFilters, limit = TARGET_ROW_COUNT) {
         const usableMovies = Array.isArray(movies)
             ? movies.filter((movie) => movie?.poster_path && movie?.id)
@@ -202,22 +239,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         return results;
     }
 
-    async function renderPreparedResults(targetRow, preparedResults) {
-        if (!targetRow) return;
+    // ADDED: All Movies default section
+async function loadAllMovies() {
+    const selectedFilters = getSelectedSubscriptions();
 
-        targetRow.innerHTML = '';
+    try {
+        const res = await fetch(`/api/trending/movies?page=1`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
 
-        if (!preparedResults.length) {
-            targetRow.innerHTML = `<p style="color:#fff;padding:20px">No movies matched this filter.</p>`;
-            return;
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error('Failed to load movies');
         }
 
-        for (const item of preparedResults) {
-            const card = createCardElement(item.movie, item.label);
-            targetRow.appendChild(card);
-        }
+        const allMovies = data.results || [];
+
+        await renderMoviesWithFilter(allMovies, selectedFilters);
+
+    } catch (error) {
+        console.error(error);
+        moviesRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
     }
-
+}
     async function loadTrendingMovies() {
         const selectedFilters = getSelectedSubscriptions();
         const query = searchInput?.value?.trim() || '';
@@ -280,13 +325,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 allMovies = collected;
             }
 
-            const preparedResults = await buildFilteredMovieResults(
-                allMovies,
-                selectedFilters,
-                TARGET_ROW_COUNT
-            );
-
-            await renderPreparedResults(moviesRow, preparedResults);
+            // ADDED: fast rendering
+await renderMoviesWithFilter(allMovies, selectedFilters);
         } catch (error) {
             console.error('Trending error:', error);
             moviesRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
@@ -326,37 +366,40 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             }
 
-            const preparedResults = await buildFilteredMovieResults(
-                collected,
-                selectedFilters,
-                TARGET_ROW_COUNT
-            );
+            // ADDED: fast rendering
+await renderMoviesWithFilter(collected, selectedFilters);
 
-            await renderPreparedResults(moviesRow, preparedResults);
         } catch (error) {
             console.error(`Genre ${genreId} error:`, error);
             moviesRow.innerHTML = `<p style="color:#fff;padding:20px">Failed to load movies.</p>`;
         }
     }
 
-    async function loadSelectedGenre() {
-        showLoading(moviesRow);
+    // ADDED: supports ALL + genres + filters
+async function loadSelectedGenre() {
+    moviesRow.innerHTML = `<p style="color:#fff;padding:20px">Loading movies...</p>`;
 
-        if (currentGenre === 'trending') {
-            sectionTitle.textContent = 'Trending';
-            await loadTrendingMovies();
-            return;
-        }
-
-        const genreMap = {
-            '28': 'Action',
-            '35': 'Comedy',
-            '27': 'Horror'
-        };
-
-        sectionTitle.textContent = genreMap[currentGenre] || 'Movies';
-        await loadGenreMovies(currentGenre);
+    if (currentGenre === 'all') {
+        sectionTitle.textContent = 'All Movies';
+        await loadAllMovies();
+        return;
     }
+
+    if (currentGenre === 'trending') {
+        sectionTitle.textContent = 'Trending';
+        await loadTrendingMovies();
+        return;
+    }
+
+    const genreMap = {
+        '28': 'Action',
+        '35': 'Comedy',
+        '27': 'Horror'
+    };
+
+    sectionTitle.textContent = genreMap[currentGenre] || 'Movies';
+    await loadGenreMovies(currentGenre);
+}
 
     genreTabs.forEach((btn) => {
         btn.addEventListener('click', async () => {
