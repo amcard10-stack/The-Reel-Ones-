@@ -499,6 +499,32 @@ app.delete('/api/dashboard/lists/:listId/items', authenticateToken, async (req, 
     }
 });
 
+app.delete('/api/dashboard/lists/:listId', authenticateToken, async (req, res) => {
+    const listId = parseInt(String(req.params.listId), 10);
+    if (!Number.isFinite(listId) || listId < 1) {
+        return res.status(400).json({ message: 'Invalid list id.' });
+    }
+
+    try {
+        const connection = await createConnection();
+        const [lists] = await connection.execute(
+            'SELECT id FROM list WHERE id = ? AND user_email = ?',
+            [listId, req.user.email]
+        );
+        if (lists.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'List not found.' });
+        }
+        await connection.execute('DELETE FROM list_item WHERE list_id = ?', [listId]);
+        await connection.execute('DELETE FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
+        await connection.end();
+        res.status(200).json({ message: 'List deleted.' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error deleting list.' });
+    }
+});
+
 app.get('/api/dashboard/lists', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();

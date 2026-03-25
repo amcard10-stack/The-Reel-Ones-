@@ -297,6 +297,24 @@ deleteStatus: async function (title, type) {
             }
         },
 
+        deleteList: async function (listId) {
+            if (!token) return { ok: false };
+            try {
+                const response = await fetch(`/api/dashboard/lists/${encodeURIComponent(listId)}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                });
+                let data = {};
+                try {
+                    data = await response.json();
+                } catch (_) {}
+                return { ok: response.ok, data };
+            } catch (error) {
+                console.error('Error deleting list:', error);
+                return { ok: false };
+            }
+        },
+
 getStatuses: async function () {
     if (!token) return [];
     try {

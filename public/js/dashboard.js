@@ -142,7 +142,26 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDashboard();
     });
 
-    document.getElementById('listsContainer')?.addEventListener('click', (e) => {
+    document.getElementById('listsContainer')?.addEventListener('click', async (e) => {
+        const delBtn = e.target.closest('.delete-list-btn');
+        if (delBtn) {
+            e.preventDefault();
+            const listId = delBtn.dataset.listId;
+            const listName = delBtn.dataset.listName || 'this list';
+            if (!listId) return;
+            if (!confirm(`Delete list "${listName}" and all titles in it? This cannot be undone.`)) return;
+            delBtn.disabled = true;
+            const result = await DataModel.deleteList?.(listId);
+            delBtn.disabled = false;
+            if (result?.ok) {
+                cachedLists = await DataModel.getLists();
+                renderDashboard();
+            } else {
+                const msg = result?.data?.message || 'Could not delete list.';
+                alert(msg);
+            }
+            return;
+        }
         const itemEl = e.target.closest('.list-item-poster, .list-item');
         if (!itemEl) return;
         const title = itemEl.dataset.title;
@@ -176,6 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateFriendActivityTeaser();
         }
         tickDashboardFriendBadges();
+        setupStatusBoardDragDrop();
         setInterval(tickDashboardFriendBadges, 6000);
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') tickDashboardFriendBadges();
@@ -517,42 +537,118 @@ function posterUrl(item) {
 }
 
 function renderStatuses() {
+    const want = document.getElementById('statusWant');
     const watching = document.getElementById('statusWatching');
     const completed = document.getElementById('statusCompleted');
-    const want = document.getElementById('statusWant');
     if (!watching || !completed || !want) return;
 
     const byStatus = {
+        want_to_watch: cachedStatuses.filter(s => s.status === 'want_to_watch'),
         watching: cachedStatuses.filter(s => s.status === 'watching'),
         completed: cachedStatuses.filter(s => s.status === 'completed'),
-        want_to_watch: cachedStatuses.filter(s => s.status === 'want_to_watch')
     };
 
-    [watching, completed, want].forEach(el => el.innerHTML = '');
-    byStatus.watching.forEach(s => {
-        watching.appendChild(createPosterCard(s));
+    [want, watching, completed].forEach((el) => {
+        el.innerHTML = '';
     });
-    byStatus.completed.forEach(s => {
-        completed.appendChild(createPosterCard(s));
-    });
-    byStatus.want_to_watch.forEach(s => {
+    byStatus.want_to_watch.forEach((s) => {
         want.appendChild(createPosterCard(s));
     });
+    byStatus.watching.forEach((s) => {
+        watching.appendChild(createPosterCard(s));
+    });
+    byStatus.completed.forEach((s) => {
+        completed.appendChild(createPosterCard(s));
+    });
 
+    if (byStatus.want_to_watch.length === 0) want.innerHTML = '<p class="empty-message">None</p>';
     if (byStatus.watching.length === 0) watching.innerHTML = '<p class="empty-message">None</p>';
     if (byStatus.completed.length === 0) completed.innerHTML = '<p class="empty-message">None</p>';
-    if (byStatus.want_to_watch.length === 0) want.innerHTML = '<p class="empty-message">None</p>';
+}
+
+function setupStatusBoardDragDrop() {
+    document.querySelectorAll('.status-col[data-status-drop]').forEach((col) => {
+        if (col.dataset.dropBound === '1') return;
+        col.dataset.dropBound = '1';
+        const status = col.dataset.statusDrop;
+        if (!status) return;
+
+        col.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+        });
+        col.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            col.classList.add('status-col-drag-over');
+        });
+        col.addEventListener('dragleave', (e) => {
+            if (!col.contains(e.relatedTarget)) col.classList.remove('status-col-drag-over');
+        });
+        col.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            col.classList.remove('status-col-drag-over');
+            let raw = e.dataTransfer.getData('application/x-status-item');
+            if (!raw) raw = e.dataTransfer.getData('text/plain');
+            let payload;
+            try {
+                payload = JSON.parse(raw);
+            } catch {
+                return;
+            }
+            if (!payload || !payload.title) return;
+            const type = payload.type === 'show' ? 'show' : 'movie';
+            const title = String(payload.title).trim();
+            if (!title) return;
+
+            const existing = cachedStatuses.find(
+                (s) => s.title === title && (s.type || 'movie') === type
+            );
+            if (existing && existing.status === status) return;
+
+            const result = await DataModel.setStatus(title, type, status);
+            if (result?.ok) {
+                if (existing) existing.status = status;
+                else cachedStatuses.push({ title, type, status });
+                renderStatuses();
+            } else {
+                const msg = result?.data?.message || 'Could not update status.';
+                alert(msg);
+            }
+        });
+    });
 }
 
 function createPosterCard(item) {
     const div = document.createElement('div');
-    div.classList.add('poster-card-small');
+    div.classList.add('poster-card-small', 'poster-card-draggable');
+    div.draggable = true;
+    const t = item.type === 'show' ? 'show' : 'movie';
+
     const url = posterUrl(item);
     const name = item.title || 'Untitled';
     div.innerHTML = url
-        ? `<img src="${url}" alt="${name}"><p>${name}</p>`
+        ? `<img src="${url}" alt="${name}" draggable="false"><p>${name}</p>`
         : `<div class="poster-placeholder"></div><p>${name}</p>`;
-    div.addEventListener('click', () => showItemPopup(item));
+    div.addEventListener('dragstart', (e) => {
+        const payload = JSON.stringify({ title: item.title, type: t });
+        e.dataTransfer.setData('application/x-status-item', payload);
+        e.dataTransfer.setData('text/plain', payload);
+        e.dataTransfer.effectAllowed = 'move';
+        div.classList.add('poster-card-dragging');
+    });
+    let ignoreNextClick = false;
+    div.addEventListener('dragend', () => {
+        div.classList.remove('poster-card-dragging');
+        document.querySelectorAll('.status-col-drag-over').forEach((c) => c.classList.remove('status-col-drag-over'));
+        ignoreNextClick = true;
+        setTimeout(() => {
+            ignoreNextClick = false;
+        }, 120);
+    });
+    div.addEventListener('click', () => {
+        if (ignoreNextClick) return;
+        showItemPopup(item);
+    });
     return div;
 }
 
@@ -634,7 +730,13 @@ function renderLists(searchTerm) {
         } else {
             itemsHtml = '<p class="empty-message">' + (searchTerm ? 'No matching items.' : 'Empty list') + '</p>';
         }
-        listDiv.innerHTML = `<h3 class="list-name">${list.name}</h3><div class="list-items list-items-posters">${itemsHtml}</div>`;
+        const safeNameAttr = (list.name || '').replace(/"/g, '&quot;');
+        listDiv.innerHTML = `
+            <div class="list-card-header">
+                <h3 class="list-name">${list.name}</h3>
+                <button type="button" class="delete-list-btn" data-list-id="${list.id}" data-list-name="${safeNameAttr}" aria-label="Delete list">Delete list</button>
+            </div>
+            <div class="list-items list-items-posters">${itemsHtml}</div>`;
         el.appendChild(listDiv);
     });
 }
