@@ -1024,6 +1024,94 @@ const uniqueStreamingProviders = streamingProviders;
     }
 });
 
+
+app.get('/api/title/details', authenticateToken, async (req, res) => {
+    const { id, type } = req.query;
+
+    if (!id || !type) {
+        return res.status(400).json({ message: 'id and type are required.' });
+    }
+
+    if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+        return res.status(503).json({ message: 'TMDB API key not configured.' });
+    }
+
+    try {
+        const tmdbType = type === 'show' ? 'tv' : 'movie';
+        const url = `https://api.themoviedb.org/3/${tmdbType}/${id}?api_key=${process.env.TMDB_API_KEY}`;
+
+        const tmdbRes = await fetch(url);
+
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+        }
+
+        const data = await tmdbRes.json();
+
+        return res.status(200).json({
+            id: data.id,
+            title: data.title || data.name || 'Untitled',
+            type: tmdbType === 'tv' ? 'show' : 'movie',
+            posterPath: data.poster_path || null,
+            overview: data.overview || ''
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error loading title details.' });
+    }
+});
+
+app.get('/api/title/related', authenticateToken, async (req, res) => {
+    const { id, type } = req.query;
+
+    if (!id || !type) {
+        return res.status(400).json({ message: 'id and type are required.' });
+    }
+
+    if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+        return res.status(503).json({ message: 'TMDB API key not configured.' });
+    }
+
+    try {
+        const tmdbType = type === 'show' ? 'tv' : 'movie';
+
+        const [similarRes, recommendationsRes] = await Promise.all([
+            fetch(`https://api.themoviedb.org/3/${tmdbType}/${id}/similar?api_key=${process.env.TMDB_API_KEY}`),
+            fetch(`https://api.themoviedb.org/3/${tmdbType}/${id}/recommendations?api_key=${process.env.TMDB_API_KEY}`)
+        ]);
+
+        const similarData = similarRes.ok ? await similarRes.json() : { results: [] };
+        const recommendationsData = recommendationsRes.ok ? await recommendationsRes.json() : { results: [] };
+
+        const combined = [
+            ...(similarData.results || []),
+            ...(recommendationsData.results || [])
+        ];
+
+        const seen = new Set();
+
+        const relatedTitles = combined
+            .filter(item => item && item.id)
+            .filter(item => {
+                if (seen.has(item.id)) return false;
+                seen.add(item.id);
+                return true;
+            })
+            .slice(0, 12)
+            .map(item => ({
+                id: item.id,
+                title: item.title || item.name || 'Untitled',
+                type: tmdbType === 'tv' ? 'show' : 'movie',
+                posterPath: item.poster_path || null
+            }));
+
+        return res.status(200).json({ relatedTitles });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error loading related titles.' });
+    }
+});
+
 app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
     const { genreId, page = 1, with_watch_providers } = req.query;
 
