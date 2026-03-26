@@ -14,6 +14,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 const saveBtn = document.getElementById('saveFilterBtn');
 const clearBtn = document.getElementById('clearFilterBtn');    
+const searchInput = document.getElementById('movieSearch');
+const searchBtn = document.getElementById('movieSearchBtn');
 
     const genreTabs = document.querySelectorAll('.genre-tab');
 
@@ -175,6 +177,39 @@ const clearBtn = document.getElementById('clearFilterBtn');
         wrap.appendChild(btn);
         moviesRow.parentElement.appendChild(wrap);
     }
+
+    async function searchMovies() {
+    const query = searchInput?.value.trim();
+
+    if (!query) {
+        await loadSelectedGenre();
+        return;
+    }
+
+    moviesRow.innerHTML = `<p style="padding:20px">Loading...</p>`;
+    sectionTitle.textContent = `Search Results`;
+
+    const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, {
+        headers: { Authorization: `Bearer ${token}` }
+    });
+
+    const data = await res.json();
+    currentPage = 1;
+
+    await renderMoviesWithFilter(data.results || [], getSelectedSubscriptions(), true);
+}
+
+searchBtn?.addEventListener('click', async () => {
+    await searchMovies();
+});
+
+searchInput?.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        await searchMovies();
+    }
+});
+
 async function loadSavedSubscriptions() {
     const result = await DataModel.getSubscriptions();
     const saved = result.subscriptions || result || [];
