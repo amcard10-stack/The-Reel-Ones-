@@ -21,6 +21,14 @@
         </div>
     </div>
 
+    <div class="genre-tabs">
+        <button class="genre-tab active" data-genre="all">All Shows</button>
+        <button class="genre-tab" data-genre="trending">Trending</button>
+        <button class="genre-tab" data-genre="10759">Action</button>
+        <button class="genre-tab" data-genre="35">Comedy</button>
+        <button class="genre-tab" data-genre="9648">Horror</button>
+    </div>
+
     <div class="top-section">
         <div class="filter-panel">
             <h4>Filter by Subscription</h4>
@@ -32,34 +40,23 @@
             <label><input type="checkbox" value="prime" class="subscription-filter"> Amazon Prime</label>
 
             <div class="filter-buttons">
-                <button id="applyFilterBtn">Apply</button>
                 <button id="clearFilterBtn">Clear</button>
                 <button id="saveFilterBtn">Save</button>
             </div>
         </div>
 
-        <div class="top-content">
-            <h3 class="row-title" id="showsSectionTitle">Trending</h3>
-            <div class="row-container">
-                <button class="scroll-btn left" id="scrollLeftBtn">&#8249;</button>
-                <div class="movie-row" id="trendingShowsRow"></div>
-                <button class="scroll-btn right" id="scrollRightBtn">&#8250;</button>
-            </div>
+
+    <div class="top-content">
+            <h3 class="row-title" id="showsSectionTitle">All Shows</h3>
+
+<div class="shows-grid" id="showsRow"></div>
         </div>
     </div>
-
-    <div class="other-rows">
-        <div class="show-section browse-section">
-            <h3 class="row-title" id="browseSectionTitle">Browse Shows</h3>
-            <div id="showsGrid" class="shows-grid"></div>
 
             <div class="load-more-wrap">
                 <button id="loadMoreBtn">Load More</button>
             </div>
         </div>
-    </div>
-
-</div>
 
 <script src="/js/datamodel.js"></script>
 <script src="/js/title-detail-modal.js"></script>

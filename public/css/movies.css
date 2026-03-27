@@ -317,8 +317,8 @@ body {
 .media-card img {
     width: 100%;
     aspect-ratio: 2 / 3;
-    object-fit: contain;   /* KEY CHANGE */
-    background: black;     /* fills empty space nicely */
+    object-fit: contain;  
+    background: black;     
     border-radius: 12px;
     display: block;
 }

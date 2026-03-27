@@ -276,3 +276,30 @@ body {
     opacity: 0.7;
     cursor: not-allowed;
 }
+
+
+.genre-tabs {
+    display: flex;
+    gap: 12px;
+    margin: 20px 0 24px 0;
+    flex-wrap: wrap;
+}
+
+.genre-tab {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 10px;
+    background: #4d82be;
+    color: white;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s ease;
+}
+
+.genre-tab:hover {
+    background: #5b93d3;
+}
+
+.genre-tab.active {
+    background: #76a7df;
+}

@@ -959,18 +959,29 @@ app.get('/api/trending/movies', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/api/trending/shows', authenticateToken, async (req, res) => {
+app.get('/api/trending/tv', authenticateToken, async (req, res) => {
+    const page = req.query.page || 1;
+
+    if (!process.env.TMDB_API_KEY) {
+        return res.status(500).json({ message: 'TMDB API key missing' });
+    }
+
     try {
-        const url = `https://api.themoviedb.org/3/trending/tv/day?api_key=${process.env.TMDB_API_KEY}`;
+        const url = `https://api.themoviedb.org/3/trending/tv/week?api_key=${process.env.TMDB_API_KEY}&page=${page}`;
         const tmdbRes = await fetch(url);
-        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB trending failed' });
+        }
+
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
         console.error(error);
-        return res.status(500).json({ message: 'Error calling TMDB.' });
+        return res.status(500).json({ message: 'Error fetching trending shows' });
     }
 });
+
 
 app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
     const q = (req.query.q || '').trim();
@@ -1252,13 +1263,25 @@ app.get('/api/movie/:id/providers', authenticateToken, async (req, res) => {
 
 app.get('/api/discover/tv', authenticateToken, async (req, res) => {
     const page = req.query.page || 1;
-    const providers = req.query.providers;
-    if (!process.env.TMDB_API_KEY) return res.status(500).json({ message: 'TMDB API key missing' });
+    const providers = req.query.with_watch_providers;
+
+    if (!process.env.TMDB_API_KEY) {
+        return res.status(500).json({ message: 'TMDB API key missing' });
+    }
+
     try {
         let url = `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}&page=${page}&watch_region=US`;
-        if (providers) url += `&with_watch_providers=${providers}`;
+
+        if (providers) {
+            url += `&with_watch_providers=${providers}`;
+        }
+
         const tmdbRes = await fetch(url);
-        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
+
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
+        }
+
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -1267,28 +1290,62 @@ app.get('/api/discover/tv', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/api/trending/tv', async (req, res) => {
+app.get('/api/tv/by-genre', authenticateToken, async (req, res) => {
+    const { genreId, page = 1, with_watch_providers } = req.query;
+
+    if (!genreId) {
+        return res.status(400).json({ message: 'genreId is required.' });
+    }
+
+    if (!process.env.TMDB_API_KEY) {
+        return res.status(500).json({ message: 'TMDB API key missing' });
+    }
+
     try {
-        const response = await fetch(`https://api.themoviedb.org/3/trending/tv/week?api_key=${process.env.TMDB_API_KEY}`);
-        const data = await response.json();
-        res.json(data);
+        let url = `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}&page=${page}&watch_region=US`;
+
+        if (with_watch_providers) {
+            url += `&with_watch_providers=${with_watch_providers}`;
+        }
+
+        const tmdbRes = await fetch(url);
+
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
+        }
+
+        const data = await tmdbRes.json();
+        return res.status(200).json(data);
     } catch (error) {
-        console.error('Error fetching trending TV:', error);
-        res.status(500).json({ error: 'Failed to fetch trending TV' });
+        console.error(error);
+        return res.status(500).json({ message: 'Error loading genre shows.' });
     }
 });
 
-app.get('/api/tv/:id/providers', async (req, res) => {
+app.get('/api/tv/:id/providers', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+
+    if (!process.env.TMDB_API_KEY) {
+        return res.status(500).json({ message: 'TMDB API key missing' });
+    }
+
     try {
-        const { id } = req.params;
-        const response = await fetch(`https://api.themoviedb.org/3/tv/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`);
-        const data = await response.json();
-        res.json(data);
+        const url = `https://api.themoviedb.org/3/tv/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`;
+        const tmdbRes = await fetch(url);
+
+        if (!tmdbRes.ok) {
+            return res.status(tmdbRes.status).json({ message: 'Provider fetch failed' });
+        }
+
+        const data = await tmdbRes.json();
+        return res.status(200).json(data);
     } catch (error) {
-        console.error('Error fetching TV providers:', error);
-        res.status(500).json({ error: 'Failed to fetch TV providers' });
+        console.error(error);
+        return res.status(500).json({ message: 'Error fetching providers' });
     }
 });
+
+
 
 //////////////////////////////////////
 // SUBSCRIPTIONS
