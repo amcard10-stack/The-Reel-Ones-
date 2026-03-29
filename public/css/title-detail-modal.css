@@ -182,3 +182,20 @@
 .tmdb-result-card .tmdb-info-btn:hover {
     background: rgba(126, 184, 255, 0.4);
 }
+.title-detail-open-page-btn {
+    margin-top: 18px;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 10px;
+    background: #7eb8ff;
+    color: #10233a;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.title-detail-open-page-btn:hover {
+    background: #9ac9ff;
+    transform: translateY(-1px);
+}

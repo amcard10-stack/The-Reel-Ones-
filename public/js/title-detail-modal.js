@@ -1,7 +1,3 @@
-/**
- * Full-screen lightbox with synopsis and a pill row (year, rating, runtime, seasons, genres).
- * Fetches TMDB details via /api/tmdb/details when possible; falls back to search-result fields.
- */
 (function (global) {
     function closeModal() {
         document.getElementById('titleDetailModalRoot')?.remove();
@@ -50,6 +46,7 @@
 
     function renderPillsFromDetail(row, d, item, isTv, yearFallback) {
         clearPills(row);
+
         const dateFromApi = isTv ? d.first_air_date : d.release_date;
         const yr = yearFromDateStr(dateFromApi) || yearFallback;
         if (yr) addPill(row, yr);
@@ -64,6 +61,7 @@
                 const fr = formatRuntime(epMins);
                 if (fr) addPill(row, `~${fr} / ep`);
             }
+
             const ns = d.number_of_seasons;
             if (typeof ns === 'number' && ns > 0) {
                 addPill(row, ns === 1 ? '1 season' : `${ns} seasons`);
@@ -84,17 +82,23 @@
     async function populatePills(pillRow, item, isTv, yearFallback) {
         const id = item.id;
         const token = typeof localStorage !== 'undefined' ? localStorage.getItem('jwtToken') : null;
+
         if (!id || !token) {
             renderPillsFallback(pillRow, item, yearFallback);
             return;
         }
+
         try {
             const type = isTv ? 'tv' : 'movie';
             const res = await fetch(
                 `/api/tmdb/details?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}`,
-                { headers: { Authorization: `Bearer ${token}` } }
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
             );
+
             if (!res.ok) throw new Error('details failed');
+
             const d = await res.json();
             renderPillsFromDetail(pillRow, d, item, isTv, yearFallback);
         } catch {
@@ -107,6 +111,7 @@
         closeModal();
 
         const isTv = mediaType === 'tv';
+        const pageType = isTv ? 'show' : 'movie';
         const title = isTv ? item.name || 'Untitled' : item.title || 'Untitled';
         const dateStr = isTv ? item.first_air_date : item.release_date;
         const year = yearFromDateStr(dateStr);
@@ -137,6 +142,7 @@
 
         const posterWrap = document.createElement('div');
         posterWrap.className = 'title-detail-poster-wrap';
+
         if (item.poster_path) {
             const img = document.createElement('img');
             img.className = 'title-detail-poster';
@@ -174,11 +180,20 @@
         syn.className = 'title-detail-overview';
         syn.textContent = overview;
 
+        const openPageBtn = document.createElement('button');
+        openPageBtn.type = 'button';
+        openPageBtn.className = 'title-detail-open-page-btn';
+        openPageBtn.textContent = 'View connected titles';
+        openPageBtn.addEventListener('click', () => {
+            window.location.href = `/title-details?id=${encodeURIComponent(item.id)}&type=${encodeURIComponent(pageType)}`;
+        });
+
         textCol.appendChild(kind);
         textCol.appendChild(h);
         textCol.appendChild(pillRow);
         textCol.appendChild(synLabel);
         textCol.appendChild(syn);
+        textCol.appendChild(openPageBtn);
 
         body.appendChild(posterWrap);
         body.appendChild(textCol);
