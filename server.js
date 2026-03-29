@@ -1165,6 +1165,48 @@ app.get('/api/title/related', authenticateToken, async (req, res) => {
     try {
         const tmdbType = type === 'show' ? 'tv' : 'movie';
 
+        // --- MOVIES: prefer real franchise/series connections via collection ---
+        if (tmdbType === 'movie') {
+            const detailUrl = `https://api.themoviedb.org/3/movie/${id}?api_key=${process.env.TMDB_API_KEY}`;
+            const detailRes = await fetch(detailUrl);
+
+            if (!detailRes.ok) {
+                return res.status(detailRes.status).json({ message: 'TMDB request failed' });
+            }
+
+            const detailData = await detailRes.json();
+            const belongsToCollection = detailData.belongs_to_collection;
+
+            if (belongsToCollection?.id) {
+                const collectionUrl = `https://api.themoviedb.org/3/collection/${belongsToCollection.id}?api_key=${process.env.TMDB_API_KEY}`;
+                const collectionRes = await fetch(collectionUrl);
+
+                if (collectionRes.ok) {
+                    const collectionData = await collectionRes.json();
+
+                    const relatedTitles = (collectionData.parts || [])
+                        .filter((item) => item && item.id && String(item.id) !== String(id))
+                        .sort((a, b) => {
+                            const da = new Date(a.release_date || '9999-12-31').getTime();
+                            const db = new Date(b.release_date || '9999-12-31').getTime();
+                            return da - db;
+                        })
+                        .map((item) => ({
+                            id: item.id,
+                            title: item.title || 'Untitled',
+                            type: 'movie',
+                            posterPath: item.poster_path || null
+                        }));
+
+                    return res.status(200).json({
+                        relatedTitles,
+                        source: 'collection'
+                    });
+                }
+            }
+        }
+
+        // --- fallback: similar + recommendations ---
         const [similarRes, recommendationsRes] = await Promise.all([
             fetch(`https://api.themoviedb.org/3/${tmdbType}/${id}/similar?api_key=${process.env.TMDB_API_KEY}`),
             fetch(`https://api.themoviedb.org/3/${tmdbType}/${id}/recommendations?api_key=${process.env.TMDB_API_KEY}`)
@@ -1181,21 +1223,25 @@ app.get('/api/title/related', authenticateToken, async (req, res) => {
         const seen = new Set();
 
         const relatedTitles = combined
-            .filter(item => item && item.id)
-            .filter(item => {
+            .filter((item) => item && item.id)
+            .filter((item) => {
+                if (String(item.id) === String(id)) return false;
                 if (seen.has(item.id)) return false;
                 seen.add(item.id);
                 return true;
             })
             .slice(0, 12)
-            .map(item => ({
+            .map((item) => ({
                 id: item.id,
                 title: item.title || item.name || 'Untitled',
                 type: tmdbType === 'tv' ? 'show' : 'movie',
                 posterPath: item.poster_path || null
             }));
 
-        return res.status(200).json({ relatedTitles });
+        return res.status(200).json({
+            relatedTitles,
+            source: 'fallback'
+        });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: 'Error loading related titles.' });
