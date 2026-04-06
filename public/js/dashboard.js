@@ -67,6 +67,9 @@ document.addEventListener('DOMContentLoaded', () => {
             statusTitle.value = '';
             document.getElementById('statusResults').innerHTML = '';
             renderDashboard();
+        } else {
+            const msg = result?.data?.message || 'Could not save status. Try again.';
+            alert(msg);
         }
     });
 
@@ -389,18 +392,26 @@ function setupTMDBSearch(inputEl, typeSelectEl, resultsContainerId, onSelect, se
 
     function renderTMDBResults(container, results, onSelect) {
         container.innerHTML = '';
-        const withPoster = results.filter(r => r.poster_path);
-        if (withPoster.length === 0) {
+        if (results.length === 0) {
             container.innerHTML = '<p class="empty-message">No results. Try a different search.</p>';
             return;
         }
-        withPoster.forEach(item => {
+        results.forEach(item => {
             const card = document.createElement('div');
             card.className = 'tmdb-result-card';
 
-            const img = document.createElement('img');
-            img.src = `https://image.tmdb.org/t/p/w154${item.poster_path}`;
-            img.alt = item._title || '';
+            let posterEl = null;
+            if (item.poster_path) {
+                const img = document.createElement('img');
+                img.src = `https://image.tmdb.org/t/p/w154${item.poster_path}`;
+                img.alt = item._title || '';
+                posterEl = img;
+            } else {
+                const ph = document.createElement('div');
+                ph.className = 'poster-placeholder tmdb-result-poster-ph';
+                ph.setAttribute('aria-hidden', 'true');
+                posterEl = ph;
+            }
 
             const titleP = document.createElement('p');
             titleP.textContent = item._title || 'Untitled';
@@ -428,7 +439,7 @@ function setupTMDBSearch(inputEl, typeSelectEl, resultsContainerId, onSelect, se
             hint.className = 'add-hint';
             hint.textContent = 'Click card to add';
 
-            card.appendChild(img);
+            card.appendChild(posterEl);
             card.appendChild(titleP);
             card.appendChild(preview);
             card.appendChild(actions);

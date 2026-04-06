@@ -563,11 +563,12 @@ app.get('/api/dashboard/status', authenticateToken, async (req, res) => {
                 'SELECT title, type FROM watch_history WHERE user_email = ?',
                 [email]
             );
+            // Backfill completed for watch_history only when no status row exists yet.
+            // Do not overwrite explicit want_to_watch / watching on every GET.
             for (const row of whRows) {
                 await connection.execute(
-                    `INSERT INTO watch_status (user_email, title, type, status)
-                     VALUES (?, ?, ?, 'completed')
-                     ON DUPLICATE KEY UPDATE status = 'completed'`,
+                    `INSERT IGNORE INTO watch_status (user_email, title, type, status)
+                     VALUES (?, ?, ?, 'completed')`,
                     [email, row.title, row.type || 'movie']
                 );
             }

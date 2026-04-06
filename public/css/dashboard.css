@@ -188,6 +188,13 @@ body {
     margin: 0 auto;
 }
 
+.tmdb-result-card .tmdb-result-poster-ph {
+    width: 100px;
+    height: 150px;
+    margin: 0 auto;
+    border-radius: 8px;
+}
+
 .tmdb-result-card p {
     margin: 6px 0 2px 0;
     font-size: 12px;
