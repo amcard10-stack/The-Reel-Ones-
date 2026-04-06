@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    DataModel.setToken(token);
+
     const backButton = document.getElementById('backButton');
     const logoutButton = document.getElementById('logoutButton');
 
@@ -17,6 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const relatedTitlesGrid = document.getElementById('relatedTitlesGrid');
     const relatedFallback = document.getElementById('relatedFallback');
     const relatedError = document.getElementById('relatedError');
+    const titleRatingSummary = document.getElementById('titleRatingSummary');
 
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
@@ -28,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         titleType.textContent = type === 'show' ? 'TV series' : 'Movie';
         titleOverview.textContent = 'Missing title id.';
         relatedError.style.display = 'block';
+        if (titleRatingSummary) titleRatingSummary.style.display = 'none';
         return;
     }
 
@@ -103,6 +107,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         return card;
     }
 
+    function renderPageRatingSummary(el, data, isError) {
+        if (!el) return;
+        el.style.display = '';
+        el.classList.remove('title-rating-summary--loading', 'title-rating-summary--error');
+        el.innerHTML = '';
+        el.setAttribute('aria-busy', 'false');
+        if (isError || !data || typeof data.global !== 'object' || typeof data.friends !== 'object') {
+            el.classList.add('title-rating-summary--error');
+            const p = document.createElement('p');
+            p.textContent = 'Rating data unavailable';
+            el.appendChild(p);
+            return;
+        }
+        const g = data.global;
+        const f = data.friends;
+        const p1 = document.createElement('p');
+        p1.className = 'title-rating-summary-line';
+        p1.textContent =
+            g.count > 0
+                ? `Community: ★ ${g.average} (${g.count} rating${g.count === 1 ? '' : 's'})`
+                : 'Community: No ratings yet';
+        const p2 = document.createElement('p');
+        p2.className = 'title-rating-summary-line';
+        p2.textContent =
+            f.count > 0
+                ? `Friends: ★ ${f.average} (${f.count} rating${f.count === 1 ? '' : 's'})`
+                : 'Friends: No friend ratings yet';
+        el.appendChild(p1);
+        el.appendChild(p2);
+    }
+
+    async function loadRatingSummary(detail) {
+        if (!titleRatingSummary || !detail) return;
+        titleRatingSummary.setAttribute('aria-busy', 'true');
+        titleRatingSummary.className = 'title-rating-summary title-rating-summary--loading';
+        titleRatingSummary.innerHTML = '<p class="title-rating-summary-loading-text">Loading community ratings…</p>';
+        try {
+            const data = await DataModel.getRatingSummary(detail.title, detail.type);
+            renderPageRatingSummary(titleRatingSummary, data, !data);
+        } catch (e) {
+            console.error(e);
+            renderPageRatingSummary(titleRatingSummary, null, true);
+        }
+    }
+
     async function loadMainTitleDetails() {
         titleType.textContent = type === 'show' ? 'TV series' : 'Movie';
 
@@ -133,11 +182,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             titlePoster.alt = titleName.textContent || 'No poster available';
             titlePoster.onerror = () => setDefaultPoster();
+            return detail;
         } catch (error) {
             console.error('Error loading title details:', error);
             titleName.textContent = 'Could not load title';
             titleOverview.textContent = 'There was a problem loading this title.';
             setDefaultPoster();
+            if (titleRatingSummary) {
+                titleRatingSummary.style.display = 'none';
+            }
+            return null;
         }
     }
 
@@ -175,6 +229,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    await loadMainTitleDetails();
+    const detail = await loadMainTitleDetails();
+    if (detail) {
+        await loadRatingSummary(detail);
+    }
     await loadRelatedTitles();
 });

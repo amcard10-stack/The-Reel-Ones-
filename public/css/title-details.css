@@ -104,6 +104,39 @@ body {
     letter-spacing: 0.04em;
 }
 
+.title-rating-summary {
+    margin: 0 0 18px 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.title-rating-summary--loading .title-rating-summary-loading-text {
+    margin: 0;
+    font-size: 0.9rem;
+    font-style: italic;
+    color: rgba(240, 244, 248, 0.55);
+}
+
+.title-rating-summary-line {
+    margin: 0 0 6px 0;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    font-weight: 600;
+    color: #e4edf7;
+}
+
+.title-rating-summary-line:last-child {
+    margin-bottom: 0;
+}
+
+.title-rating-summary--error p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #ffb3b3;
+}
+
 .overview {
     margin: 0;
     font-size: 1rem;

@@ -122,6 +122,39 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.title-detail-community {
+    margin: 0 0 16px 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.title-detail-community--loading .title-detail-community-loading-text {
+    margin: 0;
+    font-size: 13px;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.title-detail-community-line {
+    margin: 0 0 6px 0;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #dce8f4;
+    font-weight: 600;
+}
+
+.title-detail-community-line:last-child {
+    margin-bottom: 0;
+}
+
+.title-detail-community--error p {
+    margin: 0;
+    font-size: 13px;
+    color: #ffb3b3;
+}
+
 .title-detail-synopsis-label {
     margin: 0 0 8px 0;
     font-size: 12px;

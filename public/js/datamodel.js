@@ -111,6 +111,25 @@ const DataModel = (function () {
             }
         },
 
+        getRatingSummary: async function (title, type) {
+            if (!token) return null;
+            const t = (title || '').trim();
+            if (!t) return null;
+            const contentType = type === 'show' ? 'show' : 'movie';
+            try {
+                const q = new URLSearchParams({ title: t, type: contentType });
+                const response = await fetch(`/api/ratings/summary?${q}`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                });
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching rating summary:', error);
+                return null;
+            }
+        },
+
         getLists: async function () {
             if (!token) return [];
             try {

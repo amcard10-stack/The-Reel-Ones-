@@ -522,7 +522,61 @@ function showItemPopup(item) {
         }
     }
 
+    loadPopupCommunityRatings(merged);
+
     if (popup) popup.style.display = 'flex';
+}
+
+function renderPopupCommunityRatings(el, data, isError) {
+    if (!el) return;
+    el.classList.remove('popup-community-ratings--loading', 'popup-community-ratings--error');
+    el.innerHTML = '';
+    el.setAttribute('aria-busy', 'false');
+    if (isError || !data || typeof data.global !== 'object' || typeof data.friends !== 'object') {
+        el.classList.add('popup-community-ratings--error');
+        el.textContent = 'Rating data unavailable';
+        return;
+    }
+    const g = data.global;
+    const f = data.friends;
+    const p1 = document.createElement('p');
+    p1.className = 'popup-community-line';
+    p1.textContent =
+        g.count > 0
+            ? `Community: ★ ${g.average} (${g.count} rating${g.count === 1 ? '' : 's'})`
+            : 'Community: No ratings yet';
+    const p2 = document.createElement('p');
+    p2.className = 'popup-community-line';
+    p2.textContent =
+        f.count > 0
+            ? `Friends: ★ ${f.average} (${f.count} rating${f.count === 1 ? '' : 's'})`
+            : 'Friends: No friend ratings yet';
+    el.appendChild(p1);
+    el.appendChild(p2);
+}
+
+function loadPopupCommunityRatings(merged) {
+    const el = document.getElementById('popupCommunityRatings');
+    const section = document.getElementById('popupCommunityRatingsSection');
+    if (!el || !section) return;
+    const title = (merged.title || '').trim();
+    const mediaType = merged.type === 'show' ? 'show' : 'movie';
+    if (!title) {
+        section.style.display = 'none';
+        el.innerHTML = '';
+        return;
+    }
+    section.style.display = 'block';
+    el.setAttribute('aria-busy', 'true');
+    el.className = 'popup-community-ratings popup-community-ratings--loading';
+    el.textContent = 'Loading community ratings…';
+    DataModel.getRatingSummary(title, mediaType)
+        .then((data) => {
+            renderPopupCommunityRatings(el, data, !data);
+        })
+        .catch(() => {
+            renderPopupCommunityRatings(el, null, true);
+        });
 }
 
 async function renderDashboard() {

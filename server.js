@@ -27,6 +27,17 @@ function isUnknownColumnError(err) {
     return Boolean(err && (err.code === 'ER_BAD_FIELD_ERROR' || Number(err.errno) === 1054));
 }
 
+function friendAcceptedPairSql(actorCol) {
+    return `EXISTS (
+        SELECT 1 FROM friend_request fr
+        WHERE fr.status = 'accepted'
+        AND (
+            (fr.sender_email = ? AND fr.receiver_email = ${actorCol})
+            OR (fr.receiver_email = ? AND fr.sender_email = ${actorCol})
+        )
+    )`;
+}
+
 app.use(express.static('public'));
 
 //////////////////////////////////////
@@ -405,6 +416,52 @@ app.delete('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error deleting rating.' });
+    }
+});
+
+app.get('/api/ratings/summary', authenticateToken, async (req, res) => {
+    const titleRaw = (req.query.title || '').trim();
+    const contentType = req.query.type === 'show' ? 'show' : 'movie';
+    if (!titleRaw) {
+        return res.status(400).json({ message: 'title is required.' });
+    }
+    const me = req.user.email;
+    try {
+        const connection = await createConnection();
+        const [[globalRow]] = await connection.execute(
+            `SELECT AVG(r.rating) AS avg_rating, COUNT(*) AS cnt
+             FROM rating r
+             WHERE TRIM(r.title) = TRIM(?) AND r.type = ?`,
+            [titleRaw, contentType]
+        );
+        const [[friendsRow]] = await connection.execute(
+            `SELECT AVG(r.rating) AS avg_rating, COUNT(*) AS cnt
+             FROM rating r
+             WHERE TRIM(r.title) = TRIM(?) AND r.type = ?
+             AND r.user_email <> ?
+             AND ${friendAcceptedPairSql('r.user_email')}`,
+            [titleRaw, contentType, me, me, me]
+        );
+        await connection.end();
+
+        const roundAvg = (row) => {
+            if (!row) return { average: null, count: 0 };
+            const c = Number(row.cnt) || 0;
+            if (c === 0) return { average: null, count: 0 };
+            const a = parseFloat(row.avg_rating);
+            return {
+                average: Math.round(a * 10) / 10,
+                count: c
+            };
+        };
+
+        res.status(200).json({
+            global: roundAvg(globalRow),
+            friends: roundAvg(friendsRow)
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error loading rating summary.' });
     }
 });
 
@@ -1584,16 +1641,6 @@ app.get('/api/friends', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Error retrieving friends.' });
     }
 });
-
-const friendAcceptedPairSql = (actorCol) =>
-    `EXISTS (
-        SELECT 1 FROM friend_request fr
-        WHERE fr.status = 'accepted'
-        AND (
-            (fr.sender_email = ? AND fr.receiver_email = ${actorCol})
-            OR (fr.receiver_email = ? AND fr.sender_email = ${actorCol})
-        )
-    )`;
 
 // Aggregated activity from accepted friends (ratings, list adds, watch status updates)
 app.get('/api/friends/activity', authenticateToken, async (req, res) => {
