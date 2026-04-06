@@ -1,5 +1,10 @@
 (function (global) {
+    let modalPillFetchGen = 0;
+
     function closeModal() {
+        if (document.getElementById('titleDetailModalRoot')) {
+            modalPillFetchGen += 1;
+        }
         document.getElementById('titleDetailModalRoot')?.remove();
     }
 
@@ -79,91 +84,65 @@
         }
     }
 
-    function setCommunityLoading(container) {
-        container.innerHTML = '';
-        container.className = 'title-detail-community title-detail-community--loading';
-        container.setAttribute('aria-busy', 'true');
-        const p = document.createElement('p');
-        p.className = 'title-detail-community-loading-text';
-        p.textContent = 'Loading community ratings…';
-        container.appendChild(p);
+    function friendsPillText(summary) {
+        if (!summary || typeof summary.friends !== 'object') {
+            return 'Friends: unavailable';
+        }
+        const f = summary.friends;
+        if (f.count > 0) {
+            const n = f.count;
+            return `Friends ★ ${f.average} (${n} rating${n === 1 ? '' : 's'})`;
+        }
+        return 'No friend ratings yet';
     }
 
-    function renderCommunityRatings(container, data, isError) {
-        container.setAttribute('aria-busy', 'false');
-        container.classList.remove('title-detail-community--loading');
-        container.innerHTML = '';
-        if (isError || !data || typeof data.global !== 'object' || typeof data.friends !== 'object') {
-            container.classList.add('title-detail-community--error');
-            const p = document.createElement('p');
-            p.textContent = 'Rating data unavailable';
-            container.appendChild(p);
-            return;
-        }
-        container.classList.remove('title-detail-community--error');
-        const g = data.global;
-        const f = data.friends;
-        const p1 = document.createElement('p');
-        p1.className = 'title-detail-community-line';
-        p1.textContent =
-            g.count > 0
-                ? `Community: ★ ${g.average} (${g.count} rating${g.count === 1 ? '' : 's'})`
-                : 'Community: No ratings yet';
-        const p2 = document.createElement('p');
-        p2.className = 'title-detail-community-line';
-        p2.textContent =
-            f.count > 0
-                ? `Friends: ★ ${f.average} (${f.count} rating${f.count === 1 ? '' : 's'})`
-                : 'Friends: No friend ratings yet';
-        container.appendChild(p1);
-        container.appendChild(p2);
-    }
-
-    async function populateCommunityRatings(container, title, typeMovieOrShow) {
-        const token = typeof localStorage !== 'undefined' ? localStorage.getItem('jwtToken') : null;
-        if (!token || !title || title === 'Untitled') {
-            container.innerHTML = '';
-            container.style.display = 'none';
-            return;
-        }
-        container.style.display = '';
-        setCommunityLoading(container);
-        try {
-            const data =
-                typeof DataModel !== 'undefined' && DataModel.getRatingSummary
-                    ? await DataModel.getRatingSummary(title, typeMovieOrShow)
-                    : null;
-            renderCommunityRatings(container, data, !data);
-        } catch {
-            renderCommunityRatings(container, null, true);
-        }
-    }
-
-    async function populatePills(pillRow, item, isTv, yearFallback) {
+    async function populatePills(pillRow, item, isTv, yearFallback, displayTitle, pageType) {
         const id = item.id;
         const token = typeof localStorage !== 'undefined' ? localStorage.getItem('jwtToken') : null;
+        const gen = ++modalPillFetchGen;
 
-        if (!id || !token) {
-            renderPillsFallback(pillRow, item, yearFallback);
-            return;
-        }
+        const friendsPromise =
+            token &&
+            displayTitle &&
+            displayTitle !== 'Untitled' &&
+            typeof DataModel !== 'undefined' &&
+            DataModel.getRatingSummary
+                ? DataModel.getRatingSummary(displayTitle, pageType)
+                : Promise.resolve({ friends: { average: null, count: 0 } });
 
-        try {
-            const type = isTv ? 'tv' : 'movie';
-            const res = await fetch(
-                `/api/tmdb/details?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}`,
-                {
-                    headers: { Authorization: `Bearer ${token}` }
+        let d = null;
+        if (id && token) {
+            try {
+                const type = isTv ? 'tv' : 'movie';
+                const res = await fetch(
+                    `/api/tmdb/details?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}`,
+                    {
+                        headers: { Authorization: `Bearer ${token}` }
+                    }
+                );
+                if (res.ok) {
+                    d = await res.json();
                 }
-            );
+            } catch {
+                d = null;
+            }
+        }
 
-            if (!res.ok) throw new Error('details failed');
-
-            const d = await res.json();
-            renderPillsFromDetail(pillRow, d, item, isTv, yearFallback);
+        let friendsSummary;
+        try {
+            friendsSummary = await friendsPromise;
         } catch {
+            friendsSummary = null;
+        }
+
+        if (gen !== modalPillFetchGen) return;
+
+        if (d) {
+            renderPillsFromDetail(pillRow, d, item, isTv, yearFallback);
+        } else {
             renderPillsFallback(pillRow, item, yearFallback);
         }
+        addPill(pillRow, friendsPillText(friendsSummary));
     }
 
     function openTitleDetailModal(item, mediaType) {
@@ -232,9 +211,6 @@
         pillRow.setAttribute('aria-busy', 'true');
         pillRow.textContent = 'Loading details…';
 
-        const communityRow = document.createElement('div');
-        communityRow.className = 'title-detail-community';
-
         const synLabel = document.createElement('p');
         synLabel.className = 'title-detail-synopsis-label';
         synLabel.textContent = 'About';
@@ -254,7 +230,6 @@
         textCol.appendChild(kind);
         textCol.appendChild(h);
         textCol.appendChild(pillRow);
-        textCol.appendChild(communityRow);
         textCol.appendChild(synLabel);
         textCol.appendChild(syn);
         textCol.appendChild(openPageBtn);
@@ -268,8 +243,7 @@
         overlay.addEventListener('click', closeModal);
 
         document.body.appendChild(overlay);
-        void populatePills(pillRow, item, isTv, year);
-        void populateCommunityRatings(communityRow, title, pageType);
+        void populatePills(pillRow, item, isTv, year, title, pageType);
     }
 
     global.openTitleDetailModal = openTitleDetailModal;

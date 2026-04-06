@@ -643,28 +643,21 @@ body {
 .star-rating span { color: #D9DEE4; transition: color 0.15s; }
 .star-rating span:hover, .star-rating span.filled { color: #E26A6A; }
 
-.popup-community-ratings {
+.popup-friends-ratings {
     min-height: 1.5em;
     font-size: 14px;
     line-height: 1.45;
     color: #F2F4F7;
-}
-
-.popup-community-ratings--loading {
-    font-style: italic;
-    color: rgba(217, 222, 228, 0.55);
-}
-
-.popup-community-line {
-    margin: 0 0 4px 0;
     font-weight: 600;
 }
 
-.popup-community-line:last-child {
-    margin-bottom: 0;
+.popup-friends-ratings--loading {
+    font-style: italic;
+    font-weight: 500;
+    color: rgba(217, 222, 228, 0.55);
 }
 
-.popup-community-ratings--error {
+.popup-friends-ratings--error {
     font-style: normal;
     color: #ffb3b3;
     font-weight: 500;

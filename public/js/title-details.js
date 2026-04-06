@@ -107,48 +107,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         return card;
     }
 
-    function renderPageRatingSummary(el, data, isError) {
+    function renderFriendsPill(el, data, isError) {
         if (!el) return;
         el.style.display = '';
-        el.classList.remove('title-rating-summary--loading', 'title-rating-summary--error');
+        el.classList.remove('title-friends-pill-row--loading', 'title-friends-pill-row--error');
         el.innerHTML = '';
         el.setAttribute('aria-busy', 'false');
-        if (isError || !data || typeof data.global !== 'object' || typeof data.friends !== 'object') {
-            el.classList.add('title-rating-summary--error');
-            const p = document.createElement('p');
-            p.textContent = 'Rating data unavailable';
-            el.appendChild(p);
+        const span = document.createElement('span');
+        span.className = 'title-friends-pill';
+        if (isError || !data || typeof data.friends !== 'object') {
+            el.classList.add('title-friends-pill-row--error');
+            span.textContent = 'Friends: unavailable';
+            el.appendChild(span);
             return;
         }
-        const g = data.global;
         const f = data.friends;
-        const p1 = document.createElement('p');
-        p1.className = 'title-rating-summary-line';
-        p1.textContent =
-            g.count > 0
-                ? `Community: ★ ${g.average} (${g.count} rating${g.count === 1 ? '' : 's'})`
-                : 'Community: No ratings yet';
-        const p2 = document.createElement('p');
-        p2.className = 'title-rating-summary-line';
-        p2.textContent =
-            f.count > 0
-                ? `Friends: ★ ${f.average} (${f.count} rating${f.count === 1 ? '' : 's'})`
-                : 'Friends: No friend ratings yet';
-        el.appendChild(p1);
-        el.appendChild(p2);
+        if (f.count > 0) {
+            const n = f.count;
+            span.textContent = `Friends ★ ${f.average} (${n} rating${n === 1 ? '' : 's'})`;
+        } else {
+            span.textContent = 'No friend ratings yet';
+        }
+        el.appendChild(span);
     }
 
-    async function loadRatingSummary(detail) {
+    async function loadFriendsRatingSummary(detail) {
         if (!titleRatingSummary || !detail) return;
         titleRatingSummary.setAttribute('aria-busy', 'true');
-        titleRatingSummary.className = 'title-rating-summary title-rating-summary--loading';
-        titleRatingSummary.innerHTML = '<p class="title-rating-summary-loading-text">Loading community ratings…</p>';
+        titleRatingSummary.className = 'title-friends-pill-row title-friends-pill-row--loading';
+        titleRatingSummary.innerHTML =
+            '<span class="title-friends-pill title-friends-pill--loading">Loading friends…</span>';
         try {
             const data = await DataModel.getRatingSummary(detail.title, detail.type);
-            renderPageRatingSummary(titleRatingSummary, data, !data);
+            renderFriendsPill(titleRatingSummary, data, !data);
         } catch (e) {
             console.error(e);
-            renderPageRatingSummary(titleRatingSummary, null, true);
+            renderFriendsPill(titleRatingSummary, null, true);
         }
     }
 
@@ -231,7 +225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const detail = await loadMainTitleDetails();
     if (detail) {
-        await loadRatingSummary(detail);
+        await loadFriendsRatingSummary(detail);
     }
     await loadRelatedTitles();
 });

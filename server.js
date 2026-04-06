@@ -22,6 +22,8 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.use(express.json());
+// express.static is mounted at the end of the file so /api/* routes are never
+// shadowed by accidental paths under public/.
 
 function isUnknownColumnError(err) {
     return Boolean(err && (err.code === 'ER_BAD_FIELD_ERROR' || Number(err.errno) === 1054));
@@ -37,8 +39,6 @@ function friendAcceptedPairSql(actorCol) {
         )
     )`;
 }
-
-app.use(express.static('public'));
 
 //////////////////////////////////////
 // ROUTES TO SERVE HTML FILES
@@ -419,51 +419,67 @@ app.delete('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/api/ratings/summary', authenticateToken, async (req, res) => {
+async function getRatingSummaryHandler(req, res) {
     const titleRaw = (req.query.title || '').trim();
     const contentType = req.query.type === 'show' ? 'show' : 'movie';
     if (!titleRaw) {
         return res.status(400).json({ message: 'title is required.' });
     }
     const me = req.user.email;
-    try {
-        const connection = await createConnection();
-        const [[globalRow]] = await connection.execute(
-            `SELECT AVG(r.rating) AS avg_rating, COUNT(*) AS cnt
-             FROM rating r
-             WHERE TRIM(r.title) = TRIM(?) AND r.type = ?`,
-            [titleRaw, contentType]
-        );
-        const [[friendsRow]] = await connection.execute(
-            `SELECT AVG(r.rating) AS avg_rating, COUNT(*) AS cnt
-             FROM rating r
-             WHERE TRIM(r.title) = TRIM(?) AND r.type = ?
-             AND r.user_email <> ?
-             AND ${friendAcceptedPairSql('r.user_email')}`,
-            [titleRaw, contentType, me, me, me]
-        );
-        await connection.end();
 
-        const roundAvg = (row) => {
-            if (!row) return { average: null, count: 0 };
-            const c = Number(row.cnt) || 0;
-            if (c === 0) return { average: null, count: 0 };
-            const a = parseFloat(row.avg_rating);
-            return {
-                average: Math.round(a * 10) / 10,
-                count: c
-            };
+    const roundAvg = (row) => {
+        if (!row) return { average: null, count: 0 };
+        const c = Number(row.cnt) || 0;
+        if (c === 0) return { average: null, count: 0 };
+        const a = parseFloat(row.avg_rating);
+        if (!Number.isFinite(a)) return { average: null, count: c };
+        return {
+            average: Math.round(a * 10) / 10,
+            count: c
         };
+    };
+
+    let connection;
+    try {
+        connection = await createConnection();
+        let friendsRow = null;
+        try {
+            const [friendsRows] = await connection.execute(
+                `SELECT AVG(r.rating) AS avg_rating, COUNT(*) AS cnt
+                 FROM rating r
+                 WHERE TRIM(r.title) = TRIM(?) AND r.type = ?
+                 AND r.user_email <> ?
+                 AND ${friendAcceptedPairSql('r.user_email')}`,
+                [titleRaw, contentType, me, me, me]
+            );
+            friendsRow = friendsRows[0];
+        } catch (friendsErr) {
+            if (friendsErr.code === 'ER_NO_SUCH_TABLE') {
+                console.warn('ratings/summary: friend_request missing; returning empty friends aggregate.');
+            } else {
+                throw friendsErr;
+            }
+        }
 
         res.status(200).json({
-            global: roundAvg(globalRow),
             friends: roundAvg(friendsRow)
         });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error loading rating summary.' });
+    } finally {
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (endErr) {
+                console.warn('ratings/summary: connection.end failed', endErr.message);
+            }
+        }
     }
-});
+}
+
+app.get('/api/dashboard/ratings/summary', authenticateToken, getRatingSummaryHandler);
+app.get('/api/ratings/summary', authenticateToken, getRatingSummaryHandler);
 
 //////////////////////////////////////
 // LISTS
@@ -2041,6 +2057,9 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
     }
 });
 
+app.use(express.static('public'));
+
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
+    console.log('API: GET /api/dashboard/ratings/summary (friends rating aggregate)');
 });

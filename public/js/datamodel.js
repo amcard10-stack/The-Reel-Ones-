@@ -112,18 +112,25 @@ const DataModel = (function () {
         },
 
         getRatingSummary: async function (title, type) {
-            if (!token) return null;
+            const ls =
+                typeof localStorage !== 'undefined' ? localStorage.getItem('jwtToken') : null;
+            const authToken = ls || token;
+            if (!authToken) return null;
             const t = (title || '').trim();
             if (!t) return null;
             const contentType = type === 'show' ? 'show' : 'movie';
             try {
                 const q = new URLSearchParams({ title: t, type: contentType });
-                const response = await fetch(`/api/ratings/summary?${q}`, {
+                const response = await fetch(`/api/dashboard/ratings/summary?${q}`, {
                     method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
                 });
                 if (!response.ok) return null;
-                return await response.json();
+                const data = await response.json();
+                if (!data || typeof data.friends !== 'object') {
+                    return null;
+                }
+                return data;
             } catch (error) {
                 console.error('Error fetching rating summary:', error);
                 return null;

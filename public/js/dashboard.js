@@ -461,6 +461,7 @@ let cachedLists = [];
 let cachedStatuses = [];
 let posterCache = {};
 let currentPopupItem = null;
+let popupFriendsRatingsFetchGen = 0;
 
 function showItemPopup(item) {
     const whItem = cachedWatchHistory.find(w => w.title === item.title && (w.type || 'movie') === (item.type || 'movie'));
@@ -522,42 +523,39 @@ function showItemPopup(item) {
         }
     }
 
-    loadPopupCommunityRatings(merged);
+    loadPopupFriendsRatings(merged);
 
     if (popup) popup.style.display = 'flex';
 }
 
-function renderPopupCommunityRatings(el, data, isError) {
-    if (!el) return;
-    el.classList.remove('popup-community-ratings--loading', 'popup-community-ratings--error');
-    el.innerHTML = '';
-    el.setAttribute('aria-busy', 'false');
-    if (isError || !data || typeof data.global !== 'object' || typeof data.friends !== 'object') {
-        el.classList.add('popup-community-ratings--error');
-        el.textContent = 'Rating data unavailable';
-        return;
+function friendsSummaryLine(data) {
+    if (!data || typeof data.friends !== 'object') {
+        return 'Friends: unavailable';
     }
-    const g = data.global;
     const f = data.friends;
-    const p1 = document.createElement('p');
-    p1.className = 'popup-community-line';
-    p1.textContent =
-        g.count > 0
-            ? `Community: ★ ${g.average} (${g.count} rating${g.count === 1 ? '' : 's'})`
-            : 'Community: No ratings yet';
-    const p2 = document.createElement('p');
-    p2.className = 'popup-community-line';
-    p2.textContent =
-        f.count > 0
-            ? `Friends: ★ ${f.average} (${f.count} rating${f.count === 1 ? '' : 's'})`
-            : 'Friends: No friend ratings yet';
-    el.appendChild(p1);
-    el.appendChild(p2);
+    if (f.count > 0) {
+        const n = f.count;
+        return `Friends ★ ${f.average} (${n} rating${n === 1 ? '' : 's'})`;
+    }
+    return 'No friend ratings yet';
 }
 
-function loadPopupCommunityRatings(merged) {
-    const el = document.getElementById('popupCommunityRatings');
-    const section = document.getElementById('popupCommunityRatingsSection');
+function renderPopupFriendsRatings(el, data, isError) {
+    if (!el) return;
+    el.classList.remove('popup-friends-ratings--loading', 'popup-friends-ratings--error');
+    el.innerHTML = '';
+    el.setAttribute('aria-busy', 'false');
+    if (isError) {
+        el.classList.add('popup-friends-ratings--error');
+        el.textContent = 'Friends: unavailable';
+        return;
+    }
+    el.textContent = friendsSummaryLine(data);
+}
+
+function loadPopupFriendsRatings(merged) {
+    const el = document.getElementById('popupFriendsRatings');
+    const section = document.getElementById('popupFriendsRatingsSection');
     if (!el || !section) return;
     const title = (merged.title || '').trim();
     const mediaType = merged.type === 'show' ? 'show' : 'movie';
@@ -566,16 +564,19 @@ function loadPopupCommunityRatings(merged) {
         el.innerHTML = '';
         return;
     }
+    const gen = ++popupFriendsRatingsFetchGen;
     section.style.display = 'block';
     el.setAttribute('aria-busy', 'true');
-    el.className = 'popup-community-ratings popup-community-ratings--loading';
-    el.textContent = 'Loading community ratings…';
+    el.className = 'popup-friends-ratings popup-friends-ratings--loading';
+    el.textContent = 'Loading friends…';
     DataModel.getRatingSummary(title, mediaType)
         .then((data) => {
-            renderPopupCommunityRatings(el, data, !data);
+            if (gen !== popupFriendsRatingsFetchGen) return;
+            renderPopupFriendsRatings(el, data, !data);
         })
         .catch(() => {
-            renderPopupCommunityRatings(el, null, true);
+            if (gen !== popupFriendsRatingsFetchGen) return;
+            renderPopupFriendsRatings(el, null, true);
         });
 }
 
