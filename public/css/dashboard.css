@@ -335,13 +335,20 @@ body {
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 }
 
 .list-card-header .list-name {
     margin: 0;
     flex: 1;
     min-width: 0;
+}
+
+.list-card-btns {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
 }
 
 .delete-list-btn {
@@ -738,3 +745,239 @@ body {
 .poster-card-dragging {
     opacity: 0.55;
 }
+
+/* ── Recommendations Inbox ── */
+.rec-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+}
+.rec-card--unread {
+    border-color: rgba(126,184,255,0.45);
+    background: rgba(58,110,165,0.18);
+}
+.rec-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+.rec-from { font-size: 14px; }
+.rec-date  { margin-left: auto; font-size: 12px; opacity: 0.6; }
+.rec-unread-dot { color: #7eb8ff; font-size: 12px; }
+.rec-card-body  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rec-title      { font-size: 15px; }
+.rec-note       { margin: 6px 0 0; font-size: 13px; opacity: 0.8; font-style: italic; width: 100%; }
+.rec-mark-read-btn {
+    margin-top: 8px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(255,255,255,0.1);
+    color: #F2F4F7;
+    cursor: pointer;
+    font-size: 12px;
+}
+.rec-mark-read-btn:hover { background: rgba(255,255,255,0.18); }
+
+/* ── List Sharing ── */
+.share-list-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: none;
+    background: #3A6EA5;
+    color: #fff;
+    cursor: pointer;
+    font-size: 12px;
+}
+.share-list-btn:hover { background: #4a82c0; }
+.share-list-form {
+    display: none;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.share-list-form select {
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: none;
+    background: #1a3a6b;
+    color: #F2F4F7;
+}
+.share-invite-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: none;
+    background: #3A6EA5;
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+}
+.share-invite-btn:hover { background: #4a82c0; }
+.list-collab-info {
+    display: block;
+    font-size: 12px;
+    opacity: 0.65;
+    margin-bottom: 6px;
+}
+
+/* ── Shared Lists ── */
+.shared-list-card { border-color: rgba(126,184,255,0.3); }
+.shared-list-add  { display: flex; gap: 6px; }
+.list-item-tag {
+    display: inline-block;
+    background: rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 12px;
+    margin: 2px;
+}
+
+/* ── Rec inbox collapsible header ── */
+.rec-inbox-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+}
+.rec-toggle-btn {
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: #F2F4F7;
+    padding: 5px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.rec-toggle-btn:hover { background: rgba(255,255,255,0.15); }
+
+/* ── Rec card poster (dashboard inbox) ── */
+.rec-card-body {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin: 6px 0;
+}
+.rec-card-poster {
+    width: 54px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+.rec-card-poster-ph {
+    width: 54px;
+    height: 80px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+    flex-shrink: 0;
+}
+.rec-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* ── My Lists / Shared With Me split ── */
+.lists-split {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    margin-top: 14px;
+}
+@media (min-width: 860px) {
+    .lists-split { grid-template-columns: 1fr 1fr; }
+}
+.lists-split-heading {
+    margin: 0 0 12px 0;
+    font-size: 1em;
+    opacity: 0.75;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* ── Inline list search grid (dashboard) ── */
+.inline-list-search-wrap { margin-top: 10px; }
+.inline-list-results {
+    margin-top: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+.inline-list-card {
+    width: 80px !important;
+    padding: 4px !important;
+}
+.inline-list-card img {
+    width: 72px;
+    height: 108px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+.inline-type-select {
+    padding: 8px;
+    border-radius: 8px;
+    border: none;
+    background: #1a3a6b;
+    color: #F2F4F7;
+}
+
+/* ── List item click-to-remove overlay ── */
+.list-item-poster,
+.list-item { position: relative; }
+
+.list-item-remove-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,20,40,0.78);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+}
+.list-item-remove-btn {
+    padding: 5px 12px;
+    border-radius: 7px;
+    border: none;
+    background: rgba(220,53,69,0.9);
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    font-weight: 600;
+}
+.list-item-remove-btn:hover { background: #dc3545; }
+
+/* ── Leave list button ── */
+.leave-list-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(220,53,69,0.15);
+    color: #e87070;
+    cursor: pointer;
+    font-size: 12px;
+}
+.leave-list-btn:hover { background: rgba(220,53,69,0.3); }
+
+/* ── Rec card action row ── */
+.rec-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+.rec-delete-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(220,53,69,0.15);
+    color: #e87070;
+    cursor: pointer;
+    font-size: 12px;
+}
+.rec-delete-btn:hover { background: rgba(220,53,69,0.35); }

@@ -38,6 +38,16 @@ document.addEventListener('DOMContentLoaded', () => {
         listsSearch.addEventListener('keypress', (e) => { if (e.key === 'Enter') filterBySearch(); });
     }
 
+    // Rec inbox toggle
+    document.getElementById('recInboxToggleRow')?.addEventListener('click', () => {
+        const body = document.getElementById('recInboxBody');
+        const btn = document.getElementById('recInboxToggle');
+        if (!body) return;
+        const open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : 'block';
+        if (btn) btn.textContent = open ? 'Show ▾' : 'Hide ▴';
+    });
+
     createListBtn?.addEventListener('click', async () => {
         const name = document.getElementById('newListName')?.value?.trim() || '';
         if (!name) return;
@@ -73,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // TMDB search for List item add
+    // TMDB search for List item add (owned + shared lists)
     setupTMDBSearch(listItemTitle, null, 'listItemResults', async (item) => {
         const listId = listSelect?.value;
         if (!listId) {
@@ -87,6 +97,40 @@ document.addEventListener('DOMContentLoaded', () => {
             renderDashboard();
         }
     }, true);
+
+    function populateListSelect() {
+        if (!listSelect) return;
+        const allLists = [
+            ...(cachedLists || []).map(l => ({ ...l, _owned: true })),
+            ...(cachedSharedLists || []).map(l => ({ ...l, _owned: false }))
+        ];
+        if (allLists.length === 0) {
+            document.getElementById('addToListForm').style.display = 'none';
+            return;
+        }
+        document.getElementById('addToListForm').style.display = 'flex';
+        listSelect.innerHTML = '<option value="">Select a list</option>';
+        if (cachedLists.length > 0) {
+            const grp1 = document.createElement('optgroup');
+            grp1.label = 'My Lists';
+            cachedLists.forEach(l => {
+                const opt = document.createElement('option');
+                opt.value = l.id; opt.textContent = l.name;
+                grp1.appendChild(opt);
+            });
+            listSelect.appendChild(grp1);
+        }
+        if (cachedSharedLists.length > 0) {
+            const grp2 = document.createElement('optgroup');
+            grp2.label = 'Shared With Me';
+            cachedSharedLists.forEach(l => {
+                const opt = document.createElement('option');
+                opt.value = l.id; opt.textContent = l.name;
+                grp2.appendChild(opt);
+            });
+            listSelect.appendChild(grp2);
+        }
+    }
 
     // Item popup
     const popup = document.getElementById('itemPopup');
@@ -271,8 +315,26 @@ async function updateFriendMessageBadge() {
     }
 }
 
+async function updateFriendInviteBadge() {
+    const badge = document.getElementById('friendInviteBadge');
+    if (!badge) return;
+    try {
+        const res = await fetch('/api/invitations/pending', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('jwtToken')}` }
+        });
+        if (!res.ok) { badge.textContent = ''; badge.classList.remove('has-count'); return; }
+        const data = await res.json();
+        const count = (data.invitations || []).length;
+        badge.textContent = count > 0 ? (count > 99 ? '99+' : String(count)) : '';
+        badge.classList.toggle('has-count', count > 0);
+    } catch (err) {
+        badge.textContent = '';
+        badge.classList.remove('has-count');
+    }
+}
+
 async function updateFriendsNavBadges() {
-    await Promise.all([updateFriendRequestBadge(), updateFriendMessageBadge()]);
+    await Promise.all([updateFriendRequestBadge(), updateFriendMessageBadge(), updateFriendInviteBadge()]);
 }
 
 async function updateFriendActivityTeaser() {
@@ -581,20 +643,101 @@ function loadPopupFriendsRatings(merged) {
 }
 
 async function renderDashboard() {
-    cachedWatchHistory = await DataModel.getWatchHistory();
-    cachedLists = await DataModel.getLists();
-    cachedStatuses = DataModel.getStatuses ? await DataModel.getStatuses() : [];
+    [cachedWatchHistory, cachedLists, cachedStatuses] = await Promise.all([
+        DataModel.getWatchHistory(),
+        DataModel.getLists(),
+        DataModel.getStatuses ? DataModel.getStatuses() : Promise.resolve([])
+    ]);
 
     const posterItems = [
         ...cachedWatchHistory.map(w => ({ title: w.title, type: w.type || 'movie' })),
         ...cachedStatuses.map(s => ({ title: s.title, type: s.type || 'movie' })),
-        ...cachedLists.flatMap(list => (list.items || []).map(i => ({ title: i.title, type: 'movie' })))
+        ...cachedLists.flatMap(l => (l.items || []).map(i => ({ title: i.title, type: 'movie' })))
     ];
-    posterCache = (DataModel.getPostersForItems && posterItems.length > 0) ? await DataModel.getPostersForItems(posterItems) : {};
+    posterCache = (DataModel.getPostersForItems && posterItems.length > 0)
+        ? await DataModel.getPostersForItems(posterItems)
+        : {};
 
     filterBySearch();
     renderStatuses();
+    renderRecommendationsInbox();
 }
+
+async function renderRecommendationsInbox() {
+    const listEl = document.getElementById('recInboxList');
+    const badgeEl = document.getElementById('recBadge');
+    if (!listEl) return;
+
+    const recs = await DataModel.getRecommendationsInbox();
+    const unread = recs.filter(r => !r.read_at).length;
+    if (badgeEl) badgeEl.textContent = unread > 0 ? unread : '';
+
+    // Auto-expand if there are unread recs
+    if (unread > 0) {
+        const body = document.getElementById('recInboxBody');
+        const btn = document.getElementById('recInboxToggle');
+        if (body) body.style.display = 'block';
+        if (btn) btn.textContent = 'Hide ▴';
+    }
+
+    if (recs.length === 0) {
+        listEl.innerHTML = '<p class="empty-message">No recommendations yet. Friends can recommend movies and shows to you!</p>';
+        return;
+    }
+
+    // Fetch posters for all recommended titles
+    const posterItems = recs.map(r => ({ title: r.title, type: r.type || 'movie' }));
+    const recPosters = posterItems.length > 0 ? await DataModel.getPostersForItems(posterItems) : {};
+
+    listEl.innerHTML = '';
+    recs.forEach(rec => {
+        const div = document.createElement('div');
+        div.className = 'rec-card' + (rec.read_at ? ' rec-card--read' : ' rec-card--unread');
+        const senderName = rec.senderFirstName
+            ? `${rec.senderFirstName} ${rec.senderLastName}`
+            : rec.sender_email;
+        const typeLabel = rec.type === 'show' ? 'TV Show' : 'Movie';
+        const date = new Date(rec.sent_at).toLocaleDateString();
+        const posterPath = recPosters[`${rec.title}|${rec.type || 'movie'}`];
+        const posterHtml = posterPath
+            ? `<img src="https://image.tmdb.org/t/p/w154${posterPath}" alt="${rec.title}" class="rec-card-poster">`
+            : `<div class="rec-card-poster rec-card-poster-ph"></div>`;
+
+        div.innerHTML = `
+            <div class="rec-card-header">
+                <span class="rec-from">From <strong>${senderName}</strong>${rec.senderUsername ? ` (@${rec.senderUsername})` : ''}</span>
+                <span class="rec-date meta">${date}</span>
+                ${!rec.read_at ? '<span class="rec-unread-dot" title="New">●</span>' : ''}
+            </div>
+            <div class="rec-card-body">
+                ${posterHtml}
+                <div class="rec-card-info">
+                    <strong class="rec-title">${rec.title}</strong>
+                    <span class="type-badge">${typeLabel}</span>
+                    ${rec.note ? `<p class="rec-note">"${rec.note}"</p>` : ''}
+                </div>
+            </div>
+            <div class="rec-card-actions">
+                ${!rec.read_at ? `<button class="rec-mark-read-btn">Mark as read</button>` : ''}
+                <button class="rec-delete-btn">Delete</button>
+            </div>
+        `;
+        if (!rec.read_at) {
+            div.querySelector('.rec-mark-read-btn').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await DataModel.markRecommendationRead(rec.id);
+                renderRecommendationsInbox();
+            });
+        }
+        div.querySelector('.rec-delete-btn').addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const result = await DataModel.deleteRecommendation(rec.id);
+            if (result.ok) renderRecommendationsInbox();
+        });
+        listEl.appendChild(div);
+    });
+}
+
 
 function posterUrl(item) {
     const key = `${item.title}|${item.type || 'movie'}`;
@@ -761,48 +904,236 @@ function renderWatchHistory(searchTerm) {
     });
 }
 
+// Build an inline TMDB search grid inside a container, calls onSelect({title,type}) on card click
+function buildInlineListSearch(_containerEl, placeholder, onSelect) {
+    const wrap = document.createElement('div');
+    wrap.className = 'inline-list-search-wrap';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tmdb-search-input';
+    input.placeholder = placeholder || 'Search movies or shows to add...';
+    input.style.flex = '1';
+    const typeSelect = document.createElement('select');
+    typeSelect.className = 'inline-type-select';
+    typeSelect.innerHTML = '<option value="both">All</option><option value="movie">Movie</option><option value="show">TV Show</option>';
+    row.appendChild(input);
+    row.appendChild(typeSelect);
+    wrap.appendChild(row);
+    const resultsGrid = document.createElement('div');
+    resultsGrid.className = 'tmdb-results-grid inline-list-results';
+    wrap.appendChild(resultsGrid);
+
+    let debounceTimer = null;
+    const doSearch = async () => {
+        const query = input.value.trim();
+        const type = typeSelect.value;
+        resultsGrid.innerHTML = '';
+        if (!query) return;
+        resultsGrid.innerHTML = '<p class="loading-message">Searching...</p>';
+        try {
+            const token = localStorage.getItem('jwtToken');
+            let results = [];
+            if (type === 'both') {
+                const [mRes, sRes] = await Promise.all([
+                    fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, { headers: { Authorization: `Bearer ${token}` } }),
+                    fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=tv`, { headers: { Authorization: `Bearer ${token}` } })
+                ]);
+                const mData = await mRes.json(); const sData = await sRes.json();
+                results = [
+                    ...(mData.results || []).map(r => ({ ...r, _type: 'movie', _title: r.title })),
+                    ...(sData.results || []).map(r => ({ ...r, _type: 'show', _title: r.name }))
+                ];
+            } else {
+                const tmdbType = type === 'show' ? 'tv' : 'movie';
+                const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=${tmdbType}`, { headers: { Authorization: `Bearer ${token}` } });
+                const data = await res.json();
+                results = (data.results || []).map(r => ({ ...r, _type: type, _title: type === 'show' ? r.name : r.title }));
+            }
+            resultsGrid.innerHTML = '';
+            if (results.length === 0) { resultsGrid.innerHTML = '<p class="empty-message">No results.</p>'; return; }
+            results.slice(0, 12).forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'tmdb-result-card inline-list-card';
+                const posterEl = item.poster_path
+                    ? Object.assign(document.createElement('img'), { src: `https://image.tmdb.org/t/p/w154${item.poster_path}`, alt: item._title })
+                    : Object.assign(document.createElement('div'), { className: 'poster-placeholder tmdb-result-poster-ph' });
+                const titleP = document.createElement('p');
+                titleP.textContent = item._title || 'Untitled';
+                const hint = document.createElement('span');
+                hint.className = 'add-hint';
+                hint.textContent = 'Click to add';
+                card.appendChild(posterEl);
+                card.appendChild(titleP);
+                card.appendChild(hint);
+                card.addEventListener('click', async () => {
+                    card.style.opacity = '0.5';
+                    await onSelect({ title: item._title, type: item._type });
+                    card.style.opacity = '1';
+                    resultsGrid.innerHTML = '';
+                    input.value = '';
+                });
+                resultsGrid.appendChild(card);
+            });
+        } catch (e) {
+            resultsGrid.innerHTML = '<p class="empty-message">Search failed.</p>';
+        }
+    };
+    input.addEventListener('input', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(doSearch, 350); });
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') { clearTimeout(debounceTimer); doSearch(); } });
+    typeSelect.addEventListener('change', () => { if (input.value.trim()) doSearch(); });
+    return wrap;
+}
+
+function buildListCard(list, { isShared, ownerName, searchTerm }) {
+    const listDiv = document.createElement('div');
+    listDiv.className = isShared ? 'list-card shared-list-card' : 'list-card';
+
+    const safeNameAttr = (list.name || '').replace(/"/g, '&quot;');
+
+    const collabNames = (!isShared && (list.collaborators || []).length > 0)
+        ? (list.collaborators || []).map(c => c.firstName ? `${c.firstName} ${c.lastName}` : c.email)
+        : [];
+
+    listDiv.innerHTML = `
+        <div class="list-card-header">
+            <h3 class="list-name">${list.name}${isShared ? `<span class="meta" style="font-weight:normal;font-size:12px;"> · by ${ownerName}</span>` : ''}</h3>
+            <div class="list-card-btns">
+                ${!isShared
+                    ? `<button type="button" class="share-list-btn">Share</button>
+                       <button type="button" class="delete-list-btn" data-list-id="${list.id}" data-list-name="${safeNameAttr}">Delete list</button>`
+                    : `<button type="button" class="leave-list-btn">Leave list</button>`
+                }
+            </div>
+        </div>
+        ${collabNames.length > 0 ? `<span class="list-collab-info meta">Shared with: ${collabNames.join(', ')}</span>` : ''}
+        ${!isShared ? `<div class="share-list-form" style="display:none;margin-top:8px;">
+            <select class="share-friend-select"><option value="">Loading friends...</option></select>
+            <button type="button" class="share-invite-btn">Invite</button>
+            <span class="share-feedback meta" style="margin-left:6px;"></span>
+        </div>` : ''}
+        <div class="list-items list-items-posters"></div>`;
+
+    // Render item cards — click toggles a Remove button inside the card
+    const itemsEl = listDiv.querySelector('.list-items');
+    let items = list.items || [];
+    if (searchTerm) items = items.filter(i => i.title.toLowerCase().includes(searchTerm));
+
+    if (items.length > 0) {
+        items.forEach(i => {
+            const url = posterUrl({ title: i.title, type: 'movie' });
+            const name = i.title || 'Untitled';
+            const card = document.createElement('div');
+            card.className = url ? 'list-item-poster list-item-clickable' : 'list-item list-item-clickable';
+
+            if (url) {
+                card.innerHTML = `<img src="${url}" alt="${name}"><span>${name}</span>
+                    <div class="list-item-remove-overlay" style="display:none;">
+                        <button class="list-item-remove-btn">Remove</button>
+                    </div>`;
+            } else {
+                card.innerHTML = `<span>${name}</span>
+                    <div class="list-item-remove-overlay" style="display:none;">
+                        <button class="list-item-remove-btn">Remove</button>
+                    </div>`;
+            }
+
+            const overlay = card.querySelector('.list-item-remove-overlay');
+            card.addEventListener('click', (e) => {
+                if (e.target.classList.contains('list-item-remove-btn')) return;
+                const isOpen = overlay.style.display === 'flex';
+                // Close all other open overlays in this list
+                itemsEl.querySelectorAll('.list-item-remove-overlay').forEach(o => { o.style.display = 'none'; });
+                overlay.style.display = isOpen ? 'none' : 'flex';
+            });
+            card.querySelector('.list-item-remove-btn').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const result = await DataModel.removeFromList(list.id, i.title);
+                if (result.ok) renderDashboard();
+                else alert(result?.data?.message || 'Could not remove item.');
+            });
+            itemsEl.appendChild(card);
+        });
+    } else {
+        itemsEl.innerHTML = '<p class="empty-message">' + (searchTerm ? 'No matching items.' : 'Empty list') + '</p>';
+    }
+
+    // Share button wiring (owned lists only)
+    if (!isShared) {
+        const shareBtn = listDiv.querySelector('.share-list-btn');
+        const shareForm = listDiv.querySelector('.share-list-form');
+        const friendSelectEl = listDiv.querySelector('.share-friend-select');
+        const inviteBtn = listDiv.querySelector('.share-invite-btn');
+        const shareFeedback = listDiv.querySelector('.share-feedback');
+        shareBtn.addEventListener('click', async () => {
+            const open = shareForm.style.display === 'flex';
+            shareForm.style.display = open ? 'none' : 'flex';
+            if (!open) {
+                friendSelectEl.innerHTML = '<option value="">Loading...</option>';
+                const friends = await DataModel.getFriends();
+                friendSelectEl.innerHTML = friends.length === 0
+                    ? '<option value="">No friends yet</option>'
+                    : '<option value="">Select a friend</option>' + friends.map(f => {
+                        const fname = f.firstName ? `${f.firstName} ${f.lastName}` : f.email;
+                        const already = (list.collaborators || []).some(c => c.email === f.email);
+                        return `<option value="${f.email}" ${already ? 'disabled' : ''}>${fname}${already ? ' (shared)' : ''}</option>`;
+                    }).join('');
+            }
+        });
+        inviteBtn.addEventListener('click', async () => {
+            const email = friendSelectEl.value;
+            if (!email) return;
+            inviteBtn.disabled = true;
+            const result = await DataModel.inviteCollaborator(list.id, email);
+            inviteBtn.disabled = false;
+            if (result.ok) {
+                shareFeedback.textContent = 'Invited!';
+                setTimeout(() => { shareFeedback.textContent = ''; }, 3000);
+                renderDashboard();
+            } else {
+                shareFeedback.textContent = result?.data?.message || 'Failed.';
+            }
+        });
+    }
+
+    // Leave button (shared lists the user joined)
+    if (isShared) {
+        listDiv.querySelector('.leave-list-btn').addEventListener('click', async () => {
+            if (!confirm(`Leave "${list.name}"?`)) return;
+            const result = await DataModel.leaveSharedList(list.id);
+            if (result.ok) renderDashboard();
+            else alert(result?.data?.message || 'Could not leave list.');
+        });
+    }
+
+    return listDiv;
+}
+
 function renderLists(searchTerm) {
     const el = document.getElementById('listsContainer');
     const listSelect = document.getElementById('listSelect');
     const addToListForm = document.getElementById('addToListForm');
+    if (!el) return;
+
     const lists = cachedLists;
     el.innerHTML = '';
+
     if (lists.length === 0) {
         el.innerHTML = '<p class="empty-message">No lists yet.</p>';
-        addToListForm.style.display = 'none';
+        if (addToListForm) addToListForm.style.display = 'none';
         return;
     }
-    addToListForm.style.display = 'flex';
-    listSelect.innerHTML = '<option value="">Select a list</option>';
+
+    if (addToListForm) addToListForm.style.display = 'flex';
+    if (listSelect) {
+        listSelect.innerHTML = '<option value="">Select a list</option>';
+        lists.forEach(list => {
+            listSelect.innerHTML += `<option value="${list.id}">${list.name}</option>`;
+        });
+    }
+
     lists.forEach(list => {
-        listSelect.innerHTML += `<option value="${list.id}">${list.name}</option>`;
-        const listDiv = document.createElement('div');
-        listDiv.classList.add('list-card');
-        let items = list.items || [];
-        if (searchTerm) {
-            items = items.filter(i => i.title.toLowerCase().includes(searchTerm));
-        }
-        let itemsHtml = '';
-        if (items.length > 0) {
-            itemsHtml = items.map(i => {
-                const itemForPoster = { title: i.title, type: 'movie' };
-                const url = posterUrl(itemForPoster);
-                const name = i.title || 'Untitled';
-                const dataAttrs = `data-title="${(i.title || '').replace(/"/g, '&quot;')}" data-list-id="${list.id}"`;
-                return url
-                    ? `<div class="list-item-poster list-item-clickable" ${dataAttrs}><img src="${url}" alt="${name}"><span>${name}</span></div>`
-                    : `<div class="list-item list-item-clickable" ${dataAttrs}>${name}</div>`;
-            }).join('');
-        } else {
-            itemsHtml = '<p class="empty-message">' + (searchTerm ? 'No matching items.' : 'Empty list') + '</p>';
-        }
-        const safeNameAttr = (list.name || '').replace(/"/g, '&quot;');
-        listDiv.innerHTML = `
-            <div class="list-card-header">
-                <h3 class="list-name">${list.name}</h3>
-                <button type="button" class="delete-list-btn" data-list-id="${list.id}" data-list-name="${safeNameAttr}" aria-label="Delete list">Delete list</button>
-            </div>
-            <div class="list-items list-items-posters">${itemsHtml}</div>`;
-        el.appendChild(listDiv);
+        el.appendChild(buildListCard(list, { isShared: false, searchTerm }));
     });
 }

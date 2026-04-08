@@ -515,19 +515,23 @@ app.post('/api/dashboard/lists/:listId/items', authenticateToken, async (req, re
 
     try {
         const connection = await createConnection();
-        const [lists] = await connection.execute(
-            'SELECT id FROM list WHERE id = ? AND user_email = ?',
-            [listId, req.user.email]
+        const [access] = await connection.execute(
+            `SELECT l.id FROM list l
+             WHERE l.id = ? AND (
+                 l.user_email = ?
+                 OR EXISTS (SELECT 1 FROM list_collaborator lc WHERE lc.list_id = l.id AND lc.collaborator_email = ?)
+             )`,
+            [listId, req.user.email, req.user.email]
         );
 
-        if (lists.length === 0) {
+        if (access.length === 0) {
             await connection.end();
             return res.status(404).json({ message: 'List not found.' });
         }
 
         await connection.execute(
-            'INSERT INTO list_item (list_id, title) VALUES (?, ?)',
-            [listId, title]
+            'INSERT INTO list_item (list_id, title, added_by_email) VALUES (?, ?, ?)',
+            [listId, title, req.user.email]
         );
 
         await connection.end();
@@ -549,12 +553,16 @@ app.delete('/api/dashboard/lists/:listId/items', authenticateToken, async (req, 
 
     try {
         const connection = await createConnection();
-        const [lists] = await connection.execute(
-            'SELECT id FROM list WHERE id = ? AND user_email = ?',
-            [listId, req.user.email]
+        const [access] = await connection.execute(
+            `SELECT l.id FROM list l
+             WHERE l.id = ? AND (
+                 l.user_email = ?
+                 OR EXISTS (SELECT 1 FROM list_collaborator lc WHERE lc.list_id = l.id AND lc.collaborator_email = ?)
+             )`,
+            [listId, req.user.email, req.user.email]
         );
 
-        if (lists.length === 0) {
+        if (access.length === 0) {
             await connection.end();
             return res.status(404).json({ message: 'List not found.' });
         }
@@ -588,6 +596,14 @@ app.delete('/api/dashboard/lists/:listId', authenticateToken, async (req, res) =
             await connection.end();
             return res.status(404).json({ message: 'List not found.' });
         }
+        // Cannot delete a shared list — use leave instead
+        const [collabCheck] = await connection.execute(
+            'SELECT id FROM list_collaborator WHERE list_id = ? LIMIT 1', [listId]
+        );
+        if (collabCheck.length > 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'Cannot delete a shared list. Use "Leave list" instead.' });
+        }
         await connection.execute('DELETE FROM list_item WHERE list_id = ?', [listId]);
         await connection.execute('DELETE FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
         await connection.end();
@@ -601,8 +617,12 @@ app.delete('/api/dashboard/lists/:listId', authenticateToken, async (req, res) =
 app.get('/api/dashboard/lists', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
+        // Exclude lists that are currently shared (have active collaborators) — those live under Shared Lists in Friends
         const [lists] = await connection.execute(
-            'SELECT id, name, created_at FROM list WHERE user_email = ? ORDER BY created_at ASC',
+            `SELECT id, name, created_at FROM list
+             WHERE user_email = ?
+               AND NOT EXISTS (SELECT 1 FROM list_collaborator lc WHERE lc.list_id = list.id)
+             ORDER BY created_at ASC`,
             [req.user.email]
         );
 
@@ -612,7 +632,18 @@ app.get('/api/dashboard/lists', authenticateToken, async (req, res) => {
                 'SELECT id, title, added_at FROM list_item WHERE list_id = ? ORDER BY added_at DESC',
                 [list.id]
             );
-            listsWithItems.push({ ...list, items });
+            let collaborators = [];
+            try {
+                const [collabRows] = await connection.execute(
+                    `SELECT lc.collaborator_email AS email, u.first_name AS firstName, u.last_name AS lastName, u.username
+                     FROM list_collaborator lc
+                     JOIN user u ON u.email = lc.collaborator_email
+                     WHERE lc.list_id = ?`,
+                    [list.id]
+                );
+                collaborators = collabRows;
+            } catch (_) {}
+            listsWithItems.push({ ...list, items, collaborators });
         }
 
         await connection.end();
@@ -2054,6 +2085,470 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
         if (isUnknownColumnError(error)) return res.status(200).json({ marked: 0, migrated: false });
         console.error(error);
         return res.status(500).json({ message: 'Error marking messages read.' });
+    }
+});
+
+//////////////////////////////////////
+// SHARED LISTS (between two friends)
+//////////////////////////////////////
+app.get('/api/friends/:email/shared-lists', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    let connection;
+    try {
+        connection = await createConnection();
+        const [friendCheck] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, email, email, req.user.email]
+        );
+        if (friendCheck.length === 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'Not friends.' });
+        }
+        const [lists] = await connection.execute(
+            `SELECT DISTINCT l.id, l.name, l.created_at, l.user_email AS ownerEmail,
+                    u.first_name AS ownerFirstName, u.last_name AS ownerLastName, u.username AS ownerUsername
+             FROM list l
+             JOIN list_collaborator lc ON lc.list_id = l.id
+             JOIN user u ON u.email = l.user_email
+             WHERE lc.status = 'accepted'
+               AND ((l.user_email = ? AND lc.collaborator_email = ?)
+                 OR (l.user_email = ? AND lc.collaborator_email = ?))
+             ORDER BY l.created_at ASC`,
+            [req.user.email, email, email, req.user.email]
+        );
+        const listsWithItems = [];
+        for (const list of lists) {
+            const [items] = await connection.execute(
+                `SELECT li.id, li.title, li.added_at, li.added_by_email,
+                        u.first_name AS addedByFirstName, u.last_name AS addedByLastName
+                 FROM list_item li
+                 LEFT JOIN user u ON u.email = li.added_by_email
+                 WHERE li.list_id = ? ORDER BY li.added_at DESC`,
+                [list.id]
+            );
+            listsWithItems.push({ ...list, items });
+        }
+        // Pending invitations: ones I sent to this friend, or this friend sent to me
+        const [invitations] = await connection.execute(
+            `SELECT lc.id, lc.list_id, lc.collaborator_email AS invited_email,
+                    lc.invited_by_email, lc.created_at,
+                    l.name AS listName,
+                    u.first_name AS inviterFirstName, u.last_name AS inviterLastName
+             FROM list_collaborator lc
+             JOIN list l ON l.id = lc.list_id
+             JOIN user u ON u.email = lc.invited_by_email
+             WHERE lc.status = 'pending'
+               AND ((lc.invited_by_email = ? AND lc.collaborator_email = ?)
+                 OR (lc.invited_by_email = ? AND lc.collaborator_email = ?))`,
+            [req.user.email, email, email, req.user.email]
+        );
+        await connection.end();
+        return res.status(200).json({ lists: listsWithItems, invitations });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error retrieving shared lists.' });
+    }
+});
+
+app.post('/api/friends/:email/shared-lists', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ message: 'List name required.' });
+    let connection;
+    try {
+        connection = await createConnection();
+        const [friendCheck] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, email, email, req.user.email]
+        );
+        if (friendCheck.length === 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'Not friends.' });
+        }
+        const [result] = await connection.execute(
+            'INSERT INTO list (user_email, name) VALUES (?, ?)',
+            [req.user.email, name]
+        );
+        const listId = result.insertId;
+        // Insert as pending — friend must accept before it appears in their Shared Lists
+        await connection.execute(
+            'INSERT INTO list_collaborator (list_id, collaborator_email, invited_by_email, status) VALUES (?, ?, ?, ?)',
+            [listId, email, req.user.email, 'pending']
+        );
+        await connection.end();
+        return res.status(201).json({ message: 'Invitation sent.', listId });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error creating shared list.' });
+    }
+});
+
+// Get all pending list invitations for the logged-in user
+app.get('/api/invitations/pending', authenticateToken, async (req, res) => {
+    let connection;
+    try {
+        connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT lc.id, lc.list_id, lc.invited_by_email, lc.created_at,
+                    l.name AS listName,
+                    u.first_name AS inviterFirstName, u.last_name AS inviterLastName
+             FROM list_collaborator lc
+             JOIN list l ON l.id = lc.list_id
+             JOIN user u ON u.email = lc.invited_by_email
+             WHERE lc.collaborator_email = ? AND lc.status = 'pending'
+             ORDER BY lc.created_at DESC`,
+            [req.user.email]
+        );
+        await connection.end();
+        return res.status(200).json({ invitations: rows });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error fetching invitations.' });
+    }
+});
+
+// Accept a list invitation
+app.put('/api/invitations/:id/accept', authenticateToken, async (req, res) => {
+    const invId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(invId)) return res.status(400).json({ message: 'Invalid invitation id.' });
+    let connection;
+    try {
+        connection = await createConnection();
+        const [result] = await connection.execute(
+            `UPDATE list_collaborator SET status = 'accepted'
+             WHERE id = ? AND collaborator_email = ? AND status = 'pending'`,
+            [invId, req.user.email]
+        );
+        await connection.end();
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Invitation not found.' });
+        return res.status(200).json({ message: 'Invitation accepted.' });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error accepting invitation.' });
+    }
+});
+
+// Decline a list invitation
+app.put('/api/invitations/:id/decline', authenticateToken, async (req, res) => {
+    const invId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(invId)) return res.status(400).json({ message: 'Invalid invitation id.' });
+    let connection;
+    try {
+        connection = await createConnection();
+        // Declining removes the pending row entirely (and the list if owner created it just for sharing)
+        const [rows] = await connection.execute(
+            'SELECT lc.list_id, l.user_email AS ownerEmail FROM list_collaborator lc JOIN list l ON l.id = lc.list_id WHERE lc.id = ? AND lc.collaborator_email = ? AND lc.status = ?',
+            [invId, req.user.email, 'pending']
+        );
+        if (rows.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'Invitation not found.' });
+        }
+        await connection.execute('DELETE FROM list_collaborator WHERE id = ?', [invId]);
+        await connection.end();
+        return res.status(200).json({ message: 'Invitation declined.' });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error declining invitation.' });
+    }
+});
+
+app.get('/api/recommendations/between/:email', authenticateToken, async (req, res) => {
+    const { email } = req.params;
+    let connection;
+    try {
+        connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT r.id, r.sender_email, r.receiver_email, r.title, r.type, r.note, r.sent_at, r.read_at,
+                    u.first_name AS senderFirstName, u.last_name AS senderLastName
+             FROM recommendation r
+             JOIN user u ON u.email = r.sender_email
+             WHERE (r.sender_email = ? AND r.receiver_email = ?)
+                OR (r.sender_email = ? AND r.receiver_email = ?)
+             ORDER BY r.sent_at ASC`,
+            [req.user.email, email, email, req.user.email]
+        );
+        await connection.end();
+        return res.status(200).json({ recommendations: rows });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error retrieving recommendations.' });
+    }
+});
+
+//////////////////////////////////////
+// LIST COLLABORATION
+//////////////////////////////////////
+app.post('/api/dashboard/lists/:listId/collaborators', authenticateToken, async (req, res) => {
+    const listId = parseInt(req.params.listId, 10);
+    const { collaboratorEmail } = req.body;
+    if (!Number.isFinite(listId) || !collaboratorEmail) {
+        return res.status(400).json({ message: 'listId and collaboratorEmail required.' });
+    }
+    let connection;
+    try {
+        connection = await createConnection();
+        const [lists] = await connection.execute(
+            'SELECT id FROM list WHERE id = ? AND user_email = ?',
+            [listId, req.user.email]
+        );
+        if (lists.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'List not found or you are not the owner.' });
+        }
+        const [friendCheck] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, collaboratorEmail, collaboratorEmail, req.user.email]
+        );
+        if (friendCheck.length === 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'You can only invite friends as collaborators.' });
+        }
+        await connection.execute(
+            'INSERT IGNORE INTO list_collaborator (list_id, collaborator_email, invited_by_email) VALUES (?, ?, ?)',
+            [listId, collaboratorEmail, req.user.email]
+        );
+        await connection.end();
+        return res.status(201).json({ message: 'Collaborator added.' });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error adding collaborator.' });
+    }
+});
+
+// Leave a shared list
+// - Collaborator leaving: removed from list, owner keeps it (appears on owner's My Lists)
+// - Owner leaving: ownership transferred to the collaborator, owner loses access
+app.delete('/api/dashboard/lists/:listId/leave', authenticateToken, async (req, res) => {
+    const listId = parseInt(req.params.listId, 10);
+    if (!Number.isFinite(listId)) return res.status(400).json({ message: 'Invalid listId.' });
+    let connection;
+    try {
+        connection = await createConnection();
+        const [ownerRows] = await connection.execute(
+            'SELECT user_email FROM list WHERE id = ?', [listId]
+        );
+        if (ownerRows.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'List not found.' });
+        }
+        const ownerEmail = ownerRows[0].user_email;
+
+        if (ownerEmail === req.user.email) {
+            // Owner is leaving — transfer ownership to the first collaborator
+            const [collabs] = await connection.execute(
+                'SELECT collaborator_email FROM list_collaborator WHERE list_id = ? LIMIT 1', [listId]
+            );
+            if (collabs.length === 0) {
+                await connection.end();
+                return res.status(400).json({ message: 'List has no collaborators to transfer to.' });
+            }
+            const newOwner = collabs[0].collaborator_email;
+            await connection.execute('UPDATE list SET user_email = ? WHERE id = ?', [newOwner, listId]);
+            await connection.execute('DELETE FROM list_collaborator WHERE list_id = ?', [listId]);
+        } else {
+            // Collaborator is leaving — just remove themselves
+            const [result] = await connection.execute(
+                'DELETE FROM list_collaborator WHERE list_id = ? AND collaborator_email = ?',
+                [listId, req.user.email]
+            );
+            if (result.affectedRows === 0) {
+                await connection.end();
+                return res.status(404).json({ message: 'Not a collaborator on this list.' });
+            }
+        }
+        await connection.end();
+        return res.status(200).json({ message: 'Left shared list.' });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error leaving list.' });
+    }
+});
+
+app.delete('/api/dashboard/lists/:listId/collaborators/:email', authenticateToken, async (req, res) => {
+    const listId = parseInt(req.params.listId, 10);
+    const { email } = req.params;
+    if (!Number.isFinite(listId)) return res.status(400).json({ message: 'Invalid listId.' });
+    let connection;
+    try {
+        connection = await createConnection();
+        const [lists] = await connection.execute('SELECT id FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
+        if (lists.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'List not found.' });
+        }
+        await connection.execute(
+            'DELETE FROM list_collaborator WHERE list_id = ? AND collaborator_email = ?',
+            [listId, email]
+        );
+        await connection.end();
+        return res.status(200).json({ message: 'Collaborator removed.' });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error removing collaborator.' });
+    }
+});
+
+app.get('/api/dashboard/shared-lists', authenticateToken, async (req, res) => {
+    let connection;
+    try {
+        connection = await createConnection();
+        const [lists] = await connection.execute(
+            `SELECT l.id, l.name, l.created_at, l.user_email AS ownerEmail,
+                    u.first_name AS ownerFirstName, u.last_name AS ownerLastName, u.username AS ownerUsername
+             FROM list_collaborator lc
+             JOIN list l ON l.id = lc.list_id
+             JOIN user u ON u.email = l.user_email
+             WHERE lc.collaborator_email = ?
+             ORDER BY l.created_at ASC`,
+            [req.user.email]
+        );
+        const listsWithItems = [];
+        for (const list of lists) {
+            const [items] = await connection.execute(
+                `SELECT li.id, li.title, li.added_at, li.added_by_email,
+                        u.first_name AS addedByFirstName, u.last_name AS addedByLastName
+                 FROM list_item li
+                 LEFT JOIN user u ON u.email = li.added_by_email
+                 WHERE li.list_id = ? ORDER BY li.added_at DESC`,
+                [list.id]
+            );
+            listsWithItems.push({ ...list, items });
+        }
+        await connection.end();
+        return res.status(200).json({ lists: listsWithItems });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error retrieving shared lists.' });
+    }
+});
+
+//////////////////////////////////////
+// RECOMMENDATIONS (friend-to-friend)
+//////////////////////////////////////
+app.post('/api/recommendations', authenticateToken, async (req, res) => {
+    const { receiverEmail, title, type, note } = req.body;
+    if (!receiverEmail || !title) {
+        return res.status(400).json({ message: 'receiverEmail and title are required.' });
+    }
+    const contentType = type === 'show' ? 'show' : 'movie';
+    let connection;
+    try {
+        connection = await createConnection();
+        const [friendCheck] = await connection.execute(
+            `SELECT id FROM friend_request
+             WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+             AND status = 'accepted'`,
+            [req.user.email, receiverEmail, receiverEmail, req.user.email]
+        );
+        if (friendCheck.length === 0) {
+            await connection.end();
+            return res.status(403).json({ message: 'You can only recommend to friends.' });
+        }
+        await connection.execute(
+            'INSERT INTO recommendation (sender_email, receiver_email, title, type, note) VALUES (?, ?, ?, ?, ?)',
+            [req.user.email, receiverEmail, title.trim(), contentType, (note || '').trim() || null]
+        );
+        await connection.end();
+        return res.status(201).json({ message: 'Recommendation sent.' });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error sending recommendation.' });
+    }
+});
+
+app.get('/api/recommendations/inbox', authenticateToken, async (req, res) => {
+    let connection;
+    try {
+        connection = await createConnection();
+        const [rows] = await connection.execute(
+            `SELECT r.id, r.sender_email, r.title, r.type, r.note, r.sent_at, r.read_at,
+                    u.first_name AS senderFirstName, u.last_name AS senderLastName, u.username AS senderUsername
+             FROM recommendation r
+             JOIN user u ON u.email = r.sender_email
+             WHERE r.receiver_email = ?
+             ORDER BY r.sent_at DESC`,
+            [req.user.email]
+        );
+        await connection.end();
+        return res.status(200).json({ recommendations: rows });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error retrieving recommendations.' });
+    }
+});
+
+app.get('/api/recommendations/inbox/count', authenticateToken, async (req, res) => {
+    let connection;
+    try {
+        connection = await createConnection();
+        const [[row]] = await connection.execute(
+            'SELECT COUNT(*) AS cnt FROM recommendation WHERE receiver_email = ? AND read_at IS NULL',
+            [req.user.email]
+        );
+        await connection.end();
+        return res.status(200).json({ count: Number(row.cnt) });
+    } catch (error) {
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(200).json({ count: 0 });
+    }
+});
+
+app.delete('/api/recommendations/:id', authenticateToken, async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id.' });
+    let connection;
+    try {
+        connection = await createConnection();
+        // Allow sender or receiver to delete
+        const [result] = await connection.execute(
+            'DELETE FROM recommendation WHERE id = ? AND (receiver_email = ? OR sender_email = ?)',
+            [id, req.user.email, req.user.email]
+        );
+        await connection.end();
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Not found.' });
+        return res.status(200).json({ message: 'Recommendation deleted.' });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error deleting recommendation.' });
+    }
+});
+
+app.put('/api/recommendations/:id/read', authenticateToken, async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: 'Invalid id.' });
+    let connection;
+    try {
+        connection = await createConnection();
+        await connection.execute(
+            'UPDATE recommendation SET read_at = UTC_TIMESTAMP() WHERE id = ? AND receiver_email = ? AND read_at IS NULL',
+            [id, req.user.email]
+        );
+        await connection.end();
+        return res.status(200).json({ message: 'Marked as read.' });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error marking read.' });
     }
 });
 

@@ -437,5 +437,145 @@ saveSubscriptions: async function (subscriptions) {
         return { ok: false };
     }
 },
+
+getFriends: async function () {
+    const ls = typeof localStorage !== 'undefined' ? localStorage.getItem('jwtToken') : null;
+    const authToken = ls || token;
+    if (!authToken) return [];
+    try {
+        const res = await fetch('/api/friends', {
+            headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.friends || [];
+    } catch (e) {
+        return [];
+    }
+},
+
+sendRecommendation: async function (receiverEmail, title, type, note) {
+    if (!token) return { ok: false };
+    try {
+        const res = await fetch('/api/recommendations', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ receiverEmail, title, type, note }),
+        });
+        return { ok: res.ok, data: await res.json() };
+    } catch (e) {
+        return { ok: false };
+    }
+},
+
+getRecommendationsInbox: async function () {
+    if (!token) return [];
+    try {
+        const res = await fetch('/api/recommendations/inbox', {
+            headers: authHeaders(),
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.recommendations || [];
+    } catch (e) {
+        return [];
+    }
+},
+
+getRecommendationsCount: async function () {
+    const ls = typeof localStorage !== 'undefined' ? localStorage.getItem('jwtToken') : null;
+    const authToken = ls || token;
+    if (!authToken) return 0;
+    try {
+        const res = await fetch('/api/recommendations/inbox/count', {
+            headers: { 'Authorization': `Bearer ${authToken}` },
+        });
+        if (!res.ok) return 0;
+        const data = await res.json();
+        return data.count || 0;
+    } catch (e) {
+        return 0;
+    }
+},
+
+deleteRecommendation: async function (id) {
+    if (!token) return { ok: false };
+    try {
+        const res = await fetch(`/api/recommendations/${id}`, {
+            method: 'DELETE',
+            headers: authHeaders(),
+        });
+        return { ok: res.ok };
+    } catch (e) {
+        return { ok: false };
+    }
+},
+
+markRecommendationRead: async function (id) {
+    if (!token) return { ok: false };
+    try {
+        const res = await fetch(`/api/recommendations/${id}/read`, {
+            method: 'PUT',
+            headers: authHeaders(),
+        });
+        return { ok: res.ok };
+    } catch (e) {
+        return { ok: false };
+    }
+},
+
+getSharedLists: async function () {
+    if (!token) return [];
+    try {
+        const res = await fetch('/api/dashboard/shared-lists', {
+            headers: authHeaders(),
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.lists || [];
+    } catch (e) {
+        return [];
+    }
+},
+
+inviteCollaborator: async function (listId, collaboratorEmail) {
+    if (!token) return { ok: false };
+    try {
+        const res = await fetch(`/api/dashboard/lists/${listId}/collaborators`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ collaboratorEmail }),
+        });
+        return { ok: res.ok, data: await res.json() };
+    } catch (e) {
+        return { ok: false };
+    }
+},
+
+leaveSharedList: async function (listId) {
+    if (!token) return { ok: false };
+    try {
+        const res = await fetch(`/api/dashboard/lists/${listId}/leave`, {
+            method: 'DELETE',
+            headers: authHeaders(),
+        });
+        return { ok: res.ok, data: await res.json().catch(() => ({})) };
+    } catch (e) {
+        return { ok: false };
+    }
+},
+
+removeCollaborator: async function (listId, email) {
+    if (!token) return { ok: false };
+    try {
+        const res = await fetch(`/api/dashboard/lists/${listId}/collaborators/${encodeURIComponent(email)}`, {
+            method: 'DELETE',
+            headers: authHeaders(),
+        });
+        return { ok: res.ok };
+    } catch (e) {
+        return { ok: false };
+    }
+},
    };
 })();

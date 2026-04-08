@@ -410,6 +410,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? `<button type="button" class="tab-inline-btn messages-btn">Messages<span class="messages-unread-badge" aria-label="Unread messages"></span></button>`
             : '';
 
+        const sharedListsTab = isFriend
+            ? `<button type="button" class="tab-inline-btn shared-lists-btn">Shared Lists<span class="shared-lists-invite-badge" aria-label="Pending list invitations"></span></button>`
+            : '';
+
         // Private non-friends: show lock, no content tabs
         // Public users or friends: show ratings + watchlists tabs
         const isPrivateNonFriend = !isFriend && !isPublic;
@@ -417,6 +421,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             ? `<span class="private-badge">🔒 Private</span>`
             : `<button class="tab-inline-btn ratings-btn">Ratings</button>
                <button class="tab-inline-btn watchlists-btn">Watchlists</button>
+               ${sharedListsTab}
                ${messageTab}`;
 
         div.innerHTML = `
@@ -440,9 +445,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const ratingsBtn = div.querySelector('.ratings-btn');
         const watchlistsBtn = div.querySelector('.watchlists-btn');
         const messagesBtn = div.querySelector('.messages-btn');
+        const sharedListsBtn = div.querySelector('.shared-lists-btn');
 
         function setActiveBtn(btn) {
-            [ratingsBtn, watchlistsBtn, messagesBtn].forEach(b => b && b.classList.remove('active'));
+            [ratingsBtn, watchlistsBtn, messagesBtn, sharedListsBtn].forEach(b => b && b.classList.remove('active'));
             if (btn) btn.classList.add('active');
         }
 
@@ -542,6 +548,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
+        if (sharedListsBtn) {
+            sharedListsBtn.addEventListener('click', async () => {
+                if (activeTab === 'sharedlists') {
+                    contentEl.innerHTML = '';
+                    activeTab = null;
+                    setActiveBtn(null);
+                    return;
+                }
+                activeTab = 'sharedlists';
+                setActiveBtn(sharedListsBtn);
+                await renderSharedListsTab(user.email, contentEl);
+            });
+        }
+
         const addBtn = div.querySelector('.add-friend-btn');
         if (addBtn) {
             addBtn.addEventListener('click', async () => {
@@ -568,12 +588,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =========================
     async function loadFriends() {
         try {
-            const [friendsRes, summaryRes] = await Promise.all([
+            const [friendsRes, summaryRes, inviteRes] = await Promise.all([
                 fetch('/api/friends', { headers: { 'Authorization': `Bearer ${token}` } }),
-                fetch('/api/friends/messages/unread/summary', { headers: { 'Authorization': `Bearer ${token}` } })
+                fetch('/api/friends/messages/unread/summary', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/invitations/pending', { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
             const data = await friendsRes.json();
             const summaryData = await summaryRes.json().catch(() => ({ threads: [] }));
+            const inviteData = inviteRes.ok ? await inviteRes.json().catch(() => ({ invitations: [] })) : { invitations: [] };
             updateMessageBadgeSchemaHint(summaryData);
             const friends = data.friends || [];
             const unreadByEmail = new Map();
@@ -582,6 +604,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (em) unreadByEmail.set(em, threadRowCount(row));
             }
             setMessageNavBadge([...unreadByEmail.values()].reduce((a, b) => a + b, 0));
+
+            // Map pending invites by who sent them (invited_by_email)
+            const invitesByFriend = new Map();
+            for (const inv of inviteData.invitations || []) {
+                const em = String(inv.invited_by_email || '').trim().toLowerCase();
+                invitesByFriend.set(em, (invitesByFriend.get(em) || 0) + 1);
+            }
+
             friendsList.innerHTML = '';
 
             if (friends.length === 0) {
@@ -593,6 +623,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const card = buildUserCard(friend, { isFriend: true, isPublic: true, pendingEmails: new Set() });
                 const messagesBtn = card.querySelector('.messages-btn');
                 if (messagesBtn) setInlineMessagesBadge(messagesBtn, unreadByEmail.get(String(friend.email).trim().toLowerCase()) || 0);
+                // Badge on Shared Lists tab if this friend has pending invitations for me
+                const sharedListsBadge = card.querySelector('.shared-lists-invite-badge');
+                if (sharedListsBadge) {
+                    const count = invitesByFriend.get(String(friend.email).trim().toLowerCase()) || 0;
+                    if (count > 0) {
+                        sharedListsBadge.textContent = String(count);
+                        sharedListsBadge.classList.add('has-count');
+                    }
+                }
                 friendsList.appendChild(card);
             });
         } catch (err) {
@@ -662,34 +701,382 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    function buildFriendsInlineSearch(mountEl, placeholder, onSelect) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:6px;';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'inline-message-input';
+        input.placeholder = placeholder || 'Search...';
+        input.style.flex = '1';
+        const typeSelect = document.createElement('select');
+        typeSelect.style.cssText = 'padding:6px 8px;border-radius:8px;border:none;background:#1a3a6b;color:#F2F4F7;';
+        typeSelect.innerHTML = '<option value="both">All</option><option value="movie">Movie</option><option value="show">TV Show</option>';
+        row.appendChild(input);
+        row.appendChild(typeSelect);
+        const grid = document.createElement('div');
+        grid.className = 'friends-inline-search-grid';
+        mountEl.appendChild(row);
+        mountEl.appendChild(grid);
+
+        let debounceTimer = null;
+        const doSearch = async () => {
+            const query = input.value.trim();
+            const type = typeSelect.value;
+            grid.innerHTML = '';
+            if (!query) return;
+            grid.innerHTML = '<p class="empty-message" style="font-size:12px;">Searching…</p>';
+            try {
+                let results = [];
+                if (type === 'both') {
+                    const [mRes, sRes] = await Promise.all([
+                        fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=movie`, { headers: { Authorization: `Bearer ${token}` } }),
+                        fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=tv`, { headers: { Authorization: `Bearer ${token}` } })
+                    ]);
+                    const mData = await mRes.json(); const sData = await sRes.json();
+                    results = [
+                        ...(mData.results || []).map(r => ({ ...r, _type: 'movie', _title: r.title })),
+                        ...(sData.results || []).map(r => ({ ...r, _type: 'show', _title: r.name }))
+                    ];
+                } else {
+                    const tmdbType = type === 'show' ? 'tv' : 'movie';
+                    const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=${tmdbType}`, { headers: { Authorization: `Bearer ${token}` } });
+                    const data = await res.json();
+                    results = (data.results || []).map(r => ({ ...r, _type: type, _title: type === 'show' ? r.name : r.title }));
+                }
+                grid.innerHTML = '';
+                if (results.length === 0) { grid.innerHTML = '<p class="empty-message" style="font-size:12px;">No results.</p>'; return; }
+                results.slice(0, 10).forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'friends-search-result-card';
+                    const posterEl = item.poster_path
+                        ? Object.assign(document.createElement('img'), { src: `https://image.tmdb.org/t/p/w92${item.poster_path}`, alt: item._title || '' })
+                        : Object.assign(document.createElement('div'), { className: 'friends-search-result-card-ph' });
+                    const titleP = document.createElement('p');
+                    titleP.className = 'friends-search-result-title';
+                    titleP.textContent = item._title || 'Untitled';
+                    card.appendChild(posterEl);
+                    card.appendChild(titleP);
+                    card.addEventListener('click', async () => {
+                        card.style.opacity = '0.5';
+                        await onSelect({ title: item._title, type: item._type });
+                        card.style.opacity = '1';
+                        grid.innerHTML = '';
+                        input.value = '';
+                    });
+                    grid.appendChild(card);
+                });
+            } catch (e) {
+                grid.innerHTML = '<p class="empty-message" style="font-size:12px;">Search failed.</p>';
+            }
+        };
+        input.addEventListener('input', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(doSearch, 350); });
+        input.addEventListener('keypress', (e) => { if (e.key === 'Enter') { clearTimeout(debounceTimer); doSearch(); } });
+        typeSelect.addEventListener('change', () => { if (input.value.trim()) doSearch(); });
+    }
+
+    async function renderSharedListsTab(friendEmail, contentEl) {
+        contentEl.innerHTML = '<p class="empty-message">Loading...</p>';
+        try {
+            const res = await fetch(`/api/friends/${encodeURIComponent(friendEmail)}/shared-lists`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) { contentEl.innerHTML = '<p class="empty-message">Failed to load.</p>'; return; }
+            const data = await res.json();
+            const lists = data.lists || [];
+
+            contentEl.innerHTML = '';
+
+            // Create new shared list form
+            const createRow = document.createElement('div');
+            createRow.style.cssText = 'display:flex;gap:8px;margin-bottom:14px;';
+            createRow.innerHTML = `
+                <input type="text" class="new-shared-list-input inline-message-input" placeholder="New shared list name...">
+                <button type="button" class="primary-btn create-shared-list-btn" style="padding:6px 14px;">Create</button>
+            `;
+            contentEl.appendChild(createRow);
+
+            const createInput = createRow.querySelector('.new-shared-list-input');
+            const createBtn = createRow.querySelector('.create-shared-list-btn');
+            const doCreate = async () => {
+                const name = createInput.value.trim();
+                if (!name) return;
+                createBtn.disabled = true;
+                const r = await fetch(`/api/friends/${encodeURIComponent(friendEmail)}/shared-lists`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                createBtn.disabled = false;
+                if (r.ok) {
+                    createInput.value = '';
+                    createBtn.textContent = 'Sent!';
+                    setTimeout(() => { createBtn.textContent = 'Create'; }, 2000);
+                    await renderSharedListsTab(friendEmail, contentEl);
+                } else {
+                    const d = await r.json().catch(() => ({}));
+                    alert(d.message || 'Could not create list.');
+                }
+            };
+            createBtn.addEventListener('click', doCreate);
+            createInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') doCreate(); });
+
+            const myEmail = getMyEmailFromToken();
+            const invitations = data.invitations || [];
+
+            // Show pending invitations (where I'm the invited party)
+            const myPendingInvites = invitations.filter(inv => inv.invited_email === myEmail);
+            if (myPendingInvites.length > 0) {
+                const invSection = document.createElement('div');
+                invSection.className = 'shared-list-invitations-section';
+                invSection.innerHTML = '<p style="font-size:12px;font-weight:600;opacity:0.7;margin-bottom:6px;">Pending Invitations</p>';
+                myPendingInvites.forEach(inv => {
+                    const invCard = document.createElement('div');
+                    invCard.className = 'shared-list-invitation-card';
+                    invCard.innerHTML = `
+                        <span><strong>${escapeHtml(inv.listName)}</strong> — invited by ${escapeHtml(inv.inviterFirstName)} ${escapeHtml(inv.inviterLastName)}</span>
+                        <div style="display:flex;gap:6px;">
+                            <button class="accept-btn inv-accept-btn" style="padding:4px 10px;font-size:12px;">Accept</button>
+                            <button class="decline-btn inv-decline-btn" style="padding:4px 10px;font-size:12px;">Decline</button>
+                        </div>
+                    `;
+                    invCard.querySelector('.inv-accept-btn').addEventListener('click', async () => {
+                        const r = await fetch(`/api/invitations/${inv.id}/accept`, {
+                            method: 'PUT',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (r.ok) await renderSharedListsTab(friendEmail, contentEl);
+                        else { const d = await r.json().catch(() => ({})); alert(d.message || 'Could not accept.'); }
+                    });
+                    invCard.querySelector('.inv-decline-btn').addEventListener('click', async () => {
+                        const r = await fetch(`/api/invitations/${inv.id}/decline`, {
+                            method: 'PUT',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (r.ok) await renderSharedListsTab(friendEmail, contentEl);
+                        else { const d = await r.json().catch(() => ({})); alert(d.message || 'Could not decline.'); }
+                    });
+                    invSection.appendChild(invCard);
+                });
+                contentEl.appendChild(invSection);
+            }
+
+            // Show outgoing pending invitations (I sent, waiting for friend)
+            const theirPendingInvites = invitations.filter(inv => inv.invited_email !== myEmail);
+            if (theirPendingInvites.length > 0) {
+                theirPendingInvites.forEach(inv => {
+                    const pendingNote = document.createElement('div');
+                    pendingNote.className = 'shared-list-pending-note';
+                    pendingNote.innerHTML = `<span>⏳ <strong>${escapeHtml(inv.listName)}</strong> — waiting for friend to accept</span>`;
+                    contentEl.appendChild(pendingNote);
+                });
+            }
+
+            if (lists.length === 0 && myPendingInvites.length === 0 && theirPendingInvites.length === 0) {
+                const msg = document.createElement('p');
+                msg.className = 'empty-message';
+                msg.textContent = 'No shared lists yet. Create one above!';
+                contentEl.appendChild(msg);
+                return;
+            }
+
+            if (lists.length === 0) return;
+
+            // Fetch posters for all list items
+            const allItems = lists.flatMap(l => (l.items || []).map(i => ({ title: i.title, type: 'movie' })));
+            let sharedPosters = {};
+            if (allItems.length > 0) {
+                try { sharedPosters = await DataModel.getPostersForItems(allItems); } catch (_) {}
+            }
+
+            lists.forEach(list => {
+                const isOwner = list.ownerEmail === myEmail;
+                const ownerLabel = isOwner ? 'you' : (list.ownerFirstName ? `${list.ownerFirstName} ${list.ownerLastName}` : list.ownerEmail);
+                const items = list.items || [];
+
+                const listDiv = document.createElement('div');
+                listDiv.className = 'friend-list-card';
+                listDiv.innerHTML = `
+                    <div class="friend-list-card-header">
+                        <h4 class="friend-list-name" style="margin:0;">${escapeHtml(list.name)}
+                            <span class="meta" style="font-weight:normal;font-size:12px;"> · by ${escapeHtml(ownerLabel)}</span>
+                        </h4>
+                        <div class="friend-list-card-btns">
+                            <button type="button" class="add-movies-toggle tab-inline-btn" style="font-size:12px;">+ Add movies</button>
+                            <button type="button" class="leave-shared-list-btn" style="padding:4px 10px;border-radius:6px;border:none;background:rgba(220,53,69,0.15);color:#e87070;cursor:pointer;font-size:12px;">Leave list</button>
+                        </div>
+                    </div>
+                    <div class="shared-list-search-mount" style="display:none;margin-bottom:10px;"></div>
+                    <div class="shared-list-poster-row"></div>
+                `;
+
+                const addMoviesToggle = listDiv.querySelector('.add-movies-toggle');
+                const searchMount = listDiv.querySelector('.shared-list-search-mount');
+
+                addMoviesToggle.addEventListener('click', () => {
+                    const isOpen = searchMount.style.display !== 'none';
+                    if (isOpen) {
+                        searchMount.style.display = 'none';
+                        addMoviesToggle.textContent = '+ Add movies';
+                        addMoviesToggle.classList.remove('active');
+                    } else {
+                        searchMount.style.display = '';
+                        addMoviesToggle.textContent = '− Add movies';
+                        addMoviesToggle.classList.add('active');
+                        if (!searchMount._built) {
+                            searchMount._built = true;
+                            buildFriendsInlineSearch(searchMount, 'Search movies or shows to add...', async (tmdbItem) => {
+                                const r = await fetch(`/api/dashboard/lists/${list.id}/items`, {
+                                    method: 'POST',
+                                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ title: tmdbItem.title, type: tmdbItem.type })
+                                });
+                                if (r.ok) {
+                                    await renderSharedListsTab(friendEmail, contentEl);
+                                } else {
+                                    const d = await r.json().catch(() => ({}));
+                                    alert(d.message || 'Could not add item.');
+                                }
+                            });
+                        }
+                    }
+                });
+
+                const itemsEl = listDiv.querySelector('.shared-list-poster-row');
+                if (items.length > 0) {
+                    items.forEach(i => {
+                        const posterPath = sharedPosters[`${i.title}|movie`];
+                        const addedByLabel = i.addedByFirstName
+                            ? `<span class="shared-item-added-by">by ${escapeHtml(i.addedByFirstName)}</span>`
+                            : '';
+                        const card = document.createElement('div');
+                        card.className = 'shared-list-item-card';
+                        const posterHtml = posterPath
+                            ? `<img src="https://image.tmdb.org/t/p/w92${posterPath}" alt="${escapeHtml(i.title)}">`
+                            : `<div class="shared-list-item-card-ph"></div>`;
+                        card.innerHTML = `${posterHtml}
+                            <span>${escapeHtml(i.title)}</span>
+                            ${addedByLabel}
+                            <div class="shared-item-remove-overlay" style="display:none;">
+                                <button class="shared-item-remove-btn">Remove</button>
+                            </div>`;
+                        const overlay = card.querySelector('.shared-item-remove-overlay');
+                        card.addEventListener('click', (e) => {
+                            if (e.target.classList.contains('shared-item-remove-btn')) return;
+                            const isOpen = overlay.style.display === 'flex';
+                            itemsEl.querySelectorAll('.shared-item-remove-overlay').forEach(o => { o.style.display = 'none'; });
+                            overlay.style.display = isOpen ? 'none' : 'flex';
+                        });
+                        card.querySelector('.shared-item-remove-btn').addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            const r = await fetch(`/api/dashboard/lists/${list.id}/items`, {
+                                method: 'DELETE',
+                                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ title: i.title })
+                            });
+                            if (r.ok) await renderSharedListsTab(friendEmail, contentEl);
+                            else { const d = await r.json().catch(() => ({})); alert(d.message || 'Could not remove.'); }
+                        });
+                        itemsEl.appendChild(card);
+                    });
+                } else {
+                    itemsEl.innerHTML = '<span style="font-size:12px;opacity:0.6;">Empty list</span>';
+                }
+
+                const leaveBtn = listDiv.querySelector('.leave-shared-list-btn');
+                if (leaveBtn) {
+                    leaveBtn.addEventListener('click', async () => {
+                        if (!confirm(`Leave "${list.name}"?`)) return;
+                        const r = await fetch(`/api/dashboard/lists/${list.id}/leave`, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (r.ok) await renderSharedListsTab(friendEmail, contentEl);
+                        else { const d = await r.json().catch(() => ({})); alert(d.message || 'Could not leave list.'); }
+                    });
+                }
+
+                contentEl.appendChild(listDiv);
+            });
+        } catch (err) {
+            contentEl.innerHTML = '<p class="empty-message">Failed to load shared lists.</p>';
+        }
+    }
+
     async function renderInlineMessages(email, contentEl, messagesBtn) {
         contentEl.innerHTML = '<p class="empty-message">Loading...</p>';
         try {
-            const res = await fetch(`/api/friends/${encodeURIComponent(email)}/messages`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!res.ok) { contentEl.innerHTML = '<p class="empty-message">Failed to load messages.</p>'; return; }
-            const data = await res.json();
-            const messages = data.messages || [];
+            const [msgRes, recRes] = await Promise.all([
+                fetch(`/api/friends/${encodeURIComponent(email)}/messages`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`/api/recommendations/between/${encodeURIComponent(email)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
+            if (!msgRes.ok) { contentEl.innerHTML = '<p class="empty-message">Failed to load messages.</p>'; return; }
+            const msgData = await msgRes.json();
+            const recData = recRes.ok ? await recRes.json() : { recommendations: [] };
+            const messages = msgData.messages || [];
+            const recs = recData.recommendations || [];
             const myLower = (getMyEmailFromToken() || '').trim().toLowerCase();
 
-            const messagesHtml = messages.length === 0
+            // Fetch posters for recs
+            let recPosters = {};
+            if (recs.length > 0) {
+                const posterItems = recs.map(r => ({ title: r.title, type: r.type || 'movie' }));
+                try {
+                    recPosters = await DataModel.getPostersForItems(posterItems);
+                } catch (_) {}
+            }
+
+            // Merge messages and recs into one timeline sorted by time
+            const timeline = [
+                ...messages.map(m => ({ ...m, _kind: 'message', _time: new Date(m.sent_at) })),
+                ...recs.map(r => ({ ...r, _kind: 'rec', _time: new Date(r.sent_at) }))
+            ].sort((a, b) => a._time - b._time);
+
+            const timelineHtml = timeline.length === 0
                 ? '<p class="empty-message">No messages yet. Say something!</p>'
-                : messages.map(m => {
-                    const isMine = myLower && String(m.sender_email || '').trim().toLowerCase() === myLower;
-                    return `
-                        <div class="message-bubble ${isMine ? 'mine' : 'theirs'}">
-                            <p>${escapeHtml(m.content)}</p>
-                            <span class="message-time">${new Date(m.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                    `;
+                : timeline.map(item => {
+                    const isMine = myLower && String(item.sender_email || '').trim().toLowerCase() === myLower;
+                    if (item._kind === 'message') {
+                        return `<div class="message-bubble ${isMine ? 'mine' : 'theirs'}">
+                            <p>${escapeHtml(item.content)}</p>
+                            <span class="message-time">${item._time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>`;
+                    } else {
+                        const typeLabel = item.type === 'show' ? 'TV Show' : 'Movie';
+                        const posterPath = recPosters[`${item.title}|${item.type || 'movie'}`];
+                        const posterHtml = posterPath
+                            ? `<img src="https://image.tmdb.org/t/p/w92${posterPath}" alt="${escapeHtml(item.title)}" class="rec-msg-poster">`
+                            : `<div class="rec-msg-poster rec-msg-poster-ph"></div>`;
+                        return `<div class="rec-message-card ${isMine ? 'mine' : 'theirs'}">
+                            <div class="rec-message-label">🎬 ${isMine ? 'You recommended' : 'Recommended to you'}</div>
+                            <div class="rec-message-body">
+                                ${posterHtml}
+                                <div class="rec-message-info">
+                                    <strong>${escapeHtml(item.title)}</strong>
+                                    <span class="type-badge">${typeLabel}</span>
+                                    ${item.note ? `<p class="rec-note">"${escapeHtml(item.note)}"</p>` : ''}
+                                </div>
+                            </div>
+                            <span class="message-time">${item._time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>`;
+                    }
                 }).join('');
 
             contentEl.innerHTML = `
-                <div class="messages-list">${messagesHtml}</div>
+                <div class="messages-list">${timelineHtml}</div>
                 <div class="message-input-row" style="margin-top:8px;">
                     <input type="text" class="inline-message-input" placeholder="Send a message...">
                     <button type="button" class="primary-btn inline-send-btn">Send</button>
+                    <button type="button" class="inline-rec-toggle-btn" title="Recommend a movie or show">🎬</button>
+                </div>
+                <div class="inline-rec-form" style="display:none;margin-top:8px;padding:10px;background:rgba(0,0,0,0.2);border-radius:10px;flex-direction:column;gap:8px;">
+                    <strong style="font-size:13px;">Recommend a title</strong>
+                    <div class="inline-rec-search-wrap"></div>
+                    <input type="text" class="inline-rec-note inline-message-input" placeholder="Add a note (optional)...">
                 </div>
             `;
 
@@ -698,6 +1085,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const input = contentEl.querySelector('.inline-message-input');
             const sendBtn = contentEl.querySelector('.inline-send-btn');
+            const recToggleBtn = contentEl.querySelector('.inline-rec-toggle-btn');
+            const recForm = contentEl.querySelector('.inline-rec-form');
+            const recNote = contentEl.querySelector('.inline-rec-note');
+            const recSearchWrap = contentEl.querySelector('.inline-rec-search-wrap');
+
+            recToggleBtn.addEventListener('click', () => {
+                const open = recForm.style.display === 'flex';
+                recForm.style.display = open ? 'none' : 'flex';
+            });
+
+            // Build TMDB search grid inside the rec form
+            buildFriendsInlineSearch(recSearchWrap, 'Search a movie or show to recommend...', async ({ title, type }) => {
+                const note = recNote.value.trim();
+                const result = await DataModel.sendRecommendation(email, title, type, note);
+                if (result.ok) {
+                    recNote.value = '';
+                    recForm.style.display = 'none';
+                    await renderInlineMessages(email, contentEl, messagesBtn);
+                } else {
+                    alert(result?.data?.message || 'Could not send recommendation.');
+                }
+            });
 
             const sendMessage = async () => {
                 const content = input?.value?.trim();
@@ -729,6 +1138,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
             } catch (_) {}
+
+            // Mark unread recs from this friend as read
+            for (const rec of recs) {
+                if (!rec.read_at && String(rec.receiver_email || '').trim().toLowerCase() === myLower) {
+                    DataModel.markRecommendationRead(rec.id).catch(() => {});
+                }
+            }
 
             setInlineMessagesBadge(messagesBtn, 0);
             await syncMessageBadgesFromSummary();

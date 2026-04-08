@@ -227,12 +227,88 @@
             window.location.href = `/title-details?id=${encodeURIComponent(item.id)}&type=${encodeURIComponent(pageType)}`;
         });
 
+        const recommendBtn = document.createElement('button');
+        recommendBtn.type = 'button';
+        recommendBtn.className = 'title-detail-open-page-btn';
+        recommendBtn.textContent = 'Recommend to a Friend';
+
+        const recommendForm = document.createElement('div');
+        recommendForm.style.cssText = 'display:none;margin-top:10px;flex-direction:column;gap:8px;';
+
+        const friendSelect = document.createElement('select');
+        friendSelect.style.cssText = 'padding:6px;border-radius:6px;border:none;background:#1a3a6b;color:#F2F4F7;';
+        friendSelect.innerHTML = '<option value="">Select a friend...</option>';
+
+        const noteInput = document.createElement('textarea');
+        noteInput.placeholder = 'Add a note (optional)...';
+        noteInput.rows = 2;
+        noteInput.style.cssText = 'padding:6px;border-radius:6px;border:none;background:#1a3a6b;color:#F2F4F7;resize:vertical;';
+
+        const sendRow = document.createElement('div');
+        sendRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
+
+        const sendBtn = document.createElement('button');
+        sendBtn.type = 'button';
+        sendBtn.textContent = 'Send';
+        sendBtn.style.cssText = 'padding:6px 14px;border-radius:6px;border:none;background:#3A6EA5;color:#fff;cursor:pointer;';
+
+        const feedback = document.createElement('span');
+        feedback.style.cssText = 'font-size:13px;color:#9bc;';
+
+        sendRow.appendChild(sendBtn);
+        sendRow.appendChild(feedback);
+        recommendForm.appendChild(friendSelect);
+        recommendForm.appendChild(noteInput);
+        recommendForm.appendChild(sendRow);
+
+        let friendsLoaded = false;
+        recommendBtn.addEventListener('click', async () => {
+            const open = recommendForm.style.display === 'flex';
+            recommendForm.style.display = open ? 'none' : 'flex';
+            if (!friendsLoaded) {
+                friendSelect.innerHTML = '<option value="">Loading friends...</option>';
+                const token = typeof localStorage !== 'undefined' ? localStorage.getItem('jwtToken') : null;
+                if (token && typeof DataModel !== 'undefined' && DataModel.getFriends) {
+                    const friends = await DataModel.getFriends();
+                    friendsLoaded = true;
+                    if (friends.length === 0) {
+                        friendSelect.innerHTML = '<option value="">No friends yet</option>';
+                    } else {
+                        friendSelect.innerHTML = '<option value="">Select a friend...</option>' +
+                            friends.map(f => {
+                                const name = f.firstName ? `${f.firstName} ${f.lastName}` : f.email;
+                                return `<option value="${f.email}">${name}</option>`;
+                            }).join('');
+                    }
+                }
+            }
+        });
+
+        sendBtn.addEventListener('click', async () => {
+            const receiverEmail = friendSelect.value;
+            if (!receiverEmail) { feedback.textContent = 'Pick a friend first.'; return; }
+            sendBtn.disabled = true;
+            feedback.textContent = 'Sending...';
+            const result = await DataModel.sendRecommendation(receiverEmail, title, pageType, noteInput.value.trim());
+            sendBtn.disabled = false;
+            if (result.ok) {
+                feedback.textContent = 'Sent!';
+                noteInput.value = '';
+                friendSelect.value = '';
+                setTimeout(() => { recommendForm.style.display = 'none'; feedback.textContent = ''; }, 2000);
+            } else {
+                feedback.textContent = result?.data?.message || 'Could not send.';
+            }
+        });
+
         textCol.appendChild(kind);
         textCol.appendChild(h);
         textCol.appendChild(pillRow);
         textCol.appendChild(synLabel);
         textCol.appendChild(syn);
         textCol.appendChild(openPageBtn);
+        textCol.appendChild(recommendBtn);
+        textCol.appendChild(recommendForm);
 
         body.appendChild(posterWrap);
         body.appendChild(textCol);
