@@ -4,7 +4,7 @@
     position: fixed;
     inset: 0;
     z-index: 10000;
-    background: rgba(0, 0, 0, 0.72);
+    background: var(--title-modal-scrim);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -18,11 +18,11 @@
     width: 100%;
     max-height: min(90vh, 720px);
     overflow: auto;
-    background: #1a2f4a;
+    background: var(--bg-modal);
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
-    color: #f0f4f8;
+    border: 1px solid var(--ui-surface-12);
+    box-shadow: var(--panel-shadow-deep);
+    color: var(--td-text);
 }
 
 .title-detail-close {
@@ -34,15 +34,15 @@
     height: 40px;
     border: none;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: var(--ui-surface-10);
+    color: var(--text-primary);
     font-size: 26px;
     line-height: 1;
     cursor: pointer;
 }
 
 .title-detail-close:hover {
-    background: rgba(255, 255, 255, 0.18);
+    background: var(--ui-surface-18);
 }
 
 .title-detail-body {
@@ -66,11 +66,11 @@
 .title-detail-poster-placeholder {
     aspect-ratio: 2 / 3;
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--ui-surface-08);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--ui-ink-45);
     font-size: 14px;
 }
 
@@ -84,7 +84,7 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #7eb8ff;
+    color: var(--td-btn-primary);
 }
 
 .title-detail-title {
@@ -106,7 +106,7 @@
 .title-detail-pills--loading {
     font-size: 13px;
     font-style: italic;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--ui-ink-45);
 }
 
 .title-detail-pill {
@@ -117,9 +117,9 @@
     font-size: 12px;
     font-weight: 600;
     line-height: 1.3;
-    background: rgba(255, 255, 255, 0.1);
-    color: #dce8f4;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--ui-surface-10);
+    color: var(--text-secondary);
+    border: 1px solid var(--ui-surface-12);
 }
 
 .title-detail-synopsis-label {
@@ -127,14 +127,14 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: rgba(255, 255, 255, 0.55);
+    color: var(--ui-ink-55);
 }
 
 .title-detail-overview {
     margin: 0;
     font-size: 15px;
     line-height: 1.55;
-    color: #e8eef4;
+    color: var(--text-secondary);
 }
 
 @media (max-width: 600px) {
@@ -155,7 +155,7 @@
     margin: 4px 0 6px 0;
     font-size: 10px;
     line-height: 1.35;
-    color: rgba(255, 255, 255, 0.75);
+    color: var(--ui-ink-75);
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
@@ -174,21 +174,21 @@
     font-weight: 600;
     border: none;
     border-radius: 6px;
-    background: rgba(126, 184, 255, 0.25);
-    color: #e8f2ff;
+    background: var(--accent-glow-25);
+    color: var(--text-secondary);
     cursor: pointer;
 }
 
 .tmdb-result-card .tmdb-info-btn:hover {
-    background: rgba(126, 184, 255, 0.4);
+    background: var(--accent-glow-40);
 }
 .title-detail-open-page-btn {
     margin-top: 18px;
     padding: 10px 14px;
     border: none;
     border-radius: 10px;
-    background: #7eb8ff;
-    color: #10233a;
+    background: var(--td-btn-primary);
+    color: var(--td-on-primary);
     font-size: 14px;
     font-weight: 700;
     cursor: pointer;
@@ -196,6 +196,6 @@
 }
 
 .title-detail-open-page-btn:hover {
-    background: #9ac9ff;
+    background: var(--td-btn-primary-hover);
     transform: translateY(-1px);
 }

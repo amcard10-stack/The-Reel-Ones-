@@ -1,15 +1,18 @@
 body {
-    font-family: Arial;
-    background-color: #f4f4f9;
+    font-family: Arial, sans-serif;
+    background-color: var(--suggestions-bg);
+    color: var(--text-primary);
     margin: 0;
 }
 
 .container {
     width: 85%;
     margin: 30px auto;
-    background: white;
+    background: var(--bg-card);
     padding: 30px;
     border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 4px 18px var(--shadow-elevated);
 }
 
 .header {
@@ -20,35 +23,40 @@ body {
 .header-right button {
     margin-left: 8px;
     padding: 6px 12px;
-    background-color: #007bff;
-    color: white;
+    background-color: var(--accent);
+    color: var(--on-accent);
     border: none;
     border-radius: 5px;
     cursor: pointer;
 }
 
+.header-right button:hover {
+    background-color: var(--accent-hover-bg);
+}
+
 .ratings-summary {
     font-size: 1.1em;
-    color: #333;
+    color: var(--text-primary);
     margin-bottom: 20px;
 }
 
 .section-hint {
-    color: #666;
+    color: var(--text-secondary);
     font-size: 0.9em;
     margin-bottom: 12px;
 }
 
 .empty-message {
-    color: #888;
+    color: var(--text-secondary);
     font-style: italic;
 }
 
 .recommendation-card {
-    border: 1px solid #ddd;
+    border: 1px solid var(--border-subtle);
     padding: 15px;
     border-radius: 8px;
     margin-bottom: 15px;
+    background: var(--bg-input);
 }
 
 .recommendation-card h3 {
@@ -57,7 +65,7 @@ body {
 
 .recommendation-card p {
     margin: 0 0 12px 0;
-    color: #555;
+    color: var(--text-secondary);
 }
 
 .recommendation-card a.primary {
@@ -65,18 +73,22 @@ body {
     text-decoration: none;
     padding: 6px 12px;
     border-radius: 5px;
-    background-color: #28a745;
-    color: white;
+    background-color: var(--success);
+    color: var(--white);
 }
 
 .recommendation-card a.primary:hover {
-    background-color: #218838;
+    background-color: var(--success-hover);
 }
 
 .primary {
-    background-color: #28a745;
-    color: white;
+    background-color: var(--success);
+    color: var(--white);
     border: none;
     padding: 6px 10px;
     border-radius: 5px;
+}
+
+.primary:hover {
+    background-color: var(--success-hover);
 }

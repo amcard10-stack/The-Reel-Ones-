@@ -1,0 +1,221 @@
+/* Roll the Tapes — shared light / dark tokens (toggle sets data-theme on <html>) */
+
+:root {
+    color-scheme: dark;
+    --bg-body: #031f45;
+    --bg-hero: #0a1a2f;
+    --bg-card: #274979;
+    --bg-input: #1a1c20;
+    --bg-muted: #1a2f4e;
+    --bg-modal: #1a2f4a;
+    --bg-nav-btn: #274979;
+    --border-subtle: #2b2f36;
+    --border-section: #1a1c20;
+    --text-primary: #f2f4f7;
+    --text-secondary: #d9dee4;
+    --text-accent: #a7d3f5;
+    --accent: #3a6ea5;
+    --accent-hover-bg: #a7d3f5;
+    --on-accent: #0a1a2f;
+    --danger: #e26a6a;
+    --danger-alt: #dc3545;
+    --danger-soft: #ffb3b3;
+    --danger-soft-alt: #ffb3b8;
+    --white: #ffffff;
+    --teaser-fg: #0d1b2a;
+    --teaser-bg: #4ecdc4;
+    --star-filled: #e26a6a;
+    --shadow-elevated: rgba(0, 0, 0, 0.4);
+    --modal-scrim: rgba(0, 0, 0, 0.55);
+    --td-grad-start: #0f1c2e;
+    --td-grad-end: #13253c;
+    --td-text: #f0f4f8;
+    --td-btn-primary: #7eb8ff;
+    --td-btn-primary-hover: #9ac9ff;
+    --td-on-primary: #10233a;
+    --suggestions-bg: var(--bg-body);
+    --success: #28a745;
+    --success-hover: #218838;
+    --popup-danger: #e63946;
+    --popup-danger-hover: #c1121f;
+    --share-btn-bg: #1a3a6b;
+    --share-btn-hover: #4a82c0;
+    --text-error-soft: #e87070;
+    --hint-warm: #ffe8a6;
+    --accent-orange: #f4a261;
+    --movies-surface: #1f2a3a;
+    --movies-text-muted: #b8c7dc;
+    --movies-btn: #4d82be;
+    --movies-btn-hover: #5b93d3;
+    --movies-pill: #007bff;
+    --friends-activity-accent: #a8d4ff;
+    --badge-warning: #f0ad4e;
+    /* Translucent surfaces (dark UI: white haze on dark base) */
+    --ui-surface-04: rgba(255, 255, 255, 0.04);
+    --ui-surface-05: rgba(255, 255, 255, 0.05);
+    --ui-surface-06: rgba(255, 255, 255, 0.06);
+    --ui-surface-08: rgba(255, 255, 255, 0.08);
+    --ui-surface-10: rgba(255, 255, 255, 0.1);
+    --ui-surface-12: rgba(255, 255, 255, 0.12);
+    --ui-surface-15: rgba(255, 255, 255, 0.15);
+    --ui-surface-18: rgba(255, 255, 255, 0.18);
+    --ui-surface-20: rgba(255, 255, 255, 0.2);
+    --ui-surface-30: rgba(255, 255, 255, 0.3);
+    --ui-inset-18: rgba(0, 0, 0, 0.18);
+    --ui-inset-20: rgba(0, 0, 0, 0.2);
+    --ui-inset-25: rgba(0, 0, 0, 0.25);
+    --ui-ink-45: rgba(255, 255, 255, 0.45);
+    --ui-ink-55: rgba(255, 255, 255, 0.55);
+    --ui-ink-75: rgba(255, 255, 255, 0.75);
+    --title-modal-scrim: rgba(0, 0, 0, 0.72);
+    --panel-shadow-deep: 0 20px 50px rgba(0, 0, 0, 0.45);
+    --accent-glow-12: rgba(126, 184, 255, 0.12);
+    --accent-glow-28: rgba(126, 184, 255, 0.28);
+    --accent-glow-22: rgba(126, 184, 255, 0.22);
+    --accent-glow-45: rgba(126, 184, 255, 0.45);
+    --accent-glow-08: rgba(126, 184, 255, 0.08);
+    --accent-glow-65: rgba(126, 184, 255, 0.65);
+    --accent-glow-30: rgba(126, 184, 255, 0.3);
+    --accent-glow-25: rgba(126, 184, 255, 0.25);
+    --accent-glow-40: rgba(126, 184, 255, 0.4);
+    --accent-chip-bg: rgba(58, 110, 165, 0.18);
+    --accent-chip-bg-mid: rgba(58, 110, 165, 0.2);
+    --accent-chip-bg-strong: rgba(58, 110, 165, 0.35);
+    --accent-chip-border-mid: rgba(58, 110, 165, 0.4);
+    --accent-chip-border-strong: rgba(58, 110, 165, 0.6);
+    --overlay-heavy: rgba(10, 20, 40, 0.78);
+    --float-card-shadow: 0 14px 40px rgba(0, 0, 0, 0.28);
+    --float-card-shadow-soft: 0 14px 40px rgba(0, 0, 0, 0.22);
+    --float-card-shadow-hover: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+[data-theme="light"] {
+    color-scheme: light;
+    /* Light theme: warm paper / sand (not blue-gray, not stark white) */
+    --bg-body: #f2ece3;
+    --bg-hero: #e5ddd0;
+    --bg-card: #fffef8;
+    --bg-input: #fffdf6;
+    --bg-muted: #e8e0d4;
+    --bg-modal: #faf6ee;
+    --bg-nav-btn: #ebe3d7;
+    --border-subtle: #c9c0b2;
+    --border-section: #d8cfc2;
+    --text-primary: #1c1917;
+    --text-secondary: #57534e;
+    --text-accent: #1e40af;
+    --accent: #2a4d7f;
+    --accent-hover-bg: #5b8bc4;
+    --on-accent: #fffef8;
+    --danger: #b91c1c;
+    --danger-alt: #991b1b;
+    --danger-soft: #991b1b;
+    --danger-soft-alt: #9f1239;
+    --white: #ffffff;
+    --teaser-fg: #1c1917;
+    --teaser-bg: #2dd4bf;
+    --star-filled: #b91c1c;
+    --shadow-elevated: rgba(28, 25, 23, 0.1);
+    --modal-scrim: rgba(28, 25, 23, 0.4);
+    --td-grad-start: #e8e0d4;
+    --td-grad-end: #faf6ee;
+    --td-text: #1c1917;
+    --td-btn-primary: #2a4d7f;
+    --td-btn-primary-hover: #3d6a9e;
+    --td-on-primary: #fffef8;
+    --suggestions-bg: #f2ece3;
+    --success: #15803d;
+    --success-hover: #166534;
+    --popup-danger: #b91c1c;
+    --popup-danger-hover: #991b1b;
+    --share-btn-bg: #a8bfd9;
+    --share-btn-hover: #7c9dc4;
+    --text-error-soft: #991b1b;
+    --hint-warm: #713f12;
+    --accent-orange: #c2410c;
+    --movies-surface: #e5ded2;
+    --movies-text-muted: #57534e;
+    --movies-btn: #2a4d7f;
+    --movies-btn-hover: #1e3a5f;
+    --movies-pill: #1e3a5f;
+    --friends-activity-accent: #1e40af;
+    --badge-warning: #b45309;
+    --ui-surface-04: rgba(28, 25, 23, 0.04);
+    --ui-surface-05: rgba(28, 25, 23, 0.045);
+    --ui-surface-06: rgba(28, 25, 23, 0.06);
+    --ui-surface-08: rgba(28, 25, 23, 0.08);
+    --ui-surface-10: rgba(28, 25, 23, 0.1);
+    --ui-surface-12: rgba(28, 25, 23, 0.12);
+    --ui-surface-15: rgba(28, 25, 23, 0.14);
+    --ui-surface-18: rgba(28, 25, 23, 0.16);
+    --ui-surface-20: rgba(28, 25, 23, 0.18);
+    --ui-surface-30: rgba(28, 25, 23, 0.26);
+    --ui-inset-18: rgba(28, 25, 23, 0.06);
+    --ui-inset-20: rgba(28, 25, 23, 0.08);
+    --ui-inset-25: rgba(28, 25, 23, 0.11);
+    --ui-ink-45: rgba(28, 25, 23, 0.45);
+    --ui-ink-55: rgba(28, 25, 23, 0.55);
+    --ui-ink-75: rgba(28, 25, 23, 0.72);
+    --title-modal-scrim: var(--modal-scrim);
+    --panel-shadow-deep: 0 16px 42px rgba(28, 25, 23, 0.12);
+    --accent-glow-12: rgba(42, 77, 127, 0.1);
+    --accent-glow-28: rgba(42, 77, 127, 0.24);
+    --accent-glow-22: rgba(42, 77, 127, 0.16);
+    --accent-glow-45: rgba(42, 77, 127, 0.35);
+    --accent-glow-08: rgba(42, 77, 127, 0.06);
+    --accent-glow-65: rgba(42, 77, 127, 0.45);
+    --accent-glow-30: rgba(42, 77, 127, 0.28);
+    --accent-glow-25: rgba(42, 77, 127, 0.2);
+    --accent-glow-40: rgba(42, 77, 127, 0.32);
+    --accent-chip-bg: rgba(42, 77, 127, 0.12);
+    --accent-chip-bg-mid: rgba(42, 77, 127, 0.16);
+    --accent-chip-bg-strong: rgba(42, 77, 127, 0.24);
+    --accent-chip-border-mid: rgba(42, 77, 127, 0.38);
+    --accent-chip-border-strong: rgba(42, 77, 127, 0.52);
+    --overlay-heavy: rgba(28, 25, 23, 0.68);
+    --float-card-shadow: 0 14px 36px rgba(28, 25, 23, 0.08);
+    --float-card-shadow-soft: 0 14px 36px rgba(28, 25, 23, 0.06);
+    --float-card-shadow-hover: 0 10px 28px rgba(28, 25, 23, 0.1);
+}
+
+/* Floating theme control (injected + styled; logon positions differently below) */
+.theme-toggle-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 10000;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    cursor: pointer;
+    box-shadow: 0 4px 18px var(--shadow-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    line-height: 1;
+    padding: 0;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.theme-toggle-btn:hover {
+    transform: scale(1.06);
+    background: var(--bg-nav-btn);
+}
+
+.theme-toggle-btn:focus-visible {
+    outline: 2px solid var(--accent-hover-bg);
+    outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+    .theme-toggle-btn {
+        bottom: 16px;
+        right: 16px;
+        width: 44px;
+        height: 44px;
+    }
+}

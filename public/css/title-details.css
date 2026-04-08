@@ -1,8 +1,8 @@
 body {
     margin: 0;
     font-family: Arial, sans-serif;
-    background: linear-gradient(180deg, #0f1c2e 0%, #13253c 100%);
-    color: #f0f4f8;
+    background: linear-gradient(180deg, var(--td-grad-start) 0%, var(--td-grad-end) 100%);
+    color: var(--td-text);
     min-height: 100vh;
 }
 
@@ -33,13 +33,13 @@ body {
 }
 
 .back-btn {
-    background: rgba(255, 255, 255, 0.12);
-    color: #f0f4f8;
+    background: var(--ui-surface-12);
+    color: var(--td-text);
 }
 
 .logout-btn {
-    background: #7eb8ff;
-    color: #10233a;
+    background: var(--td-btn-primary);
+    color: var(--td-on-primary);
 }
 
 .back-btn:hover,
@@ -48,11 +48,11 @@ body {
 }
 
 .back-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--ui-surface-20);
 }
 
 .logout-btn:hover {
-    background: #9ac9ff;
+    background: var(--td-btn-primary-hover);
 }
 
 .title-main {
@@ -60,11 +60,11 @@ body {
     grid-template-columns: 280px 1fr;
     gap: 28px;
     align-items: start;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--ui-surface-06);
+    border: 1px solid var(--ui-surface-10);
     border-radius: 18px;
     padding: 24px;
-    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.28);
+    box-shadow: var(--float-card-shadow);
     margin-bottom: 32px;
 }
 
@@ -80,7 +80,7 @@ body {
     display: block;
     object-fit: cover;
     object-position: center;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--ui-surface-08);
 }
 
 .title-info {
@@ -92,14 +92,14 @@ body {
     font-size: 2rem;
     line-height: 1.2;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--td-text);
 }
 
 .meta {
     margin: 0 0 16px 0;
     font-size: 0.95rem;
     font-weight: 600;
-    color: #7eb8ff;
+    color: var(--td-btn-primary);
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
@@ -121,20 +121,20 @@ body {
     font-size: 12px;
     font-weight: 600;
     line-height: 1.3;
-    background: rgba(255, 255, 255, 0.1);
-    color: #dce8f4;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: var(--ui-surface-10);
+    color: var(--text-secondary);
+    border: 1px solid var(--ui-surface-12);
 }
 
 .title-friends-pill--loading {
     font-style: italic;
     font-weight: 600;
-    color: rgba(240, 244, 248, 0.55);
-    background: rgba(255, 255, 255, 0.06);
+    color: var(--ui-ink-45);
+    background: var(--ui-surface-06);
 }
 
 .title-friends-pill-row--error .title-friends-pill {
-    color: #ffb3b3;
+    color: var(--danger-soft);
     border-color: rgba(255, 107, 107, 0.35);
 }
 
@@ -142,22 +142,22 @@ body {
     margin: 0;
     font-size: 1rem;
     line-height: 1.7;
-    color: #e4edf7;
+    color: var(--text-secondary);
     white-space: pre-wrap;
 }
 
 .related-section {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--ui-surface-06);
+    border: 1px solid var(--ui-surface-10);
     border-radius: 18px;
     padding: 24px;
-    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
+    box-shadow: var(--float-card-shadow-soft);
 }
 
 .related-section h2 {
     margin: 0 0 18px 0;
     font-size: 1.35rem;
-    color: #ffffff;
+    color: var(--td-text);
 }
 
 .related-grid {
@@ -167,8 +167,8 @@ body {
 }
 
 .related-card {
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--ui-surface-08);
+    border: 1px solid var(--ui-surface-10);
     border-radius: 14px;
     padding: 12px;
     cursor: pointer;
@@ -179,8 +179,8 @@ body {
 .related-card:hover,
 .related-card:focus {
     transform: translateY(-3px);
-    border-color: rgba(126, 184, 255, 0.7);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+    border-color: var(--accent-glow-65);
+    box-shadow: var(--float-card-shadow-hover);
 }
 
 .related-poster {
@@ -190,7 +190,7 @@ body {
     border-radius: 10px;
     display: block;
     margin-bottom: 10px;
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--ui-surface-08);
 }
 
 .related-title {
@@ -198,14 +198,14 @@ body {
     font-size: 0.95rem;
     font-weight: 700;
     line-height: 1.35;
-    color: #f7fbff;
+    color: var(--td-text);
 }
 
 .related-meta {
     margin: 0;
     font-size: 0.8rem;
     font-weight: 600;
-    color: #9ec9ff;
+    color: var(--text-accent);
     text-transform: uppercase;
     letter-spacing: 0.04em;
 }
@@ -213,11 +213,11 @@ body {
 .fallback-message {
     margin: 14px 0 0 0;
     font-size: 0.95rem;
-    color: rgba(240, 244, 248, 0.8);
+    color: var(--ui-ink-75);
 }
 
 .error-message {
-    color: #ffb3b3;
+    color: var(--danger-soft);
 }
 
 @media (max-width: 800px) {

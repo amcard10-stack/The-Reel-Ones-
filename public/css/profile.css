@@ -1,8 +1,8 @@
 body {
     margin: 0;
     font-family: Arial, sans-serif;
-    background-color: #031f45;
-    color: #F2F4F7;
+    background-color: var(--bg-body);
+    color: var(--text-primary);
 }
 
 .header {
@@ -22,13 +22,13 @@ body {
     border-radius: 10px;
     border: none;
     cursor: pointer;
-    background-color: #3A6EA5;
-    color: #F2F4F7;
+    background-color: var(--accent);
+    color: var(--on-accent);
 }
 
 .nav-btn:hover {
-    background-color: #A7D3F5;
-    color: #0A1A2F;
+    background-color: var(--text-accent);
+    color: var(--on-accent);
 }
 
 .settings-container {
@@ -47,12 +47,12 @@ body {
 }
 
 .subtitle {
-    color: #D9DEE4;
+    color: var(--text-secondary);
     margin-bottom: 40px;
 }
 
 .subtitle a {
-    color: #E26A6A;
+    color: var(--danger);
     text-decoration: underline;
 }
 
@@ -69,12 +69,12 @@ body {
     height: 140px;
     border-radius: 50%;
     object-fit: cover;
-    border: 4px solid #3A6EA5;
+    border: 4px solid var(--accent);
 }
 
 .upload-btn {
-    background-color: #3A6EA5;
-    color: #F2F4F7;
+    background-color: var(--accent);
+    color: var(--on-accent);
     padding: 8px 16px;
     border-radius: 10px;
     cursor: pointer;
@@ -82,12 +82,12 @@ body {
 }
 
 .upload-btn:hover {
-    background-color: #A7D3F5;
-    color: #0A1A2F;
+    background-color: var(--text-accent);
+    color: var(--on-accent);
 }
 
 .card {
-    background-color: #274979;
+    background-color: var(--bg-card);
     padding: 40px;
     border-radius: 16px;
 }
@@ -99,7 +99,7 @@ body {
 label {
     display: block;
     margin-bottom: 6px;
-    color: #D9DEE4;
+    color: var(--text-secondary);
     font-size: 15px;
 }
 
@@ -107,22 +107,22 @@ input {
     width: 100%;
     padding: 14px 18px;
     border-radius: 12px;
-    border: 1px solid #2B2F36;
-    background-color: #1A1C20;
-    color: #F2F4F7;
+    border: 1px solid var(--border-subtle);
+    background-color: var(--bg-input);
+    color: var(--text-primary);
     font-size: 16px;
     box-sizing: border-box;
 }
 
 input:disabled {
-    background-color: #1A1C20;
-    color: #D9DEE4;
+    background-color: var(--bg-input);
+    color: var(--text-secondary);
     opacity: 0.85;
 }
 
 .divider {
     border: none;
-    border-top: 1px solid #2B2F36;
+    border-top: 1px solid var(--border-subtle);
     margin: 40px 0;
 }
 
@@ -130,14 +130,15 @@ input:disabled {
     padding: 12px 20px;
     border-radius: 12px;
     background: transparent;
-    border: 2px solid #F2F4F7;
-    color: #F2F4F7;
+    border: 2px solid var(--text-primary);
+    color: var(--text-primary);
     cursor: pointer;
 }
 
 .outline-btn:hover {
-    background-color: #3A6EA5;
-    border-color: #3A6EA5;
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
 }
 
 .password-section {
@@ -159,24 +160,24 @@ input:disabled {
 .primary-btn {
     padding: 14px 28px;
     border-radius: 14px;
-    background-color: #3A6EA5;
+    background-color: var(--accent);
     border: none;
-    color: #F2F4F7;
+    color: var(--on-accent);
     font-size: 16px;
     cursor: pointer;
 }
 
 .primary-btn:hover {
-    background-color: #A7D3F5;
-    color: #0A1A2F;
+    background-color: var(--text-accent);
+    color: var(--on-accent);
 }
 
 .bio-card {
-    background-color: #274979;
+    background-color: var(--bg-card);
     padding: 25px 40px;
     border-radius: 16px;
     margin: 20px 0 28px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+    box-shadow: 0 6px 18px var(--shadow-elevated);
 }
 
 .bio-card textarea {
@@ -186,15 +187,15 @@ input:disabled {
     resize: vertical;
     padding: 12px 14px;
     border-radius: 12px;
-    border: 1px solid #2B2F36;
-    background-color: #1A1C20;
-    color: #F2F4F7;
+    border: 1px solid var(--border-subtle);
+    background-color: var(--bg-input);
+    color: var(--text-primary);
     font-size: 14px;
 }
 
 .bio-card textarea:focus {
     outline: none;
-    border-color: #3A6EA5;
+    border-color: var(--accent);
 }
 
 /* Privacy toggle */
@@ -207,7 +208,7 @@ input:disabled {
 
 .toggle-label {
     font-size: 15px;
-    color: #D9DEE4;
+    color: var(--text-secondary);
     min-width: 52px;
 }
 
@@ -230,7 +231,7 @@ input:disabled {
     position: absolute;
     cursor: pointer;
     inset: 0;
-    background-color: #3A6EA5;
+    background-color: var(--accent);
     border-radius: 28px;
     transition: background-color 0.2s;
 }
@@ -248,7 +249,7 @@ input:disabled {
 }
 
 .toggle-switch input:checked + .toggle-slider {
-    background-color: #E26A6A;
+    background-color: var(--danger);
 }
 
 .toggle-switch input:checked + .toggle-slider::before {
@@ -260,14 +261,14 @@ input:disabled {
     padding: 14px 28px;
     border-radius: 14px;
     background-color: transparent;
-    border: 2px solid #E26A6A;
-    color: #E26A6A;
+    border: 2px solid var(--danger);
+    color: var(--danger);
     font-size: 16px;
     cursor: pointer;
     transition: background-color 0.2s, color 0.2s;
 }
 
 .delete-btn:hover {
-    background-color: #E26A6A;
-    color: #fff;
+    background-color: var(--danger);
+    color: var(--white);
 }
