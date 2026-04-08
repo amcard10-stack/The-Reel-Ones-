@@ -18,6 +18,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const listItemTitle = document.getElementById('listItemTitle');
     const listSelect = document.getElementById('listSelect');
     const createListBtn = document.getElementById('createListBtn');
+    // NOTIFICATIONS
+    const notificationBell = document.getElementById('notificationBell');
+    const notificationPanel = document.getElementById('notificationPanel');
+    const notificationList = document.getElementById('notificationList');
+    const notificationBadge = document.getElementById('notificationBadge');
+    const markAllNotificationsReadBtn = document.getElementById('markAllNotificationsRead');
 
     logoutButton?.addEventListener('click', () => {
         localStorage.removeItem('jwtToken');
@@ -25,8 +31,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     refreshButton?.addEventListener('click', async () => {
-        renderDashboard();
-        updateFriendsNavBadges();
+        await renderDashboard();
+        await updateFriendsNavBadges();
+        await loadNotificationCount();
+
     });
 
     if (watchHistorySearch) {
@@ -57,6 +65,41 @@ document.addEventListener('DOMContentLoaded', () => {
             filterBySearch();
         }
     });
+
+    // NOTIFICATIONS //
+notificationBell?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const isOpen = notificationPanel?.style.display === 'block';
+
+    if (isOpen) {
+        notificationPanel.style.display = 'none';
+        return;
+    }
+
+    notificationPanel.style.display = 'block';
+    await loadNotifications();
+});
+
+document.addEventListener('click', (e) => {
+    if (!notificationPanel || !notificationBell) return;
+    if (
+        notificationPanel.style.display === 'block' &&
+        !notificationPanel.contains(e.target) &&
+        !notificationBell.contains(e.target)
+    ) {
+        notificationPanel.style.display = 'none';
+    }
+});
+
+markAllNotificationsReadBtn?.addEventListener('click', async () => {
+    if (!DataModel.markAllNotificationsRead) return;
+
+    const result = await DataModel.markAllNotificationsRead();
+    if (result?.ok) {
+        await loadNotificationCount();
+        await loadNotifications();
+    }
+});
 
     // TMDB search for Watch History add
     setupTMDBSearch(watchHistoryTitle, watchHistoryType, 'watchHistoryResults', async (item) => {
@@ -278,16 +321,19 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         DataModel.setToken(token);
         renderDashboard();
-        function tickDashboardFriendBadges() {
+        loadNotificationCount();
+
+        async function tickDashboardFriendBadges() {
             if (document.visibilityState === 'hidden') return;
-            updateFriendsNavBadges();
-            updateFriendActivityTeaser();
+            await updateFriendsNavBadges();
+            await updateFriendActivityTeaser();
+            await loadNotificationCount();
         }
         tickDashboardFriendBadges();
         setupStatusBoardDragDrop();
         setInterval(tickDashboardFriendBadges, 6000);
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') tickDashboardFriendBadges();
+            if (document.visibilityState === 'visible') tickDashboardHeaderActivity();
         });
 
 // profile popup
@@ -378,6 +424,155 @@ async function updateFriendInviteBadge() {
 async function updateFriendsNavBadges() {
     await Promise.all([updateFriendRequestBadge(), updateFriendMessageBadge(), updateFriendInviteBadge()]);
 }
+
+async function loadNotificationCount() {
+    const badge = document.getElementById('notificationBadge');
+    if (!badge) return;
+
+    try {
+        let count = 0;
+
+        if (DataModel.getUnreadNotificationCount) {
+            const data = await DataModel.getUnreadNotificationCount();
+            count = Number(data?.count) || 0;
+        } else {
+            const res = await fetch('/api/notifications/unread-count', {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('jwtToken')}`
+                }
+            });
+
+            if (res.ok) {
+                const data = await res.json().catch(() => ({}));
+                count = Number(data?.count) || 0;
+            }
+        }
+
+        if (count > 0) {
+            badge.textContent = count > 99 ? '99+' : String(count);
+            badge.style.display = 'inline-block';
+        } else {
+            badge.textContent = '';
+            badge.style.display = 'none';
+        }
+    } catch (err) {
+        badge.textContent = '';
+        badge.style.display = 'none';
+    }
+}
+
+async function loadNotifications() {
+    const list = document.getElementById('notificationList');
+    if (!list) return;
+
+    list.innerHTML = '<p class="loading-message">Loading notifications...</p>';
+
+    try {
+        let notifications = [];
+
+        if (DataModel.getNotifications) {
+            notifications = await DataModel.getNotifications();
+        } else {
+            const res = await fetch('/api/notifications', {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('jwtToken')}`
+                }
+            });
+
+            if (!res.ok) throw new Error('Failed to load notifications');
+            notifications = await res.json();
+        }
+
+        renderNotifications(Array.isArray(notifications) ? notifications : []);
+    } catch (err) {
+        console.error('Failed to load notifications:', err);
+        list.innerHTML = '<p class="empty-message">Could not load notifications.</p>';
+    }
+}
+
+function renderNotifications(notifications) {
+    const list = document.getElementById('notificationList');
+    if (!list) return;
+
+    if (!notifications.length) {
+        list.innerHTML = '<p class="notification-empty">No notifications yet.</p>';
+        return;
+    }
+
+    list.innerHTML = notifications.map((notification) => {
+        const safeTitle = escapeHtml(notification.title || 'Notification');
+        const safeMessage = escapeHtml(notification.message || '');
+        const safeActionUrl = notification.action_url || '';
+        const timeText = formatNotificationTime(notification.created_at);
+        const unreadClass = notification.is_read ? '' : ' unread';
+
+        return `
+            <div class="notification-item${unreadClass}" 
+                 data-id="${notification.id}" 
+                 data-action-url="${safeActionUrl}">
+                <div class="notification-title">${safeTitle}</div>
+                <div class="notification-message">${safeMessage}</div>
+                <div class="notification-time">${timeText}</div>
+            </div>
+        `;
+    }).join('');
+
+    list.querySelectorAll('.notification-item').forEach((itemEl) => {
+        itemEl.addEventListener('click', async () => {
+            const id = itemEl.dataset.id;
+            const actionUrl = itemEl.dataset.actionUrl;
+
+            try {
+                if (id) {
+                    if (DataModel.markNotificationRead) {
+                        await DataModel.markNotificationRead(id);
+                    } else {
+                        await fetch(`/api/notifications/${id}/read`, {
+                            method: 'PUT',
+                            headers: {
+                                Authorization: `Bearer ${localStorage.getItem('jwtToken')}`
+                            }
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to mark notification as read:', err);
+            }
+
+            await loadNotificationCount();
+
+            if (actionUrl) {
+                window.location.href = actionUrl;
+            } else {
+                itemEl.classList.remove('unread');
+            }
+        });
+    });
+}
+
+function formatNotificationTime(dateString) {
+    if (!dateString) return '';
+
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return '';
+
+    return date.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 
 async function updateFriendActivityTeaser() {
     const wrap = document.getElementById('friendActivityTeaser');
