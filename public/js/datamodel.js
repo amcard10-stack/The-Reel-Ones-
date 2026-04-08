@@ -370,8 +370,12 @@ setStatus: async function (title, type, status) {
             headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, type, status }),
         });
-
-        return { ok: response.ok, data: await response.json() };
+        let data = {};
+        try {
+            const text = await response.text();
+            if (text) data = JSON.parse(text);
+        } catch (_) {}
+        return { ok: response.ok, data };
     } catch (error) {
         console.error("Error setting status:", error);
         return { ok: false };

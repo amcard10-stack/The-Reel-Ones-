@@ -70,13 +70,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // TMDB search for Status add
     setupTMDBSearch(statusTitle, statusType, 'statusResults', async (item) => {
-        const status = statusValue?.value;
-        if (!status) return;
+        const status = normalizeWatchStatusKey(statusValue?.value) || 'want_to_watch';
         const result = await DataModel.setStatus(item.title, item.type, status);
         if (result.ok) {
             statusTitle.value = '';
             document.getElementById('statusResults').innerHTML = '';
-            renderDashboard();
+            await refreshStatusesFromServer();
+            document.querySelector('.status-grid')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
             const msg = result?.data?.message || 'Could not save status. Try again.';
             alert(msg);
@@ -159,18 +159,60 @@ document.addEventListener('DOMContentLoaded', () => {
         const rating = currentPopupItem._rating || 0;
         const review = document.getElementById('popupReview')?.value?.trim() || '';
         const status = popupStatusSection?.style.display !== 'none' ? popupStatusSelect?.value : null;
-        if (rating >= 1 && rating <= 5) {
-            const hasExisting = (currentPopupItem.rating != null && currentPopupItem.rating > 0);
-            const result = hasExisting
-                ? await DataModel.updateRating(currentPopupItem.title, currentPopupItem.type, rating, review)
-                : await DataModel.addRating(currentPopupItem.title, currentPopupItem.type, rating, review);
-            if (result.ok) { /* ok */ }
+        popupSave.disabled = true;
+        popupDelete.disabled = true;
+        try {
+            if (rating >= 1 && rating <= 5) {
+                const hasExisting = (currentPopupItem.rating != null && currentPopupItem.rating > 0);
+                const result = hasExisting
+                    ? await DataModel.updateRating(currentPopupItem.title, currentPopupItem.type, rating, review)
+                    : await DataModel.addRating(currentPopupItem.title, currentPopupItem.type, rating, review);
+                if (!result.ok) {
+                    alert(result?.data?.message || 'Could not save rating.');
+                    return;
+                }
+            }
+            if (status) {
+                const sr = await DataModel.setStatus(currentPopupItem.title, currentPopupItem.type, status);
+                if (!sr.ok) {
+                    alert(sr?.data?.message || 'Could not update status.');
+                    return;
+                }
+            }
+            popup.style.display = 'none';
+            await renderDashboard();
+        } finally {
+            popupSave.disabled = false;
+            popupDelete.disabled = false;
         }
-        if (status) {
-            await DataModel.setStatus(currentPopupItem.title, currentPopupItem.type, status);
+    });
+
+    popupStatusSelect?.addEventListener('change', async () => {
+        if (!currentPopupItem || popupStatusSection?.style.display === 'none') return;
+        if (popupStatusSelect.dataset.programmatic === '1') return;
+        const v = popupStatusSelect.value;
+        const sr = await DataModel.setStatus(currentPopupItem.title, currentPopupItem.type, v);
+        if (!sr.ok) {
+            alert(sr?.data?.message || 'Could not update status.');
+            popupStatusSelect.value = normalizeWatchStatusKey(currentPopupItem.status) || 'completed';
+            return;
         }
-        popup.style.display = 'none';
-        renderDashboard();
+        syncCachedStatusRow(currentPopupItem.title, currentPopupItem.type, v);
+        currentPopupItem.status = v;
+        const statusEl = document.getElementById('popupStatus');
+        if (statusEl) {
+            statusEl.textContent = `Status: ${v.replace(/_/g, ' ')}`;
+            statusEl.style.display = 'block';
+        }
+        renderStatuses();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        const p = document.getElementById('itemPopup');
+        if (p && p.style.display === 'flex') {
+            p.style.display = 'none';
+        }
     });
     popupDelete?.addEventListener('click', async () => {
         if (!currentPopupItem) return;
@@ -523,14 +565,58 @@ let cachedLists = [];
 let cachedStatuses = [];
 let posterCache = {};
 let currentPopupItem = null;
+
+/** Align server/DB status strings with board columns (handles spacing/casing quirks). */
+function normalizeWatchStatusKey(raw) {
+    if (raw == null || raw === '') return '';
+    const s = String(raw).trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (s === 'wanttowatch') return 'want_to_watch';
+    if (s === 'watching' || s === 'completed' || s === 'want_to_watch') return s;
+    return s;
+}
 let popupFriendsRatingsFetchGen = 0;
+
+function syncCachedStatusRow(title, type, status) {
+    const t = type === 'show' ? 'show' : 'movie';
+    const ns = normalizeWatchStatusKey(status) || status;
+    const ex = cachedStatuses.find(
+        (s) => s.title === title && (s.type || 'movie') === t
+    );
+    if (ex) ex.status = ns;
+    else cachedStatuses.push({ title, type: t, status: ns });
+}
+
+async function refreshStatusesFromServer() {
+    if (!DataModel.getStatuses) return;
+    try {
+        const rows = await DataModel.getStatuses();
+        cachedStatuses = Array.isArray(rows) ? rows : [];
+        const needPosters = cachedStatuses.map((s) => ({ title: s.title, type: s.type || 'movie' }));
+        const missing = needPosters.filter((k) => !posterCache[`${k.title}|${k.type || 'movie'}`]);
+        if (missing.length > 0 && DataModel.getPostersForItems) {
+            const map = await DataModel.getPostersForItems(missing);
+            Object.assign(posterCache, map);
+        }
+        renderStatuses();
+    } catch (e) {
+        console.error('refreshStatusesFromServer', e);
+        await renderDashboard();
+    }
+}
 
 function showItemPopup(item) {
     const whItem = cachedWatchHistory.find(w => w.title === item.title && (w.type || 'movie') === (item.type || 'movie'));
     const merged = whItem ? { ...item, rating: whItem.rating, review: whItem.review, watched_at: whItem.watched_at } : item;
     if (!merged.status && cachedStatuses?.length) {
-        const statusItem = cachedStatuses.find(s => s.title === merged.title);
-        if (statusItem) merged.status = statusItem.status;
+        const statusItem = cachedStatuses.find(
+            (s) =>
+                s.title === merged.title &&
+                (s.type || 'movie') === (merged.type || 'movie')
+        );
+        if (statusItem) {
+            const nk = normalizeWatchStatusKey(statusItem.status);
+            if (nk) merged.status = nk;
+        }
     }
     currentPopupItem = { ...merged, _rating: merged.rating || 0 };
     const popup = document.getElementById('itemPopup');
@@ -555,8 +641,9 @@ function showItemPopup(item) {
     if (titleEl) titleEl.textContent = merged.title || 'Untitled';
     if (metaEl) metaEl.textContent = `${merged.type || 'movie'}${merged.watched_at ? ' · ' + new Date(merged.watched_at).toLocaleDateString() : ''}`;
     if (statusEl) {
-        statusEl.textContent = merged.status ? `Status: ${merged.status.replace('_', ' ')}` : '';
-        statusEl.style.display = merged.status ? 'block' : 'none';
+        const st = normalizeWatchStatusKey(merged.status);
+        statusEl.textContent = st ? `Status: ${st.replace(/_/g, ' ')}` : '';
+        statusEl.style.display = st ? 'block' : 'none';
     }
     if (reviewEl) reviewEl.value = merged.review || '';
     if (starsEl) {
@@ -567,7 +654,13 @@ function showItemPopup(item) {
         });
     }
     if (statusSection) statusSection.style.display = 'block';
-    if (statusSelect) statusSelect.value = merged.status || 'completed';
+    if (statusSelect) {
+        statusSelect.dataset.programmatic = '1';
+        statusSelect.value = normalizeWatchStatusKey(merged.status) || 'completed';
+        requestAnimationFrame(() => {
+            delete statusSelect.dataset.programmatic;
+        });
+    }
 
     const listsWithExactItem = (cachedLists || []).map(l => {
         const item = (l.items || []).find(i => (i.title || '').trim().toLowerCase() === (merged.title || '').trim().toLowerCase());
@@ -749,13 +842,24 @@ function renderStatuses() {
     const want = document.getElementById('statusWant');
     const watching = document.getElementById('statusWatching');
     const completed = document.getElementById('statusCompleted');
+    const hWant = document.getElementById('statusWantHeading');
+    const hWatching = document.getElementById('statusWatchingHeading');
+    const hCompleted = document.getElementById('statusCompletedHeading');
     if (!watching || !completed || !want) return;
 
     const byStatus = {
-        want_to_watch: cachedStatuses.filter(s => s.status === 'want_to_watch'),
-        watching: cachedStatuses.filter(s => s.status === 'watching'),
-        completed: cachedStatuses.filter(s => s.status === 'completed'),
+        want_to_watch: cachedStatuses.filter((s) => normalizeWatchStatusKey(s.status) === 'want_to_watch'),
+        watching: cachedStatuses.filter((s) => normalizeWatchStatusKey(s.status) === 'watching'),
+        completed: cachedStatuses.filter((s) => normalizeWatchStatusKey(s.status) === 'completed'),
     };
+
+    const setHeading = (el, base, n) => {
+        if (!el) return;
+        el.textContent = n > 0 ? `${base} (${n})` : base;
+    };
+    setHeading(hWant, 'Want to Watch', byStatus.want_to_watch.length);
+    setHeading(hWatching, 'Watching', byStatus.watching.length);
+    setHeading(hCompleted, 'Completed', byStatus.completed.length);
 
     [want, watching, completed].forEach((el) => {
         el.innerHTML = '';
@@ -770,9 +874,16 @@ function renderStatuses() {
         completed.appendChild(createPosterCard(s));
     });
 
-    if (byStatus.want_to_watch.length === 0) want.innerHTML = '<p class="empty-message">None</p>';
-    if (byStatus.watching.length === 0) watching.innerHTML = '<p class="empty-message">None</p>';
-    if (byStatus.completed.length === 0) completed.innerHTML = '<p class="empty-message">None</p>';
+    const emptyWant =
+        '<p class="empty-message">No titles yet — search above or drag a card here from another column.</p>';
+    const emptyWatching =
+        '<p class="empty-message">Nothing in progress — drag something from Want to Watch or add a title above.</p>';
+    const emptyCompleted =
+        '<p class="empty-message">No completed titles yet — drag a card here when you finish, or use search above.</p>';
+
+    if (byStatus.want_to_watch.length === 0) want.innerHTML = emptyWant;
+    if (byStatus.watching.length === 0) watching.innerHTML = emptyWatching;
+    if (byStatus.completed.length === 0) completed.innerHTML = emptyCompleted;
 }
 
 function setupStatusBoardDragDrop() {
@@ -812,14 +923,18 @@ function setupStatusBoardDragDrop() {
             const existing = cachedStatuses.find(
                 (s) => s.title === title && (s.type || 'movie') === type
             );
-            if (existing && existing.status === status) return;
+            if (existing && normalizeWatchStatusKey(existing.status) === status) return;
+
+            if (existing) {
+                existing.status = status;
+            } else {
+                cachedStatuses.push({ title, type, status });
+            }
+            renderStatuses();
 
             const result = await DataModel.setStatus(title, type, status);
-            if (result?.ok) {
-                if (existing) existing.status = status;
-                else cachedStatuses.push({ title, type, status });
-                renderStatuses();
-            } else {
+            if (!result?.ok) {
+                await refreshStatusesFromServer();
                 const msg = result?.data?.message || 'Could not update status.';
                 alert(msg);
             }
@@ -835,9 +950,25 @@ function createPosterCard(item) {
 
     const url = posterUrl(item);
     const name = item.title || 'Untitled';
-    div.innerHTML = url
-        ? `<img src="${url}" alt="${name}" draggable="false"><p>${name}</p>`
-        : `<div class="poster-placeholder"></div><p>${name}</p>`;
+    if (url) {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = name;
+        img.draggable = false;
+        div.appendChild(img);
+    } else {
+        const ph = document.createElement('div');
+        ph.className = 'poster-placeholder';
+        div.appendChild(ph);
+    }
+    const typeSpan = document.createElement('span');
+    typeSpan.className = 'poster-card-type';
+    typeSpan.textContent = t === 'show' ? 'TV' : 'Movie';
+    div.appendChild(typeSpan);
+    const titleP = document.createElement('p');
+    titleP.className = 'poster-card-title';
+    titleP.textContent = name;
+    div.appendChild(titleP);
     div.addEventListener('dragstart', (e) => {
         const payload = JSON.stringify({ title: item.title, type: t });
         e.dataTransfer.setData('application/x-status-item', payload);

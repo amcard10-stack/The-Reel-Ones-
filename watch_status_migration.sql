@@ -11,3 +11,5 @@ CREATE TABLE IF NOT EXISTS watch_status (
     UNIQUE KEY unique_user_title (user_email, title),
     FOREIGN KEY (user_email) REFERENCES user(email) ON DELETE CASCADE
 );
+
+-- If the table already existed with an older ENUM (missing want_to_watch), run watch_status_enum_alter.sql.

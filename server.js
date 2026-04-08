@@ -29,6 +29,17 @@ function isUnknownColumnError(err) {
     return Boolean(err && (err.code === 'ER_BAD_FIELD_ERROR' || Number(err.errno) === 1054));
 }
 
+/** Normalize client/DB quirks for watch_status.status (ENUM). */
+function normalizeDashboardWatchStatus(raw) {
+    const s = String(raw ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, '_');
+    if (s === 'wanttowatch') return 'want_to_watch';
+    const allowed = new Set(['watching', 'completed', 'want_to_watch']);
+    return allowed.has(s) ? s : null;
+}
+
 function friendAcceptedPairSql(actorCol) {
     return `EXISTS (
         SELECT 1 FROM friend_request fr
@@ -699,18 +710,18 @@ app.get('/api/dashboard/status', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
-    const { title, type, status } = req.body;
+    const titleTrim = String(req.body?.title ?? '').trim();
+    const statusNorm = normalizeDashboardWatchStatus(req.body?.status);
 
-    if (!title || !status) {
-        return res.status(400).json({ message: 'Title and status required.' });
+    if (!titleTrim || !statusNorm) {
+        return res.status(400).json({
+            message: !titleTrim
+                ? 'Title and status required.'
+                : 'Invalid status. Use watching, completed, or want to watch.',
+        });
     }
 
-    const t = type === 'show' ? 'show' : 'movie';
-    const allowed = new Set(['watching', 'completed', 'want_to_watch']);
-
-    if (!allowed.has(status)) {
-        return res.status(400).json({ message: 'Invalid status.' });
-    }
+    const t = req.body?.type === 'show' ? 'show' : 'movie';
 
     try {
         const connection = await createConnection();
@@ -721,11 +732,24 @@ app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
                status = VALUES(status),
                type = VALUES(type),
                updated_at = CURRENT_TIMESTAMP`,
-            [req.user.email, title, t, status]
+            [req.user.email, titleTrim, t, statusNorm]
         );
         await connection.end();
         return res.status(200).json({ message: 'Status saved.' });
     } catch (err) {
+        const truncated =
+            err &&
+            (err.code === 'WARN_DATA_TRUNCATED' ||
+                err.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' ||
+                Number(err.errno) === 1265 ||
+                Number(err.errno) === 1366);
+        if (truncated) {
+            console.error('watch_status ENUM/truncation — run watch_status_enum_alter.sql if needed:', err.message);
+            return res.status(400).json({
+                message:
+                    'Could not save that status. Your database may need the watch_status status column updated (see watch_status_enum_alter.sql).',
+            });
+        }
         console.error(err);
         return res.status(500).json({ message: 'Error saving status.' });
     }
