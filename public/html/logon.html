@@ -3,51 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logon</title>
+    <meta name="description" content="Sign in to Roll the Tapes — track movies and shows, ratings, and lists.">
+    <meta name="theme-color" content="#0a1a2f">
+    <title>Sign in · Roll the Tapes</title>
     <link rel="stylesheet" href="/css/logon.css">
 </head>
 
 <body>
 
-    <div class="logon-wrapper">
+    <a href="#auth-card" class="skip-link">Skip to sign in</a>
 
-        <div class="container">
-            <img src="/logo.png" alt="Roll the Tapes" class="app-logo">
+    <div class="hero">
+        <div class="hero-bg hero-bg--loading" id="heroBg">
+            <div class="marquee-root" id="heroMarquee" aria-hidden="true"></div>
+        </div>
+        <div class="hero-scrim" aria-hidden="true"></div>
 
-            <div class="tab">
-                <button class="tab-button active" id="login-tab">Sign in</button>
-                <button class="tab-button" id="create-account-tab">Create Account</button>
+        <div class="logon-wrapper">
+
+        <main class="container" id="auth-card">
+            <img src="/logo.png" alt="Roll the Tapes" class="app-logo" width="150">
+            <p class="auth-tagline">Your watchlist, ratings, and friends in one place.</p>
+
+            <div class="tab" role="tablist" aria-label="Choose sign in or create account">
+                <button type="button" class="tab-button active" id="login-tab" role="tab" aria-selected="true" aria-controls="logon-form">Sign in</button>
+                <button type="button" class="tab-button" id="create-account-tab" role="tab" aria-selected="false" aria-controls="create-account-form">Create account</button>
             </div>
 
             <div id="form-container">
 
-                <!-- Logon Form -->
-                <form id="logon-form" class="active-form">
+                <form id="logon-form" class="active-form" role="tabpanel" aria-labelledby="login-tab">
                     <label for="login-email">Email</label>
-                    <input type="email" id="login-email" placeholder="Enter your email" required>
+                    <input type="email" id="login-email" name="email" placeholder="you@example.com" autocomplete="email" required>
 
                     <label for="login-password">Password</label>
-                    <input type="password" id="login-password" placeholder="Enter your password" required>
+                    <div class="password-field">
+                        <input type="password" id="login-password" name="password" placeholder="Your password" autocomplete="current-password" required>
+                        <button type="button" class="password-toggle" id="login-password-toggle" aria-label="Show password" aria-pressed="false">Show</button>
+                    </div>
 
-                    <button type="submit" class="primary-btn">Logon</button>
+                    <button type="submit" class="primary-btn" id="login-submit">Sign in</button>
                 </form>
 
-                <!-- Create Account Form -->
-                <form id="create-account-form">
+                <form id="create-account-form" role="tabpanel" aria-labelledby="create-account-tab" aria-hidden="true">
                     <label for="create-email">Email</label>
-                    <input type="email" id="create-email" placeholder="Enter your email" required>
+                    <input type="email" id="create-email" name="email" placeholder="you@example.com" autocomplete="email" required>
 
                     <label for="create-password">Password</label>
-                    <input type="password" id="create-password" placeholder="Create your password" required>
+                    <div class="password-field">
+                        <input type="password" id="create-password" name="password" placeholder="Choose a password" autocomplete="new-password" required>
+                        <button type="button" class="password-toggle" id="create-password-toggle" aria-label="Show password" aria-pressed="false">Show</button>
+                    </div>
 
-                    <button type="submit" class="primary-btn">Create Account</button>
+                    <button type="submit" class="primary-btn" id="create-submit">Create account</button>
                 </form>
 
-                <p id="message" class="message"></p>
+                <p id="message" class="message" role="status" aria-live="polite"></p>
 
             </div>
-        </div>
+        </main>
 
+        <p class="hero-attribution">
+            Poster images from
+            <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">The Movie Database (TMDB)</a>
+        </p>
+
+        </div>
     </div>
 
     <script src="/js/logon.js"></script>

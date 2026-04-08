@@ -94,6 +94,58 @@ app.get('/suggestions', (req, res) => {
     res.sendFile(__dirname + '/public/html/suggestions.html');
 });
 
+// Landing page hero — no auth (TMDB key kept on server)
+const HERO_POSTER_FALLBACK = [
+    'https://image.tmdb.org/t/p/w1280/qJ2tW6WMUDux911r6m7haRef0WH.jpg',
+    'https://image.tmdb.org/t/p/w1280/9gk7adHYeDvHkCSEqAvQNLV5Uge.jpg',
+    'https://image.tmdb.org/t/p/w1280/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg',
+    'https://image.tmdb.org/t/p/w1280/d5NXSklXo0qyIYkgV94XAgMIckC.jpg',
+    'https://image.tmdb.org/t/p/w1280/7IiTTgloJzvGI1TAYymCfbfl3vT.jpg',
+    'https://image.tmdb.org/t/p/w1280/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg',
+];
+
+app.get('/api/public/hero-posters', async (req, res) => {
+    const key = process.env.TMDB_API_KEY;
+    if (!key || key === 'your-tmdb-api-key-here') {
+        return res.status(200).json({ posters: HERO_POSTER_FALLBACK });
+    }
+    try {
+        const [movieRes1, movieRes2, tvRes1, tvRes2] = await Promise.all([
+            fetch(`https://api.themoviedb.org/3/trending/movie/day?api_key=${key}&page=1`),
+            fetch(`https://api.themoviedb.org/3/trending/movie/day?api_key=${key}&page=2`),
+            fetch(`https://api.themoviedb.org/3/trending/tv/day?api_key=${key}&page=1`),
+            fetch(`https://api.themoviedb.org/3/trending/tv/day?api_key=${key}&page=2`),
+        ]);
+        const urls = [];
+        const pushPaths = (results, limit) => {
+            for (const r of (results || []).slice(0, limit)) {
+                if (r.poster_path) {
+                    urls.push(`https://image.tmdb.org/t/p/w1280${r.poster_path}`);
+                }
+            }
+        };
+        for (const res of [movieRes1, movieRes2, tvRes1, tvRes2]) {
+            if (res.ok) {
+                const d = await res.json();
+                pushPaths(d.results, 20);
+            }
+        }
+        const seen = new Set();
+        const unique = [];
+        for (const u of urls) {
+            if (!seen.has(u)) {
+                seen.add(u);
+                unique.push(u);
+            }
+        }
+        const posters = unique.length >= 4 ? unique.slice(0, 56) : HERO_POSTER_FALLBACK;
+        return res.status(200).json({ posters });
+    } catch (e) {
+        console.error('hero-posters:', e.message);
+        return res.status(200).json({ posters: HERO_POSTER_FALLBACK });
+    }
+});
+
 //////////////////////////////////////
 // HELPER FUNCTIONS AND AUTH MIDDLEWARE
 //////////////////////////////////////
