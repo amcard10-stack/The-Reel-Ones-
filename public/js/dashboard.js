@@ -471,7 +471,8 @@ async function loadNotifications() {
         let notifications = [];
 
         if (DataModel.getNotifications) {
-            notifications = await DataModel.getNotifications();
+            const data = await DataModel.getNotifications();
+            notifications = Array.isArray(data) ? data : (data?.notifications || []);
         } else {
             const res = await fetch('/api/notifications', {
                 headers: {
@@ -480,10 +481,13 @@ async function loadNotifications() {
             });
 
             if (!res.ok) throw new Error('Failed to load notifications');
-            notifications = await res.json();
+
+            const data = await res.json();
+            notifications = Array.isArray(data) ? data : (data?.notifications || []);
         }
 
-        renderNotifications(Array.isArray(notifications) ? notifications : []);
+        console.log('loaded notifications:', notifications);
+        renderNotifications(notifications);
     } catch (err) {
         console.error('Failed to load notifications:', err);
         list.innerHTML = '<p class="empty-message">Could not load notifications.</p>';

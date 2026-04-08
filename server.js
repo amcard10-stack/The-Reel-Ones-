@@ -187,6 +187,33 @@ async function authenticateToken(req, res, next) {
         return res.status(401).json({ message: 'Invalid or expired token.' });
     }
 }
+async function getUserDisplayName(connection, email) {
+    const [[user]] = await connection.execute(
+        `SELECT email, username, first_name, last_name
+         FROM user
+         WHERE email = ?`,
+        [email]
+    );
+
+    if (!user) return email;
+
+    const username = String(user.username || '').trim();
+    const first = String(user.first_name || '').trim();
+    const last = String(user.last_name || '').trim();
+    const fullName = `${first} ${last}`.trim();
+
+    if (username) return username;
+    if (fullName) return fullName;
+    return user.email;
+}
+
+async function createNotification(connection, userEmail, type, title, message, actionUrl = null) {
+    await connection.execute(
+        `INSERT INTO notifications (user_email, type, title, message, action_url, is_read)
+         VALUES (?, ?, ?, ?, ?, FALSE)`,
+        [userEmail, type, title, message, actionUrl]
+    );
+}
 
 //////////////////////////////////////
 // AUTH ROUTES
@@ -254,6 +281,124 @@ app.post('/api/login', async (req, res) => {
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: 'Error logging in.' });
+    }
+});
+
+//////////////////////////////////////
+// NOTIFICATIONS
+//////////////////////////////////////
+app.get('/api/notifications', authenticateToken, async (req, res) => {
+    let connection;
+    try {
+        connection = await createConnection();
+
+        const [notificationRows] = await connection.execute(
+            `SELECT id, user_email, type, title, message, action_url, is_read, created_at
+             FROM notifications
+             WHERE user_email = ?
+             AND type <> 'friend_request'
+             ORDER BY created_at DESC
+             LIMIT 50`,
+            [req.user.email]
+        );
+
+        const [friendRequestRows] = await connection.execute(
+            `SELECT 
+                fr.id,
+                fr.receiver_email AS user_email,
+                'friend_request' AS type,
+                'New Friend Request' AS title,
+                CONCAT(
+                    COALESCE(
+                        NULLIF(TRIM(u.username), ''),
+                        NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''),
+                        fr.sender_email
+                    ),
+                    ' sent you a friend request.'
+                ) AS message,
+                '/friends' AS action_url,
+                FALSE AS is_read,
+                fr.created_at
+             FROM friend_request fr
+             JOIN user u ON u.email = fr.sender_email
+             WHERE fr.receiver_email = ?
+               AND fr.status = 'pending'
+             ORDER BY fr.created_at DESC`,
+            [req.user.email]
+        );
+
+        const allNotifications = [...notificationRows, ...friendRequestRows]
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(0, 50);
+
+        await connection.end();
+        return res.status(200).json({ notifications: allNotifications });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error retrieving notifications.', notifications: [] });
+    }
+});
+
+app.get('/api/notifications/unread-count', authenticateToken, async (req, res) => {
+    let connection;
+    try {
+        connection = await createConnection();
+        const [[row]] = await connection.execute(
+            `SELECT COUNT(*) AS count
+             FROM notifications
+             WHERE user_email = ? AND is_read = FALSE`,
+            [req.user.email]
+        );
+        await connection.end();
+        return res.status(200).json({ count: Number(row?.count || 0) });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(200).json({ count: 0 });
+    }
+});
+
+app.put('/api/notifications/:id/read', authenticateToken, async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+        return res.status(400).json({ message: 'Invalid notification id.' });
+    }
+
+    let connection;
+    try {
+        connection = await createConnection();
+        await connection.execute(
+            `UPDATE notifications
+             SET is_read = TRUE
+             WHERE id = ? AND user_email = ?`,
+            [id, req.user.email]
+        );
+        await connection.end();
+        return res.status(200).json({ message: 'Notification marked as read.' });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error marking notification as read.' });
+    }
+});
+
+app.put('/api/notifications/read-all', authenticateToken, async (req, res) => {
+    let connection;
+    try {
+        connection = await createConnection();
+        await connection.execute(
+            `UPDATE notifications
+             SET is_read = TRUE
+             WHERE user_email = ? AND is_read = FALSE`,
+            [req.user.email]
+        );
+        await connection.end();
+        return res.status(200).json({ message: 'All notifications marked as read.' });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error marking all notifications as read.' });
     }
 });
 
@@ -1641,8 +1786,10 @@ app.post('/api/friends/request', authenticateToken, async (req, res) => {
     const { receiverEmail } = req.body;
     if (!receiverEmail) return res.status(400).json({ message: 'Receiver email required.' });
     if (receiverEmail === req.user.email) return res.status(400).json({ message: 'You cannot add yourself.' });
+
+    let connection;
     try {
-        const connection = await createConnection();
+        connection = await createConnection();
         const [existing] = await connection.execute(
             `SELECT id FROM friend_request WHERE sender_email = ? AND receiver_email = ? AND status = 'pending'`,
             [req.user.email, receiverEmail]
@@ -1665,10 +1812,16 @@ app.post('/api/friends/request', authenticateToken, async (req, res) => {
             'INSERT INTO friend_request (sender_email, receiver_email) VALUES (?, ?)',
             [req.user.email, receiverEmail]
         );
+
+    //    const actorLabel = await getUserDisplayName(connection, req.user.email);
+    //     await createNotification(
+    //         connection, receiverEmail, 'friend_request', 'New Friend Request', `${actorLabel} sent you a friend request.`, '/friends'
+    //     ); 
         await connection.end();
         res.status(201).json({ message: 'Friend request sent.' });
     } catch (error) {
         console.error(error);
+        if (connection) {try { await connection.end(); } catch (_) {}}
         res.status(500).json({ message: 'Error sending friend request.' });
     }
 });
@@ -1729,17 +1882,45 @@ app.put('/api/friends/request/:id', authenticateToken, async (req, res) => {
     if (!['accepted', 'declined'].includes(status)) {
         return res.status(400).json({ message: 'Invalid status.' });
     }
+
+    let connection;
     try {
-        const connection = await createConnection();
+        connection = await createConnection();
+
+        const [requestRows] = await connection.execute(
+            `SELECT id, sender_email, receiver_email 
+            FROM friend_request 
+            WHERE id = ? AND receiver_email = ? AND status = 'pending'`,
+            [id, req.user.email]
+        );
+        if (requestRows.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'Friend request not found.' });
+        }
+        const request = requestRows[0];
         const [result] = await connection.execute(
             `UPDATE friend_request SET status = ? WHERE id = ? AND receiver_email = ?`,
             [status, id, req.user.email]
         );
+        if (result.affectedRows === 0) {
         await connection.end();
-        if (result.affectedRows === 0) return res.status(404).json({ message: 'Request not found.' });
+        return res.status(404).json({ message: 'Request not found.' });
+        }
+        const actorLabel = await getUserDisplayName(connection, req.user.email);
+        await createNotification(
+            connection, request.sender_email,
+            status === 'accepted' ? 'friend_request_accepted' : 'friend_request_declined',
+            status === 'accepted' ? 'Friend Request Accepted' : 'Friend Request Declined',
+            status === 'accepted'
+                ? `${actorLabel} accepted your friend request.`
+                : `${actorLabel} declined your friend request.`,
+            '/friends'
+        );  
+        await connection.end();
         res.status(200).json({ message: `Request ${status}.` });
     } catch (error) {
         console.error(error);
+        if (connection) {try { await connection.end(); } catch (_) {}}
         res.status(500).json({ message: 'Error updating request.' });
     }
 });
@@ -2256,6 +2437,15 @@ app.post('/api/friends/:email/shared-lists', authenticateToken, async (req, res)
             'INSERT INTO list_collaborator (list_id, collaborator_email, invited_by_email, status) VALUES (?, ?, ?, ?)',
             [listId, email, req.user.email, 'pending']
         );
+
+        const actorLabel = await getUserDisplayName(connection, req.user.email);
+        await createNotification(
+            connection, email, 
+            'list_invitation', 'New List Invitation', 
+            `${actorLabel} invited you to collaborate on : ${name}.`,
+             '/friends'
+        );
+
         await connection.end();
         return res.status(201).json({ message: 'Invitation sent.', listId });
     } catch (error) {
@@ -2294,16 +2484,48 @@ app.get('/api/invitations/pending', authenticateToken, async (req, res) => {
 app.put('/api/invitations/:id/accept', authenticateToken, async (req, res) => {
     const invId = parseInt(req.params.id, 10);
     if (!Number.isFinite(invId)) return res.status(400).json({ message: 'Invalid invitation id.' });
+
     let connection;
     try {
         connection = await createConnection();
+
+        const [rows] = await connection.execute(
+            `SELECT lc.id, lc.list_id, lc.invited_by_email, l.name AS listName
+             FROM list_collaborator lc
+             JOIN list l ON l.id = lc.list_id
+             WHERE lc.id = ? AND lc.collaborator_email = ? AND lc.status = 'pending'`,
+            [invId, req.user.email, 'pending']
+        );
+
+        if (rows.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'Invitation not found.' });
+        }
+
+        const invitation = rows[0];
+
         const [result] = await connection.execute(
             `UPDATE list_collaborator SET status = 'accepted'
              WHERE id = ? AND collaborator_email = ? AND status = 'pending'`,
             [invId, req.user.email]
         );
+
+        if (result.affectedRows === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'Invitation not found.' });
+        }
+
+        const actorLabel = await getUserDisplayName(connection, req.user.email);
+        await createNotification(
+            connection,
+            invitation.invited_by_email,
+            'list_invitation_accepted',
+            'List Invitation Accepted',
+            `${actorLabel} accepted your invitation to ${invitation.listName}.`,
+            '/friends'
+        );
+
         await connection.end();
-        if (result.affectedRows === 0) return res.status(404).json({ message: 'Invitation not found.' });
         return res.status(200).json({ message: 'Invitation accepted.' });
     } catch (error) {
         console.error(error);
@@ -2329,6 +2551,15 @@ app.put('/api/invitations/:id/decline', authenticateToken, async (req, res) => {
             return res.status(404).json({ message: 'Invitation not found.' });
         }
         await connection.execute('DELETE FROM list_collaborator WHERE id = ?', [invId]);
+        const actorLabel = await getUserDisplayName(connection, req.user.email);
+        await createNotification(
+            connection,
+            invitation.invited_by_email,
+            'list_invitation_declined',
+            'List Invitation Declined',
+            `${actorLabel} declined your invitation to ${invitation.listName}.`,
+            '/friends'
+        );
         await connection.end();
         return res.status(200).json({ message: 'Invitation declined.' });
     } catch (error) {
@@ -2382,6 +2613,8 @@ app.post('/api/dashboard/lists/:listId/collaborators', authenticateToken, async 
             await connection.end();
             return res.status(404).json({ message: 'List not found or you are not the owner.' });
         }
+        const listName = lists[0].name;
+
         const [friendCheck] = await connection.execute(
             `SELECT id FROM friend_request
              WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
@@ -2395,6 +2628,13 @@ app.post('/api/dashboard/lists/:listId/collaborators', authenticateToken, async 
         await connection.execute(
             'INSERT IGNORE INTO list_collaborator (list_id, collaborator_email, invited_by_email) VALUES (?, ?, ?)',
             [listId, collaboratorEmail, req.user.email]
+        );
+        const actorLabel = await getUserDisplayName(connection, req.user.email);
+        await createNotification(
+            connection, collaboratorEmail, 
+            'list_invitation', 'New List Invitation', 
+            `${actorLabel} invited you to collaborate on : ${listName}.`,
+             '/friends'
         );
         await connection.end();
         return res.status(201).json({ message: 'Collaborator added.' });
@@ -2541,6 +2781,12 @@ app.post('/api/recommendations', authenticateToken, async (req, res) => {
             'INSERT INTO recommendation (sender_email, receiver_email, title, type, note) VALUES (?, ?, ?, ?, ?)',
             [req.user.email, receiverEmail, title.trim(), contentType, (note || '').trim() || null]
         );
+       const actorLabel = await getUserDisplayName(connection, req.user.email);
+         await createNotification(
+        connection, receiverEmail, 'recommendation_received','New Recommendation', `${actorLabel} recommended ${title.trim()} (${contentType}) to you.`, 
+        '/suggestions'
+         );
+
         await connection.end();
         return res.status(201).json({ message: 'Recommendation sent.' });
     } catch (error) {

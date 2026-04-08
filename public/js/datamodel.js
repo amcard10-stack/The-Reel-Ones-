@@ -581,5 +581,82 @@ removeCollaborator: async function (listId, email) {
         return { ok: false };
     }
 },
+
+getNotifications: async function () {
+    if (!token) return [];
+    try {
+        const response = await fetch('/api/notifications', {
+            method: 'GET',
+            headers: authHeaders(),
+        });
+
+        if (!response.ok) return [];
+
+        const data = await response.json();
+        return data.notifications || [];
+    } catch (error) {
+        console.error("Error fetching notifications:", error);
+        return [];
+    }
+},
+
+getUnreadNotificationCount: async function () {
+    if (!token) return { count: 0 };
+    try {
+        const response = await fetch('/api/notifications/unread-count', {
+            method: 'GET',
+            headers: authHeaders(),
+        });
+
+        if (!response.ok) return { count: 0 };
+
+        const data = await response.json();
+        return { count: data.count || 0 };
+    } catch (error) {
+        console.error("Error fetching unread notification count:", error);
+        return { count: 0 };
+    }
+},
+
+markNotificationRead: async function (id) {
+    if (!token) return { ok: false };
+    try {
+        const response = await fetch(`/api/notifications/${id}/read`, {
+            method: 'PUT',
+            headers: authHeaders(),
+        });
+
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (_) {}
+
+        return { ok: response.ok, data };
+    } catch (error) {
+        console.error("Error marking notification as read:", error);
+        return { ok: false };
+    }
+},
+
+markAllNotificationsRead: async function () {
+    if (!token) return { ok: false };
+    try {
+        const response = await fetch('/api/notifications/read-all', {
+            method: 'PUT',
+            headers: authHeaders(),
+        });
+
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (_) {}
+
+        return { ok: response.ok, data };
+    } catch (error) {
+        console.error("Error marking all notifications as read:", error);
+        return { ok: false };
+    }
+},
+
    };
 })();
