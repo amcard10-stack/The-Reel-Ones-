@@ -344,14 +344,26 @@ app.get('/api/notifications/unread-count', authenticateToken, async (req, res) =
     let connection;
     try {
         connection = await createConnection();
-        const [[row]] = await connection.execute(
+        const [[notificationRow]] = await connection.execute(
             `SELECT COUNT(*) AS count
              FROM notifications
-             WHERE user_email = ? AND is_read = FALSE`,
+             WHERE user_email = ? 
+             AND is_read = FALSE
+             AND type <> 'friend_request'`,
             [req.user.email]
         );
+        const [[friendReqRow]] = await connection.execute(
+            `SELECT COUNT(*) AS count
+            FROM friend_request
+            WHERE receiver_email = ?
+            AND status = 'pending'`,
+            [req.user.email]
+        );
+        const total = 
+        Number (notificationRow?.count || 0) + Number(friendReqRow?.count || 0);
         await connection.end();
-        return res.status(200).json({ count: Number(row?.count || 0) });
+
+        return res.status(200).json({ count: total });
     } catch (error) {
         console.error(error);
         if (connection) { try { await connection.end(); } catch (_) {} }
