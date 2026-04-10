@@ -2527,7 +2527,7 @@ app.put('/api/invitations/:id/accept', authenticateToken, async (req, res) => {
              FROM list_collaborator lc
              JOIN list l ON l.id = lc.list_id
              WHERE lc.id = ? AND lc.collaborator_email = ? AND lc.status = 'pending'`,
-            [invId, req.user.email, 'pending']
+            [invId, req.user.email]
         );
 
         if (rows.length === 0) {
@@ -2603,7 +2603,7 @@ app.put('/api/invitations/:id/decline', authenticateToken, async (req, res) => {
             invitation.invited_by_email,
             'list_invitation_declined',
             'List Invitation Declined',
-            `${actorLabel} declined your invitation to "${invitation.listName}".`,
+            `${actorLabel} declined your invitation to ${invitation.listName}.`,
             '/friends'
         );
 
@@ -2680,7 +2680,7 @@ app.post('/api/dashboard/lists/:listId/collaborators', authenticateToken, async 
         await createNotification(
             connection, collaboratorEmail, 
             'list_invitation', 'New List Invitation', 
-            `${actorLabel} invited you to collaborate on : ${listName}.`,
+            `${actorLabel} invited you to collaborate on ${listName}.`,
              '/friends'
         );
         await connection.end();
@@ -2731,7 +2731,7 @@ app.delete('/api/dashboard/lists/:listId/leave', authenticateToken, async (req, 
                 newOwner,
                 'list_left',
                 'Shared List Updated',
-                `${actorLabel} left "${listName}".`,
+                `${actorLabel} left ${listName}.`,
                 '/friends'
             );
 
@@ -2789,7 +2789,7 @@ app.delete('/api/dashboard/lists/:listId/collaborators/:email', authenticateToke
         email,
         'list_removed',
         'Shared List Updated',
-        `${actorLabel} removed you from "${listName}".`,
+        `${actorLabel} removed you from ${listName}.`,
         '/friends'
 );
 
