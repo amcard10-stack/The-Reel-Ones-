@@ -297,6 +297,7 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
              FROM notifications
              WHERE user_email = ?
              AND type <> 'friend_request'
+             AND CREATED_AT >= DATE_SUB(NOW(), INTERVAL 30 DAY)
              ORDER BY created_at DESC
              LIMIT 50`,
             [req.user.email]
@@ -349,7 +350,8 @@ app.get('/api/notifications/unread-count', authenticateToken, async (req, res) =
              FROM notifications
              WHERE user_email = ? 
              AND is_read = FALSE
-             AND type <> 'friend_request'`,
+             AND type <> 'friend_request'
+             AND CREATED_AT >= DATE_SUB(NOW(), INTERVAL 30 DAY)`,
             [req.user.email]
         );
         const [[friendReqRow]] = await connection.execute(
@@ -2110,19 +2112,38 @@ app.get('/api/friends/activity/summary', authenticateToken, async (req, res) => 
 app.delete('/api/friends/:email', authenticateToken, async (req, res) => {
     const { email } = req.params;
     if (!email || email === req.user.email) return res.status(400).json({ message: 'Invalid friend.' });
+
+    let connection;
+
     try {
-        const connection = await createConnection();
+        connection = await createConnection();
         const [result] = await connection.execute(
             `DELETE FROM friend_request
              WHERE status = 'accepted'
              AND ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))`,
             [req.user.email, email, email, req.user.email]
         );
+        if (result.affectedRows === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'Friend not found.' });
+        }
+
+        const actorLabel = await getUserDisplayName(connection, req.user.email);
+
+        await createNotification(
+            connection,
+            email,
+            'friend_removed',
+            'Friend Removed',
+            `${actorLabel} removed you from their friends list.`,
+            '/friends'
+        );
+
         await connection.end();
-        if (result.affectedRows === 0) return res.status(404).json({ message: 'Friend not found.' });
         return res.status(200).json({ message: 'Friend removed.' });
     } catch (error) {
         console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
         return res.status(500).json({ message: 'Error removing friend.' });
     }
 });
@@ -2454,7 +2475,7 @@ app.post('/api/friends/:email/shared-lists', authenticateToken, async (req, res)
         await createNotification(
             connection, email, 
             'list_invitation', 'New List Invitation', 
-            `${actorLabel} invited you to collaborate on : ${name}.`,
+            `${actorLabel} shared: ${name} with you.`,
              '/friends'
         );
 
@@ -2550,28 +2571,42 @@ app.put('/api/invitations/:id/accept', authenticateToken, async (req, res) => {
 app.put('/api/invitations/:id/decline', authenticateToken, async (req, res) => {
     const invId = parseInt(req.params.id, 10);
     if (!Number.isFinite(invId)) return res.status(400).json({ message: 'Invalid invitation id.' });
+
     let connection;
     try {
         connection = await createConnection();
-        // Declining removes the pending row entirely (and the list if owner created it just for sharing)
+
         const [rows] = await connection.execute(
-            'SELECT lc.list_id, l.user_email AS ownerEmail FROM list_collaborator lc JOIN list l ON l.id = lc.list_id WHERE lc.id = ? AND lc.collaborator_email = ? AND lc.status = ?',
-            [invId, req.user.email, 'pending']
+            `SELECT lc.id, lc.list_id, lc.invited_by_email, l.name AS listName
+             FROM list_collaborator lc
+             JOIN list l ON l.id = lc.list_id
+             WHERE lc.id = ? AND lc.collaborator_email = ? AND lc.status = 'pending'`,
+            [invId, req.user.email]
         );
+
         if (rows.length === 0) {
             await connection.end();
             return res.status(404).json({ message: 'Invitation not found.' });
         }
-        await connection.execute('DELETE FROM list_collaborator WHERE id = ?', [invId]);
+
+        const invitation = rows[0];
+
+        await connection.execute(
+            'DELETE FROM list_collaborator WHERE id = ?',
+            [invId]
+        );
+
         const actorLabel = await getUserDisplayName(connection, req.user.email);
+
         await createNotification(
             connection,
             invitation.invited_by_email,
             'list_invitation_declined',
             'List Invitation Declined',
-            `${actorLabel} declined your invitation to ${invitation.listName}.`,
+            `${actorLabel} declined your invitation to "${invitation.listName}".`,
             '/friends'
         );
+
         await connection.end();
         return res.status(200).json({ message: 'Invitation declined.' });
     } catch (error) {
@@ -2618,7 +2653,7 @@ app.post('/api/dashboard/lists/:listId/collaborators', authenticateToken, async 
     try {
         connection = await createConnection();
         const [lists] = await connection.execute(
-            'SELECT id FROM list WHERE id = ? AND user_email = ?',
+            'SELECT id, name FROM list WHERE id = ? AND user_email = ?',
             [listId, req.user.email]
         );
         if (lists.length === 0) {
@@ -2673,7 +2708,10 @@ app.delete('/api/dashboard/lists/:listId/leave', authenticateToken, async (req, 
             await connection.end();
             return res.status(404).json({ message: 'List not found.' });
         }
-        const ownerEmail = ownerRows[0].user_email;
+        const list = listRows[0];
+        const listName = list.name;
+        const ownerEmail = list.user_email;
+        const actorLabel = await getUserDisplayName(connection, req.user.email);
 
         if (ownerEmail === req.user.email) {
             // Owner is leaving — transfer ownership to the first collaborator
@@ -2687,6 +2725,16 @@ app.delete('/api/dashboard/lists/:listId/leave', authenticateToken, async (req, 
             const newOwner = collabs[0].collaborator_email;
             await connection.execute('UPDATE list SET user_email = ? WHERE id = ?', [newOwner, listId]);
             await connection.execute('DELETE FROM list_collaborator WHERE list_id = ?', [listId]);
+
+            await createNotification(
+                connection,
+                newOwner,
+                'list_left',
+                'Shared List Updated',
+                `${actorLabel} left "${listName}".`,
+                '/friends'
+            );
+
         } else {
             // Collaborator is leaving — just remove themselves
             const [result] = await connection.execute(
@@ -2697,6 +2745,15 @@ app.delete('/api/dashboard/lists/:listId/leave', authenticateToken, async (req, 
                 await connection.end();
                 return res.status(404).json({ message: 'Not a collaborator on this list.' });
             }
+
+        await createNotification(
+                connection,
+                ownerEmail,
+                'list_left',
+                'Shared List Updated',
+                `${actorLabel} left "${listName}".`,
+                '/friends'
+            );
         }
         await connection.end();
         return res.status(200).json({ message: 'Left shared list.' });
@@ -2714,7 +2771,7 @@ app.delete('/api/dashboard/lists/:listId/collaborators/:email', authenticateToke
     let connection;
     try {
         connection = await createConnection();
-        const [lists] = await connection.execute('SELECT id FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
+        const [lists] = await connection.execute('SELECT id, name FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
         if (lists.length === 0) {
             await connection.end();
             return res.status(404).json({ message: 'List not found.' });
@@ -2723,6 +2780,19 @@ app.delete('/api/dashboard/lists/:listId/collaborators/:email', authenticateToke
             'DELETE FROM list_collaborator WHERE list_id = ? AND collaborator_email = ?',
             [listId, email]
         );
+
+        const listName = lists[0].name;
+        const actorLabel = await getUserDisplayName(connection, req.user.email);
+
+        await createNotification(
+        connection,
+        email,
+        'list_removed',
+        'Shared List Updated',
+        `${actorLabel} removed you from "${listName}".`,
+        '/friends'
+);
+
         await connection.end();
         return res.status(200).json({ message: 'Collaborator removed.' });
     } catch (error) {
