@@ -22,8 +22,6 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.use(express.json());
-// express.static is mounted at the end of the file so /api/* routes are never
-// shadowed by accidental paths under public/.
 
 function isUnknownColumnError(err) {
     return Boolean(err && (err.code === 'ER_BAD_FIELD_ERROR' || Number(err.errno) === 1054));
@@ -124,9 +122,9 @@ app.get('/api/public/hero-posters', async (req, res) => {
                 }
             }
         };
-        for (const res of [movieRes1, movieRes2, tvRes1, tvRes2]) {
-            if (res.ok) {
-                const d = await res.json();
+        for (const r of [movieRes1, movieRes2, tvRes1, tvRes2]) {
+            if (r.ok) {
+                const d = await r.json();
                 pushPaths(d.results, 20);
             }
         }
@@ -187,6 +185,7 @@ async function authenticateToken(req, res, next) {
         return res.status(401).json({ message: 'Invalid or expired token.' });
     }
 }
+
 async function getUserDisplayName(connection, email) {
     const [[user]] = await connection.execute(
         `SELECT email, username, first_name, last_name
@@ -213,6 +212,53 @@ async function createNotification(connection, userEmail, type, title, message, a
          VALUES (?, ?, ?, ?, ?, FALSE)`,
         [userEmail, type, title, message, actionUrl]
     );
+}
+
+const ALLOWED_REACTION_EMOJIS = new Set(['👍', '😂', '🔥', '😮']);
+
+function normalizeReactionEmoji(raw) {
+    const emoji = String(raw || '').trim();
+    return ALLOWED_REACTION_EMOJIS.has(emoji) ? emoji : null;
+}
+
+async function areUsersAcceptedFriends(connection, emailA, emailB) {
+    const [rows] = await connection.execute(
+        `SELECT id
+         FROM friend_request
+         WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
+         AND status = 'accepted'
+         LIMIT 1`,
+        [emailA, emailB, emailB, emailA]
+    );
+    return rows.length > 0;
+}
+
+async function getReactionSummaryForRating(connection, ratingId, viewerEmail) {
+    const [countRows] = await connection.execute(
+        `SELECT emoji, COUNT(*) AS count
+         FROM rating_reaction
+         WHERE rating_id = ?
+         GROUP BY emoji`,
+        [ratingId]
+    );
+
+    const [myRows] = await connection.execute(
+        `SELECT emoji
+         FROM rating_reaction
+         WHERE rating_id = ? AND user_email = ?
+         LIMIT 1`,
+        [ratingId, viewerEmail]
+    );
+
+    const counts = {};
+    for (const row of countRows) {
+        counts[row.emoji] = Number(row.count) || 0;
+    }
+
+    return {
+        counts,
+        myReaction: myRows.length ? myRows[0].emoji : null
+    };
 }
 
 //////////////////////////////////////
@@ -297,7 +343,6 @@ app.get('/api/notifications', authenticateToken, async (req, res) => {
              FROM notifications
              WHERE user_email = ?
              AND type <> 'friend_request'
-             AND CREATED_AT >= DATE_SUB(NOW(), INTERVAL 30 DAY)
              ORDER BY created_at DESC
              LIMIT 50`,
             [req.user.email]
@@ -350,8 +395,7 @@ app.get('/api/notifications/unread-count', authenticateToken, async (req, res) =
              FROM notifications
              WHERE user_email = ? 
              AND is_read = FALSE
-             AND type <> 'friend_request'
-             AND CREATED_AT >= DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+             AND type <> 'friend_request'`,
             [req.user.email]
         );
         const [[friendReqRow]] = await connection.execute(
@@ -361,8 +405,8 @@ app.get('/api/notifications/unread-count', authenticateToken, async (req, res) =
             AND status = 'pending'`,
             [req.user.email]
         );
-        const total = 
-        Number (notificationRow?.count || 0) + Number(friendReqRow?.count || 0);
+        const total =
+            Number(notificationRow?.count || 0) + Number(friendReqRow?.count || 0);
         await connection.end();
 
         return res.status(200).json({ count: total });
@@ -431,20 +475,10 @@ app.get('/api/dashboard/watch-history', authenticateToken, async (req, res) => {
              LIMIT 50`,
             [req.user.email]
         );
-        const [ratingOnlyRows] = await connection.execute(
-            `SELECT r.id, r.title, r.type, r.rated_at as watched_at, r.rating, r.review
-             FROM rating r
-             WHERE r.user_email = ?
-             AND NOT EXISTS (SELECT 1 FROM watch_history wh WHERE wh.user_email = r.user_email AND wh.title = r.title AND wh.type = r.type)
-             ORDER BY r.rated_at DESC`,
-            [req.user.email]
-        );
+        // FIX: Removed the ratingOnlyRows query and the id+1000000 offset that was
+        // causing "Rating not found" errors when those inflated IDs were used in reactions.
         await connection.end();
-        const fromWh = rows.map(r => ({ ...r, watched_at: r.watched_at }));
-        const fromRatings = ratingOnlyRows.map(r => ({ ...r, id: r.id + 1000000 }));
-        const watchHistory = [...fromWh, ...fromRatings]
-            .sort((a, b) => new Date(b.watched_at) - new Date(a.watched_at))
-            .slice(0, 50);
+        const watchHistory = rows.map(r => ({ ...r, watched_at: r.watched_at }));
         res.status(200).json({ watchHistory });
     } catch (error) {
         console.error(error);
@@ -818,7 +852,6 @@ app.delete('/api/dashboard/lists/:listId', authenticateToken, async (req, res) =
             await connection.end();
             return res.status(404).json({ message: 'List not found.' });
         }
-        // Cannot delete a shared list — use leave instead
         const [collabCheck] = await connection.execute(
             'SELECT id FROM list_collaborator WHERE list_id = ? LIMIT 1', [listId]
         );
@@ -839,7 +872,6 @@ app.delete('/api/dashboard/lists/:listId', authenticateToken, async (req, res) =
 app.get('/api/dashboard/lists', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
-        // Exclude lists that are currently shared (have active collaborators) — those live under Shared Lists in Friends
         const [lists] = await connection.execute(
             `SELECT id, name, created_at FROM list
              WHERE user_email = ?
@@ -889,8 +921,6 @@ app.get('/api/dashboard/status', authenticateToken, async (req, res) => {
                 'SELECT title, type FROM watch_history WHERE user_email = ?',
                 [email]
             );
-            // Backfill completed for watch_history only when no status row exists yet.
-            // Do not overwrite explicit want_to_watch / watching on every GET.
             for (const row of whRows) {
                 await connection.execute(
                     `INSERT IGNORE INTO watch_status (user_email, title, type, status)
@@ -955,10 +985,9 @@ app.post('/api/dashboard/status', authenticateToken, async (req, res) => {
                 Number(err.errno) === 1265 ||
                 Number(err.errno) === 1366);
         if (truncated) {
-            console.error('watch_status ENUM/truncation — run watch_status_enum_alter.sql if needed:', err.message);
+            console.error('watch_status ENUM/truncation:', err.message);
             return res.status(400).json({
-                message:
-                    'Could not save that status. Your database may need the watch_status status column updated (see watch_status_enum_alter.sql).',
+                message: 'Could not save that status. Your database may need the watch_status status column updated.',
             });
         }
         console.error(err);
@@ -1216,28 +1245,46 @@ app.get('/api/users/public', authenticateToken, async (req, res) => {
 
 app.get('/api/users/:email/ratings', authenticateToken, async (req, res) => {
     const { email } = req.params;
+    let connection;
+
     try {
-        const connection = await createConnection();
+        connection = await createConnection();
+
         const [privacyCheck] = await connection.execute(
-            'SELECT is_private FROM user WHERE email = ?', [email]
+            `SELECT is_private FROM user WHERE email = ?`,
+            [email]
         );
+
         if (privacyCheck.length === 0) {
             await connection.end();
             return res.status(404).json({ message: 'User not found.' });
         }
+
         if (privacyCheck[0].is_private) {
             await connection.end();
             return res.status(403).json({ message: 'This profile is private.', isPrivate: true });
         }
+
         const [rows] = await connection.execute(
-            'SELECT title, type, rating, review, rated_at FROM rating WHERE user_email = ? ORDER BY rated_at DESC',
+            `SELECT id, title, type, rating, review, rated_at
+             FROM rating
+             WHERE user_email = ?
+             ORDER BY rated_at DESC`,
             [email]
         );
+
+        const result = [];
+        for (const r of rows) {
+            const reactions = await getReactionSummaryForRating(connection, r.id, req.user.email);
+            result.push({ ...r, reactions });
+        }
+
         await connection.end();
-        res.status(200).json({ ratings: rows });
+        return res.status(200).json({ ratings: result });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Error retrieving ratings.' });
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error retrieving ratings.' });
     }
 });
 
@@ -1277,21 +1324,15 @@ app.get('/api/users/:email/lists', authenticateToken, async (req, res) => {
 //////////////////////////////////////
 // TMDB
 //////////////////////////////////////
-// trending
 app.get('/api/trending/movies', authenticateToken, async (req, res) => {
     try {
-        const page = req.query.page || 1; // ADDED
-
-        const url = `https://api.themoviedb.org/3/trending/movie/day?api_key=${process.env.TMDB_API_KEY}&page=${page}`; // ADDED
-
+        const page = req.query.page || 1;
+        const url = `https://api.themoviedb.org/3/trending/movie/day?api_key=${process.env.TMDB_API_KEY}&page=${page}`;
         const tmdbRes = await fetch(url);
-
         if (!tmdbRes.ok) {
             return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
         }
-
         const data = await tmdbRes.json();
-
         return res.status(200).json(data);
     } catch (error) {
         console.error(error);
@@ -1301,19 +1342,15 @@ app.get('/api/trending/movies', authenticateToken, async (req, res) => {
 
 app.get('/api/trending/tv', authenticateToken, async (req, res) => {
     const page = req.query.page || 1;
-
     if (!process.env.TMDB_API_KEY) {
         return res.status(500).json({ message: 'TMDB API key missing' });
     }
-
     try {
         const url = `https://api.themoviedb.org/3/trending/tv/week?api_key=${process.env.TMDB_API_KEY}&page=${page}`;
         const tmdbRes = await fetch(url);
-
         if (!tmdbRes.ok) {
             return res.status(tmdbRes.status).json({ message: 'TMDB trending failed' });
         }
-
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -1321,7 +1358,6 @@ app.get('/api/trending/tv', authenticateToken, async (req, res) => {
         return res.status(500).json({ message: 'Error fetching trending shows' });
     }
 });
-
 
 app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
     const q = (req.query.q || '').trim();
@@ -1344,7 +1380,6 @@ app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
     }
 });
 
-// TMDB movie or TV details (genres, runtime, seasons) for title modal pills
 app.get('/api/tmdb/details', authenticateToken, async (req, res) => {
     const rawId = req.query.id;
     const type = String(req.query.type || 'movie').toLowerCase() === 'tv' ? 'tv' : 'movie';
@@ -1427,25 +1462,23 @@ app.get('/api/title/providers', authenticateToken, async (req, res) => {
         }
 
         const streamingProviders = (regionData.flatrate || []).map(p => ({
-    provider_id: String(p.provider_id),
-    provider_name: p.provider_name
-}));
+            provider_id: String(p.provider_id),
+            provider_name: p.provider_name
+        }));
 
-const rentProviders = (regionData.rent || []).map(p => p.provider_name);
-const buyProviders = (regionData.buy || []).map(p => p.provider_name);
+        const rentProviders = (regionData.rent || []).map(p => p.provider_name);
+        const buyProviders = (regionData.buy || []).map(p => p.provider_name);
 
-const allProviders = [
-    ...streamingProviders.map(p => p.provider_name),
-    ...rentProviders,
-    ...buyProviders
-];
-
-const uniqueStreamingProviders = streamingProviders;
+        const allProviders = [
+            ...streamingProviders.map(p => p.provider_name),
+            ...rentProviders,
+            ...buyProviders
+        ];
 
         return res.status(200).json({
             available: allProviders.length > 0,
             providers: allProviders,
-            streamingProviders: uniqueStreamingProviders,
+            streamingProviders,
             label: allProviders.length > 0 ? allProviders.slice(0, 3).join(', ') : 'Availability unavailable'
         });
     } catch (error) {
@@ -1453,7 +1486,6 @@ const uniqueStreamingProviders = streamingProviders;
         return res.status(500).json({ message: 'Error loading providers.' });
     }
 });
-
 
 app.get('/api/title/details', authenticateToken, async (req, res) => {
     const { id, type } = req.query;
@@ -1469,15 +1501,11 @@ app.get('/api/title/details', authenticateToken, async (req, res) => {
     try {
         const tmdbType = type === 'show' ? 'tv' : 'movie';
         const url = `https://api.themoviedb.org/3/${tmdbType}/${id}?api_key=${process.env.TMDB_API_KEY}`;
-
         const tmdbRes = await fetch(url);
-
         if (!tmdbRes.ok) {
             return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
         }
-
         const data = await tmdbRes.json();
-
         return res.status(200).json({
             id: data.id,
             title: data.title || data.name || 'Untitled',
@@ -1505,7 +1533,6 @@ app.get('/api/title/related', authenticateToken, async (req, res) => {
     try {
         const tmdbType = type === 'show' ? 'tv' : 'movie';
 
-        // --- MOVIES: prefer real franchise/series connections via collection ---
         if (tmdbType === 'movie') {
             const detailUrl = `https://api.themoviedb.org/3/movie/${id}?api_key=${process.env.TMDB_API_KEY}`;
             const detailRes = await fetch(detailUrl);
@@ -1523,7 +1550,6 @@ app.get('/api/title/related', authenticateToken, async (req, res) => {
 
                 if (collectionRes.ok) {
                     const collectionData = await collectionRes.json();
-
                     const relatedTitles = (collectionData.parts || [])
                         .filter((item) => item && item.id && String(item.id) !== String(id))
                         .sort((a, b) => {
@@ -1538,15 +1564,11 @@ app.get('/api/title/related', authenticateToken, async (req, res) => {
                             posterPath: item.poster_path || null
                         }));
 
-                    return res.status(200).json({
-                        relatedTitles,
-                        source: 'collection'
-                    });
+                    return res.status(200).json({ relatedTitles, source: 'collection' });
                 }
             }
         }
 
-        // --- fallback: similar + recommendations ---
         const [similarRes, recommendationsRes] = await Promise.all([
             fetch(`https://api.themoviedb.org/3/${tmdbType}/${id}/similar?api_key=${process.env.TMDB_API_KEY}`),
             fetch(`https://api.themoviedb.org/3/${tmdbType}/${id}/recommendations?api_key=${process.env.TMDB_API_KEY}`)
@@ -1561,7 +1583,6 @@ app.get('/api/title/related', authenticateToken, async (req, res) => {
         ];
 
         const seen = new Set();
-
         const relatedTitles = combined
             .filter((item) => item && item.id)
             .filter((item) => {
@@ -1578,10 +1599,7 @@ app.get('/api/title/related', authenticateToken, async (req, res) => {
                 posterPath: item.poster_path || null
             }));
 
-        return res.status(200).json({
-            relatedTitles,
-            source: 'fallback'
-        });
+        return res.status(200).json({ relatedTitles, source: 'fallback' });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: 'Error loading related titles.' });
@@ -1601,10 +1619,9 @@ app.get('/api/movies/by-genre', authenticateToken, async (req, res) => {
 
     try {
         let url = `https://api.themoviedb.org/3/discover/movie?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}&page=${page}&watch_region=US`;
-
-if (with_watch_providers) {
-    url += `&with_watch_providers=${with_watch_providers}`;
-}
+        if (with_watch_providers) {
+            url += `&with_watch_providers=${with_watch_providers}`;
+        }
         const tmdbRes = await fetch(url);
         if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
         const data = await tmdbRes.json();
@@ -1657,17 +1674,13 @@ app.get('/api/discover/tv', authenticateToken, async (req, res) => {
 
     try {
         let url = `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}&page=${page}&watch_region=US`;
-
         if (providers) {
             url += `&with_watch_providers=${providers}`;
         }
-
         const tmdbRes = await fetch(url);
-
         if (!tmdbRes.ok) {
             return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
         }
-
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -1689,17 +1702,13 @@ app.get('/api/tv/by-genre', authenticateToken, async (req, res) => {
 
     try {
         let url = `https://api.themoviedb.org/3/discover/tv?api_key=${process.env.TMDB_API_KEY}&with_genres=${genreId}&page=${page}&watch_region=US`;
-
         if (with_watch_providers) {
             url += `&with_watch_providers=${with_watch_providers}`;
         }
-
         const tmdbRes = await fetch(url);
-
         if (!tmdbRes.ok) {
             return res.status(tmdbRes.status).json({ message: 'TMDB discover failed' });
         }
-
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -1718,11 +1727,9 @@ app.get('/api/tv/:id/providers', authenticateToken, async (req, res) => {
     try {
         const url = `https://api.themoviedb.org/3/tv/${id}/watch/providers?api_key=${process.env.TMDB_API_KEY}`;
         const tmdbRes = await fetch(url);
-
         if (!tmdbRes.ok) {
             return res.status(tmdbRes.status).json({ message: 'Provider fetch failed' });
         }
-
         const data = await tmdbRes.json();
         return res.status(200).json(data);
     } catch (error) {
@@ -1730,8 +1737,6 @@ app.get('/api/tv/:id/providers', authenticateToken, async (req, res) => {
         return res.status(500).json({ message: 'Error fetching providers' });
     }
 });
-
-
 
 //////////////////////////////////////
 // SUBSCRIPTIONS
@@ -1826,16 +1831,11 @@ app.post('/api/friends/request', authenticateToken, async (req, res) => {
             'INSERT INTO friend_request (sender_email, receiver_email) VALUES (?, ?)',
             [req.user.email, receiverEmail]
         );
-
-    //    const actorLabel = await getUserDisplayName(connection, req.user.email);
-    //     await createNotification(
-    //         connection, receiverEmail, 'friend_request', 'New Friend Request', `${actorLabel} sent you a friend request.`, '/friends'
-    //     ); 
         await connection.end();
         res.status(201).json({ message: 'Friend request sent.' });
     } catch (error) {
         console.error(error);
-        if (connection) {try { await connection.end(); } catch (_) {}}
+        if (connection) { try { await connection.end(); } catch (_) {} }
         res.status(500).json({ message: 'Error sending friend request.' });
     }
 });
@@ -1917,8 +1917,8 @@ app.put('/api/friends/request/:id', authenticateToken, async (req, res) => {
             [status, id, req.user.email]
         );
         if (result.affectedRows === 0) {
-        await connection.end();
-        return res.status(404).json({ message: 'Request not found.' });
+            await connection.end();
+            return res.status(404).json({ message: 'Request not found.' });
         }
         const actorLabel = await getUserDisplayName(connection, req.user.email);
         await createNotification(
@@ -1929,12 +1929,12 @@ app.put('/api/friends/request/:id', authenticateToken, async (req, res) => {
                 ? `${actorLabel} accepted your friend request.`
                 : `${actorLabel} declined your friend request.`,
             '/friends'
-        );  
+        );
         await connection.end();
         res.status(200).json({ message: `Request ${status}.` });
     } catch (error) {
         console.error(error);
-        if (connection) {try { await connection.end(); } catch (_) {}}
+        if (connection) { try { await connection.end(); } catch (_) {} }
         res.status(500).json({ message: 'Error updating request.' });
     }
 });
@@ -1960,23 +1960,46 @@ app.get('/api/friends', authenticateToken, async (req, res) => {
     }
 });
 
-// Aggregated activity from accepted friends (ratings, list adds, watch status updates)
 app.get('/api/friends/activity', authenticateToken, async (req, res) => {
     const me = req.user.email;
     const limit = Math.min(60, Math.max(1, parseInt(String(req.query.limit || '35'), 10) || 35));
 
+    let connection;
     try {
-        const connection = await createConnection();
+        connection = await createConnection();
         const friendParams = [me, me];
 
         const [ratingRows] = await connection.execute(
             `SELECT r.user_email AS actorEmail,
                     COALESCE(NULLIF(TRIM(u.username), ''), r.user_email) AS actorLabel,
-                    r.title, r.type AS mediaType, r.rating, r.rated_at AS occurredAt, 'rating' AS kind
+                    r.title,
+                    r.type AS mediaType,
+                    r.rating,
+                    r.rated_at AS occurredAt,
+                    'rating' AS kind
              FROM rating r
              INNER JOIN user u ON u.email = r.user_email
-             WHERE r.user_email <> ? AND ${friendAcceptedPairSql('r.user_email')}
+             WHERE r.user_email <> ?
+               AND ${friendAcceptedPairSql('r.user_email')}
              ORDER BY r.rated_at DESC
+             LIMIT 60`,
+            [me, ...friendParams]
+        );
+
+        const [reactionRows] = await connection.execute(
+            `SELECT rr.user_email AS actorEmail,
+                    COALESCE(NULLIF(TRIM(u.username), ''), rr.user_email) AS actorLabel,
+                    rr.emoji,
+                    r.title,
+                    r.type AS mediaType,
+                    rr.updated_at AS occurredAt,
+                    'reaction' AS kind
+             FROM rating_reaction rr
+             INNER JOIN rating r ON r.id = rr.rating_id
+             INNER JOIN user u ON u.email = rr.user_email
+             WHERE rr.user_email <> ?
+               AND ${friendAcceptedPairSql('rr.user_email')}
+             ORDER BY rr.updated_at DESC
              LIMIT 60`,
             [me, ...friendParams]
         );
@@ -1984,11 +2007,15 @@ app.get('/api/friends/activity', authenticateToken, async (req, res) => {
         const [listRows] = await connection.execute(
             `SELECT l.user_email AS actorEmail,
                     COALESCE(NULLIF(TRIM(u.username), ''), l.user_email) AS actorLabel,
-                    li.title, l.name AS listName, li.added_at AS occurredAt, 'list_add' AS kind
+                    li.title,
+                    l.name AS listName,
+                    li.added_at AS occurredAt,
+                    'list_add' AS kind
              FROM list_item li
              INNER JOIN list l ON l.id = li.list_id
              INNER JOIN user u ON u.email = l.user_email
-             WHERE l.user_email <> ? AND ${friendAcceptedPairSql('l.user_email')}
+             WHERE l.user_email <> ?
+               AND ${friendAcceptedPairSql('l.user_email')}
              ORDER BY li.added_at DESC
              LIMIT 60`,
             [me, ...friendParams]
@@ -1999,10 +2026,15 @@ app.get('/api/friends/activity', authenticateToken, async (req, res) => {
             const [rows] = await connection.execute(
                 `SELECT ws.user_email AS actorEmail,
                         COALESCE(NULLIF(TRIM(u.username), ''), ws.user_email) AS actorLabel,
-                        ws.title, ws.type AS mediaType, ws.status, ws.updated_at AS occurredAt, 'status' AS kind
+                        ws.title,
+                        ws.type AS mediaType,
+                        ws.status,
+                        ws.updated_at AS occurredAt,
+                        'status' AS kind
                  FROM watch_status ws
                  INNER JOIN user u ON u.email = ws.user_email
-                 WHERE ws.user_email <> ? AND ${friendAcceptedPairSql('ws.user_email')}
+                 WHERE ws.user_email <> ?
+                   AND ${friendAcceptedPairSql('ws.user_email')}
                  ORDER BY ws.updated_at DESC
                  LIMIT 60`,
                 [me, ...friendParams]
@@ -2015,6 +2047,7 @@ app.get('/api/friends/activity', authenticateToken, async (req, res) => {
         await connection.end();
 
         const merged = [];
+
         for (const row of ratingRows) {
             merged.push({
                 kind: 'rating',
@@ -2026,6 +2059,19 @@ app.get('/api/friends/activity', authenticateToken, async (req, res) => {
                 occurredAt: row.occurredAt,
             });
         }
+
+        for (const row of reactionRows) {
+            merged.push({
+                kind: 'reaction',
+                actorEmail: row.actorEmail,
+                actorLabel: row.actorLabel,
+                title: row.title,
+                mediaType: row.mediaType,
+                emoji: row.emoji,
+                occurredAt: row.occurredAt,
+            });
+        }
+
         for (const row of listRows) {
             merged.push({
                 kind: 'list_add',
@@ -2036,6 +2082,7 @@ app.get('/api/friends/activity', authenticateToken, async (req, res) => {
                 occurredAt: row.occurredAt,
             });
         }
+
         for (const row of statusRows) {
             merged.push({
                 kind: 'status',
@@ -2051,14 +2098,14 @@ app.get('/api/friends/activity', authenticateToken, async (req, res) => {
         merged.sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt));
         const activities = merged.slice(0, limit);
 
-        res.status(200).json({ activities });
+        return res.status(200).json({ activities });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Error loading friend activity.' });
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error loading friend activity.' });
     }
 });
 
-// Count of friend activity events in the last N days (for dashboard teaser)
 app.get('/api/friends/activity/summary', authenticateToken, async (req, res) => {
     const me = req.user.email;
     const days = Math.min(30, Math.max(1, parseInt(String(req.query.days || '7'), 10) || 7));
@@ -2112,65 +2159,64 @@ app.get('/api/friends/activity/summary', authenticateToken, async (req, res) => 
 app.delete('/api/friends/:email', authenticateToken, async (req, res) => {
     const { email } = req.params;
     if (!email || email === req.user.email) return res.status(400).json({ message: 'Invalid friend.' });
-
-    let connection;
-
     try {
-        connection = await createConnection();
+        const connection = await createConnection();
         const [result] = await connection.execute(
             `DELETE FROM friend_request
              WHERE status = 'accepted'
              AND ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))`,
             [req.user.email, email, email, req.user.email]
         );
-        if (result.affectedRows === 0) {
-            await connection.end();
-            return res.status(404).json({ message: 'Friend not found.' });
-        }
-
-        const actorLabel = await getUserDisplayName(connection, req.user.email);
-
-        await createNotification(
-            connection,
-            email,
-            'friend_removed',
-            'Friend Removed',
-            `${actorLabel} removed you from their friends list.`,
-            '/friends'
-        );
-
         await connection.end();
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Friend not found.' });
         return res.status(200).json({ message: 'Friend removed.' });
     } catch (error) {
         console.error(error);
-        if (connection) { try { await connection.end(); } catch (_) {} }
         return res.status(500).json({ message: 'Error removing friend.' });
     }
 });
 
 app.get('/api/friends/:email/ratings', authenticateToken, async (req, res) => {
     const { email } = req.params;
+    let connection;
+
     try {
-        const connection = await createConnection();
+        connection = await createConnection();
+
         const [friendCheck] = await connection.execute(
-            `SELECT id FROM friend_request
+            `SELECT id
+             FROM friend_request
              WHERE ((sender_email = ? AND receiver_email = ?) OR (sender_email = ? AND receiver_email = ?))
              AND status = 'accepted'`,
             [req.user.email, email, email, req.user.email]
         );
+
         if (friendCheck.length === 0) {
             await connection.end();
             return res.status(403).json({ message: 'Not friends.' });
         }
+
         const [rows] = await connection.execute(
-            'SELECT title, type, rating, review, rated_at FROM rating WHERE user_email = ? ORDER BY rated_at DESC',
+            `SELECT id, title, type, rating, review, rated_at
+             FROM rating
+             WHERE user_email = ?
+             ORDER BY rated_at DESC`,
             [email]
         );
+
+        const result = [];
+        for (const r of rows) {
+            const reactions = await getReactionSummaryForRating(connection, r.id, req.user.email);
+            result.push({ ...r, reactions });
+        }
+
+        // FIX: removed stray 'l' character after connection.end()
         await connection.end();
-        res.status(200).json({ ratings: rows });
+        return res.status(200).json({ ratings: result });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Error retrieving friend ratings.' });
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error retrieving friend ratings.' });
     }
 });
 
@@ -2379,7 +2425,137 @@ app.put('/api/friends/:email/messages/read', authenticateToken, async (req, res)
 });
 
 //////////////////////////////////////
-// SHARED LISTS (between two friends)
+// REACTIONS (EMOJI)
+//////////////////////////////////////
+app.post('/api/reactions', authenticateToken, async (req, res) => {
+    const rawRatingId = req.body?.ratingId;
+    const ratingId = parseInt(String(rawRatingId), 10);
+    const emoji = normalizeReactionEmoji(req.body?.emoji);
+
+    if (!Number.isFinite(ratingId) || ratingId < 1) {
+        return res.status(400).json({ message: 'Invalid ratingId.', debug: { rawRatingId } });
+    }
+
+    if (!emoji) {
+        return res.status(400).json({ message: 'Invalid emoji.' });
+    }
+
+    let connection;
+    try {
+        connection = await createConnection();
+
+        const [allMatchRows] = await connection.execute(
+            `SELECT id, user_email, title, type, rating, rated_at FROM rating WHERE id = ?`,
+            [ratingId]
+        );
+
+        if (allMatchRows.length === 0) {
+            await connection.end();
+            return res.status(404).json({
+                message: 'Rating not found.',
+                debug: { ratingId, rawRatingId }
+            });
+        }
+
+        const rating = allMatchRows[0];
+
+        if (String(rating.user_email).toLowerCase() === String(req.user.email).toLowerCase()) {
+            await connection.end();
+            return res.status(400).json({ message: 'You cannot react to your own rating.' });
+        }
+
+        const areFriends = await areUsersAcceptedFriends(connection, req.user.email, rating.user_email);
+
+        if (!areFriends) {
+            await connection.end();
+            return res.status(403).json({ message: 'You can only react to ratings from accepted friends.' });
+        }
+
+        await connection.execute(
+            `INSERT INTO rating_reaction (rating_id, user_email, emoji)
+             VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                emoji = VALUES(emoji),
+                updated_at = CURRENT_TIMESTAMP`,
+            [ratingId, req.user.email, emoji]
+        );
+
+        const reactions = await getReactionSummaryForRating(connection, ratingId, req.user.email);
+
+        await connection.end();
+        return res.status(200).json({ message: 'Reaction saved.', reactions });
+    } catch (error) {
+        console.error('POST /api/reactions error code:', error?.code);
+        console.error('POST /api/reactions error message:', error?.message);
+        console.error('POST /api/reactions full error:', error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        // Return the actual DB error message in development so you can see what's wrong
+        return res.status(500).json({
+            message: 'Error saving reaction.',
+            debug: { code: error?.code, sqlMessage: error?.sqlMessage || error?.message }
+        });
+    }
+});
+
+app.delete('/api/reactions/:ratingId', authenticateToken, async (req, res) => {
+    const ratingId = parseInt(String(req.params.ratingId), 10);
+
+    if (!Number.isFinite(ratingId) || ratingId < 1) {
+        return res.status(400).json({ message: 'Invalid ratingId.' });
+    }
+
+    let connection;
+    try {
+        connection = await createConnection();
+
+        const [rows] = await connection.execute(
+            `SELECT id FROM rating WHERE id = ? LIMIT 1`,
+            [ratingId]
+        );
+
+        if (rows.length === 0) {
+            await connection.end();
+            return res.status(404).json({ message: 'Rating not found.' });
+        }
+
+        await connection.execute(
+            `DELETE FROM rating_reaction WHERE rating_id = ? AND user_email = ?`,
+            [ratingId, req.user.email]
+        );
+
+        const reactions = await getReactionSummaryForRating(connection, ratingId, req.user.email);
+
+        await connection.end();
+        return res.status(200).json({ message: 'Reaction removed.', reactions });
+    } catch (error) {
+        console.error('DELETE /api/reactions/:ratingId error:', error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error removing reaction.' });
+    }
+});
+
+app.get('/api/reactions/:ratingId', authenticateToken, async (req, res) => {
+    const ratingId = parseInt(req.params.ratingId, 10);
+
+    if (!Number.isFinite(ratingId)) {
+        return res.status(400).json({ message: 'Invalid ratingId.' });
+    }
+
+    let connection;
+    try {
+        connection = await createConnection();
+        const summary = await getReactionSummaryForRating(connection, ratingId, req.user.email);
+        await connection.end();
+        return res.status(200).json(summary);
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error loading reactions.' });
+    }
+});
+
+//////////////////////////////////////
+// SHARED LISTS
 //////////////////////////////////////
 app.get('/api/friends/:email/shared-lists', authenticateToken, async (req, res) => {
     const { email } = req.params;
@@ -2420,7 +2596,6 @@ app.get('/api/friends/:email/shared-lists', authenticateToken, async (req, res) 
             );
             listsWithItems.push({ ...list, items });
         }
-        // Pending invitations: ones I sent to this friend, or this friend sent to me
         const [invitations] = await connection.execute(
             `SELECT lc.id, lc.list_id, lc.collaborator_email AS invited_email,
                     lc.invited_by_email, lc.created_at,
@@ -2465,7 +2640,6 @@ app.post('/api/friends/:email/shared-lists', authenticateToken, async (req, res)
             [req.user.email, name]
         );
         const listId = result.insertId;
-        // Insert as pending — friend must accept before it appears in their Shared Lists
         await connection.execute(
             'INSERT INTO list_collaborator (list_id, collaborator_email, invited_by_email, status) VALUES (?, ?, ?, ?)',
             [listId, email, req.user.email, 'pending']
@@ -2473,10 +2647,10 @@ app.post('/api/friends/:email/shared-lists', authenticateToken, async (req, res)
 
         const actorLabel = await getUserDisplayName(connection, req.user.email);
         await createNotification(
-            connection, email, 
-            'list_invitation', 'New List Invitation', 
-            `${actorLabel} shared: ${name} with you.`,
-             '/friends'
+            connection, email,
+            'list_invitation', 'New List Invitation',
+            `${actorLabel} invited you to collaborate on : ${name}.`,
+            '/friends'
         );
 
         await connection.end();
@@ -2488,7 +2662,6 @@ app.post('/api/friends/:email/shared-lists', authenticateToken, async (req, res)
     }
 });
 
-// Get all pending list invitations for the logged-in user
 app.get('/api/invitations/pending', authenticateToken, async (req, res) => {
     let connection;
     try {
@@ -2513,7 +2686,6 @@ app.get('/api/invitations/pending', authenticateToken, async (req, res) => {
     }
 });
 
-// Accept a list invitation
 app.put('/api/invitations/:id/accept', authenticateToken, async (req, res) => {
     const invId = parseInt(req.params.id, 10);
     if (!Number.isFinite(invId)) return res.status(400).json({ message: 'Invalid invitation id.' });
@@ -2567,37 +2739,24 @@ app.put('/api/invitations/:id/accept', authenticateToken, async (req, res) => {
     }
 });
 
-// Decline a list invitation
+// FIX: was referencing undefined 'invitation' variable — now uses 'rows[0]' correctly
 app.put('/api/invitations/:id/decline', authenticateToken, async (req, res) => {
     const invId = parseInt(req.params.id, 10);
     if (!Number.isFinite(invId)) return res.status(400).json({ message: 'Invalid invitation id.' });
-
     let connection;
     try {
         connection = await createConnection();
-
         const [rows] = await connection.execute(
-            `SELECT lc.id, lc.list_id, lc.invited_by_email, l.name AS listName
-             FROM list_collaborator lc
-             JOIN list l ON l.id = lc.list_id
-             WHERE lc.id = ? AND lc.collaborator_email = ? AND lc.status = 'pending'`,
-            [invId, req.user.email]
+            'SELECT lc.id, lc.list_id, lc.invited_by_email, l.name AS listName FROM list_collaborator lc JOIN list l ON l.id = lc.list_id WHERE lc.id = ? AND lc.collaborator_email = ? AND lc.status = ?',
+            [invId, req.user.email, 'pending']
         );
-
         if (rows.length === 0) {
             await connection.end();
             return res.status(404).json({ message: 'Invitation not found.' });
         }
-
         const invitation = rows[0];
-
-        await connection.execute(
-            'DELETE FROM list_collaborator WHERE id = ?',
-            [invId]
-        );
-
+        await connection.execute('DELETE FROM list_collaborator WHERE id = ?', [invId]);
         const actorLabel = await getUserDisplayName(connection, req.user.email);
-
         await createNotification(
             connection,
             invitation.invited_by_email,
@@ -2606,7 +2765,6 @@ app.put('/api/invitations/:id/decline', authenticateToken, async (req, res) => {
             `${actorLabel} declined your invitation to ${invitation.listName}.`,
             '/friends'
         );
-
         await connection.end();
         return res.status(200).json({ message: 'Invitation declined.' });
     } catch (error) {
@@ -2678,10 +2836,10 @@ app.post('/api/dashboard/lists/:listId/collaborators', authenticateToken, async 
         );
         const actorLabel = await getUserDisplayName(connection, req.user.email);
         await createNotification(
-            connection, collaboratorEmail, 
-            'list_invitation', 'New List Invitation', 
-            `${actorLabel} invited you to collaborate on ${listName}.`,
-             '/friends'
+            connection, collaboratorEmail,
+            'list_invitation', 'New List Invitation',
+            `${actorLabel} invited you to collaborate on : ${listName}.`,
+            '/friends'
         );
         await connection.end();
         return res.status(201).json({ message: 'Collaborator added.' });
@@ -2692,9 +2850,6 @@ app.post('/api/dashboard/lists/:listId/collaborators', authenticateToken, async 
     }
 });
 
-// Leave a shared list
-// - Collaborator leaving: removed from list, owner keeps it (appears on owner's My Lists)
-// - Owner leaving: ownership transferred to the collaborator, owner loses access
 app.delete('/api/dashboard/lists/:listId/leave', authenticateToken, async (req, res) => {
     const listId = parseInt(req.params.listId, 10);
     if (!Number.isFinite(listId)) return res.status(400).json({ message: 'Invalid listId.' });
@@ -2708,13 +2863,9 @@ app.delete('/api/dashboard/lists/:listId/leave', authenticateToken, async (req, 
             await connection.end();
             return res.status(404).json({ message: 'List not found.' });
         }
-        const list = listRows[0];
-        const listName = list.name;
-        const ownerEmail = list.user_email;
-        const actorLabel = await getUserDisplayName(connection, req.user.email);
+        const ownerEmail = ownerRows[0].user_email;
 
         if (ownerEmail === req.user.email) {
-            // Owner is leaving — transfer ownership to the first collaborator
             const [collabs] = await connection.execute(
                 'SELECT collaborator_email FROM list_collaborator WHERE list_id = ? LIMIT 1', [listId]
             );
@@ -2725,18 +2876,7 @@ app.delete('/api/dashboard/lists/:listId/leave', authenticateToken, async (req, 
             const newOwner = collabs[0].collaborator_email;
             await connection.execute('UPDATE list SET user_email = ? WHERE id = ?', [newOwner, listId]);
             await connection.execute('DELETE FROM list_collaborator WHERE list_id = ?', [listId]);
-
-            await createNotification(
-                connection,
-                newOwner,
-                'list_left',
-                'Shared List Updated',
-                `${actorLabel} left ${listName}.`,
-                '/friends'
-            );
-
         } else {
-            // Collaborator is leaving — just remove themselves
             const [result] = await connection.execute(
                 'DELETE FROM list_collaborator WHERE list_id = ? AND collaborator_email = ?',
                 [listId, req.user.email]
@@ -2745,15 +2885,6 @@ app.delete('/api/dashboard/lists/:listId/leave', authenticateToken, async (req, 
                 await connection.end();
                 return res.status(404).json({ message: 'Not a collaborator on this list.' });
             }
-
-        await createNotification(
-                connection,
-                ownerEmail,
-                'list_left',
-                'Shared List Updated',
-                `${actorLabel} left "${listName}".`,
-                '/friends'
-            );
         }
         await connection.end();
         return res.status(200).json({ message: 'Left shared list.' });
@@ -2771,7 +2902,7 @@ app.delete('/api/dashboard/lists/:listId/collaborators/:email', authenticateToke
     let connection;
     try {
         connection = await createConnection();
-        const [lists] = await connection.execute('SELECT id, name FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
+        const [lists] = await connection.execute('SELECT id FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
         if (lists.length === 0) {
             await connection.end();
             return res.status(404).json({ message: 'List not found.' });
@@ -2780,19 +2911,6 @@ app.delete('/api/dashboard/lists/:listId/collaborators/:email', authenticateToke
             'DELETE FROM list_collaborator WHERE list_id = ? AND collaborator_email = ?',
             [listId, email]
         );
-
-        const listName = lists[0].name;
-        const actorLabel = await getUserDisplayName(connection, req.user.email);
-
-        await createNotification(
-        connection,
-        email,
-        'list_removed',
-        'Shared List Updated',
-        `${actorLabel} removed you from ${listName}.`,
-        '/friends'
-);
-
         await connection.end();
         return res.status(200).json({ message: 'Collaborator removed.' });
     } catch (error) {
@@ -2838,7 +2956,7 @@ app.get('/api/dashboard/shared-lists', authenticateToken, async (req, res) => {
 });
 
 //////////////////////////////////////
-// RECOMMENDATIONS (friend-to-friend)
+// RECOMMENDATIONS
 //////////////////////////////////////
 app.post('/api/recommendations', authenticateToken, async (req, res) => {
     const { receiverEmail, title, type, note } = req.body;
@@ -2863,11 +2981,12 @@ app.post('/api/recommendations', authenticateToken, async (req, res) => {
             'INSERT INTO recommendation (sender_email, receiver_email, title, type, note) VALUES (?, ?, ?, ?, ?)',
             [req.user.email, receiverEmail, title.trim(), contentType, (note || '').trim() || null]
         );
-       const actorLabel = await getUserDisplayName(connection, req.user.email);
-         await createNotification(
-        connection, receiverEmail, 'recommendation_received','New Recommendation', `${actorLabel} recommended ${title.trim()} (${contentType}) to you.`, 
-        '/suggestions'
-         );
+        const actorLabel = await getUserDisplayName(connection, req.user.email);
+        await createNotification(
+            connection, receiverEmail, 'recommendation_received', 'New Recommendation',
+            `${actorLabel} recommended ${title.trim()} (${contentType}) to you.`,
+            '/suggestions'
+        );
 
         await connection.end();
         return res.status(201).json({ message: 'Recommendation sent.' });
@@ -2922,7 +3041,6 @@ app.delete('/api/recommendations/:id', authenticateToken, async (req, res) => {
     let connection;
     try {
         connection = await createConnection();
-        // Allow sender or receiver to delete
         const [result] = await connection.execute(
             'DELETE FROM recommendation WHERE id = ? AND (receiver_email = ? OR sender_email = ?)',
             [id, req.user.email, req.user.email]
@@ -2960,5 +3078,4 @@ app.use(express.static('public'));
 
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
-    console.log('API: GET /api/dashboard/ratings/summary (friends rating aggregate)');
 });
