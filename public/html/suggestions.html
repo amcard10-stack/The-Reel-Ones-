@@ -5,7 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Suggestions</title>
     <meta name="theme-color" content="#031f45">
-    <script>(function(){try{var t=localStorage.getItem('rollTheTapesTheme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}})();</script>
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('rollTheTapesTheme');
+                if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+            } catch (e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="/css/theme.css?v=4">
     <link rel="stylesheet" href="/css/suggestions.css">
 </head>
@@ -23,18 +30,24 @@
 
     <div class="section">
         <p id="ratingsSummary" class="ratings-summary"></p>
+
+        <div class="recommendation-type-toggle" id="recommendationTypeToggle">
+            <button class="type-tab active" data-type="both">Both</button>
+            <button class="type-tab" data-type="movie">Movies</button>
+            <button class="type-tab" data-type="show">Shows</button>
+        </div>
     </div>
 
     <div class="section" id="toRateSection">
         <h2>Rate These to Improve Recommendations</h2>
         <p class="section-hint">Titles from your watch history you haven't rated yet.</p>
-        <div id="toRateList"></div>
+        <div id="toRateList" class="recommendation-grid"></div>
     </div>
 
     <div class="section" id="recommendationsSection">
-        <h2>Recommended For You</h2>
+        <h2 id="recommendationsSectionTitle">Recommended For You</h2>
         <p class="section-hint">Based on ratings from users with similar taste.</p>
-        <div id="recommendationsList"></div>
+        <div id="recommendationsList" class="recommendation-grid"></div>
     </div>
 
 </div>
