@@ -114,6 +114,21 @@ body {
     box-shadow: 0 6px 16px var(--shadow-elevated);
 }
 
+.recommendation-card--with-poster {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.recommendation-card__poster {
+    flex-shrink: 0;
+}
+
+.recommendation-card__content {
+    flex: 1;
+    min-width: 0;
+}
+
 .recommendation-card h3 {
     margin: 0 0 8px 0;
     color: var(--text-primary);
@@ -139,6 +154,23 @@ body {
     gap: 10px;
 }
 
+.suggestion-poster {
+    display: block;
+    width: 92px;
+    height: auto;
+    border-radius: 6px;
+    object-fit: cover;
+    box-shadow: 0 2px 8px var(--shadow-elevated);
+}
+
+.suggestion-poster-ph {
+    width: 92px;
+    aspect-ratio: 2 / 3;
+    border-radius: 6px;
+    background: var(--border-subtle);
+    flex-shrink: 0;
+}
+
 .recommendation-card a.primary {
     display: inline-block;
     text-decoration: none;
@@ -162,6 +194,212 @@ body {
 
 .primary:hover {
     background-color: var(--success-hover);
+}
+
+.pick-filters {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pick-filters-label {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.pick-segment {
+    display: inline-flex;
+    flex-wrap: wrap;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    overflow: hidden;
+    background: var(--bg-input);
+}
+
+.pick-segment-btn {
+    font: inherit;
+    padding: 8px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-right: 1px solid var(--border-subtle);
+}
+
+.pick-segment-btn:last-child {
+    border-right: none;
+}
+
+.pick-segment-btn:hover {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+.pick-segment-btn.is-active {
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+.pick-segment-btn.is-active:hover {
+    background: var(--accent-hover-bg);
+    color: var(--on-accent);
+}
+
+.pick-subscription-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.95em;
+    color: var(--text-primary);
+    user-select: none;
+}
+
+.pick-subscription-check input {
+    width: 1.1em;
+    height: 1.1em;
+    accent-color: var(--accent);
+}
+
+.pick-pill-block {
+    margin-top: 4px;
+}
+
+.pick-pill-hint {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    margin: 0 0 8px 0;
+}
+
+.pick-pill-loading {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.pick-pill-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.pick-pill {
+    font: inherit;
+    font-size: 0.9em;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    cursor: pointer;
+    line-height: 1.2;
+}
+
+.pick-pill:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+}
+
+.pick-pill.is-selected {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+}
+
+.pick-link-btn {
+    font: inherit;
+    font-size: 0.88em;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: underline;
+    margin-top: 4px;
+}
+
+.pick-link-btn:hover {
+    color: var(--accent-hover-bg);
+}
+
+.pick-random-btn {
+    cursor: pointer;
+    font-size: 1em;
+    margin-bottom: 16px;
+}
+
+.pick-random-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.pick-result {
+    margin-top: 8px;
+    min-height: 0;
+}
+
+.pick-card {
+    border: 1px solid var(--border-subtle);
+    padding: 16px;
+    border-radius: 8px;
+    background: var(--bg-input);
+    margin-top: 8px;
+}
+
+.pick-card--with-poster {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.pick-card__poster {
+    flex-shrink: 0;
+}
+
+.pick-card__poster .suggestion-poster {
+    width: 120px;
+}
+
+.pick-card__poster .suggestion-poster-ph {
+    width: 120px;
+}
+
+.pick-card__body {
+    flex: 1;
+    min-width: 0;
+}
+
+.pick-card h3 {
+    margin: 0 0 8px 0;
+}
+
+.pick-card .pick-meta {
+    color: var(--text-secondary);
+    margin: 0 0 12px 0;
+}
+
+.pick-card .streaming-label {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 6px 0;
+    font-size: 0.95em;
+}
+
+.pick-card .streaming-list {
+    margin: 0;
+    padding-left: 1.2em;
+    color: var(--text-secondary);
+}
+
+.pick-card .pick-note {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    margin: 10px 0 0 0;
 }
 
 @media (max-width: 768px) {

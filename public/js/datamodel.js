@@ -293,6 +293,59 @@ deleteStatus: async function (title, type) {
             }
         },
 
+        /**
+         * @param {{ type?: 'all'|'movie'|'show', requireSubscriptionMatch?: boolean, genreIds?: number[], providerIds?: string[] }} [opts]
+         */
+        getRandomWatchlistPick: async function (opts) {
+            if (!token) return null;
+            const o = opts || {};
+            const type = o.type ? String(o.type).toLowerCase() : 'all';
+            const requireSubscriptionMatch = Boolean(o.requireSubscriptionMatch);
+            const genreIds = Array.isArray(o.genreIds) ? o.genreIds.filter((n) => Number.isFinite(Number(n)) && Number(n) > 0).map((n) => parseInt(String(n), 10)) : [];
+            const providerIds = Array.isArray(o.providerIds) ? o.providerIds.map((s) => String(s).trim()).filter(Boolean) : [];
+            try {
+                const response = await fetch('/api/suggestions/random-watchlist', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: type === 'movie' || type === 'show' ? type : 'all',
+                        requireSubscriptionMatch,
+                        genreIds,
+                        providerIds,
+                    }),
+                });
+                if (response.status === 400) {
+                    let err = {};
+                    try {
+                        err = await response.json();
+                    } catch (_) {}
+                    return { pick: null, message: err.message || 'Invalid filters.', _clientError: true };
+                }
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching random watchlist pick:', error);
+                return null;
+            }
+        },
+
+        getTmdbGenres: async function (mediaType) {
+            if (!token) return [];
+            const t = mediaType === 'show' || mediaType === 'tv' ? 'tv' : 'movie';
+            try {
+                const response = await fetch(`/api/tmdb/genres?type=${encodeURIComponent(t)}`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                });
+                if (!response.ok) return [];
+                const data = await response.json();
+                return data.genres || [];
+            } catch (e) {
+                console.error('getTmdbGenres:', e);
+                return [];
+            }
+        },
+
         addToList: async function (listId, title) {
             if (!token) return { ok: false };
             try {
@@ -407,26 +460,26 @@ getPostersForItems: async function (items) {
     return posters;
 },
 
-    getSubscriptions: async function () {
-    if (!token) return [];
-    try {
-        const response = await fetch('/api/subscriptions', {
-            method: 'GET',
-            headers: authHeaders(),
-        });
+        getSubscriptions: async function () {
+            if (!token) return [];
+            try {
+                const response = await fetch('/api/subscriptions', {
+                    method: 'GET',
+                    headers: authHeaders(),
+                });
 
-        if (!response.ok) return [];
+                if (!response.ok) return [];
 
-        const data = await response.json();
+                const data = await response.json();
 
-        return data;
-    } catch (error) {
-        console.error("Error fetching subscriptions:", error);
-        return [];
-    }
-},
+                return data;
+            } catch (error) {
+                console.error("Error fetching subscriptions:", error);
+                return [];
+            }
+        },
 
-saveSubscriptions: async function (subscriptions) {
+        saveSubscriptions: async function (subscriptions) {
     if (!token) return { ok: false };
     try {
         const response = await fetch('/api/subscriptions', {

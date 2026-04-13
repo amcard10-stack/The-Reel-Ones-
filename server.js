@@ -1157,6 +1157,176 @@ app.delete('/api/profile', authenticateToken, async (req, res) => {
 //////////////////////////////////////
 // SUGGESTIONS
 //////////////////////////////////////
+
+/** TMDB search match: id + poster_path (exact title match preferred). */
+async function tmdbSearchMatchFromTitle(title, contentType) {
+    if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+        return null;
+    }
+    const tmdbType = contentType === 'show' ? 'tv' : 'movie';
+    const url = `https://api.themoviedb.org/3/search/${tmdbType}?api_key=${process.env.TMDB_API_KEY}&query=${encodeURIComponent(title)}`;
+    const tmdbRes = await fetch(url);
+    if (!tmdbRes.ok) return null;
+    const data = await tmdbRes.json();
+    const results = data.results || [];
+    const exact = results.find((r) => {
+        const t = contentType === 'show' ? r.name : r.title;
+        return t && t.toLowerCase() === String(title).toLowerCase();
+    });
+    const chosen = exact || results[0];
+    if (!chosen || !chosen.id) return null;
+    return { id: chosen.id, poster_path: chosen.poster_path || null };
+}
+
+/** Same region + provider shape as GET /api/title/providers. */
+async function tmdbWatchProvidersForId(tmdbId, contentType) {
+    if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+        return { available: false, providers: [], streamingProviders: [], label: 'Availability unavailable', providerIds: [] };
+    }
+    const tmdbType = contentType === 'show' ? 'tv' : 'movie';
+    const url = `https://api.themoviedb.org/3/${tmdbType}/${tmdbId}/watch/providers?api_key=${process.env.TMDB_API_KEY}`;
+    const tmdbRes = await fetch(url);
+    if (!tmdbRes.ok) {
+        return { available: false, providers: [], streamingProviders: [], label: 'Availability unavailable', providerIds: [] };
+    }
+    const data = await tmdbRes.json();
+    const regionData =
+        data?.results?.US ||
+        data?.results?.CA ||
+        data?.results?.GB ||
+        Object.values(data?.results || {})[0] ||
+        null;
+    if (!regionData) {
+        return {
+            available: false,
+            providers: [],
+            streamingProviders: [],
+            label: 'Availability unavailable',
+            providerIds: [],
+        };
+    }
+    const streamingProviders = (regionData.flatrate || []).map((p) => ({
+        provider_id: String(p.provider_id),
+        provider_name: p.provider_name,
+    }));
+    const rentProviders = (regionData.rent || []).map((p) => p.provider_name);
+    const buyProviders = (regionData.buy || []).map((p) => p.provider_name);
+    const allProviders = [
+        ...streamingProviders.map((p) => p.provider_name),
+        ...rentProviders,
+        ...buyProviders,
+    ];
+    const providerIds = [
+        ...(regionData.flatrate || []).map((p) => String(p.provider_id)),
+        ...(regionData.rent || []).map((p) => String(p.provider_id)),
+        ...(regionData.buy || []).map((p) => String(p.provider_id)),
+    ];
+    return {
+        available: allProviders.length > 0,
+        providers: allProviders,
+        streamingProviders,
+        label: allProviders.length > 0 ? allProviders.slice(0, 3).join(', ') : 'Availability unavailable',
+        providerIds: [...new Set(providerIds)],
+    };
+}
+
+/** TMDB movie/TV details genre ids (for pick filters). */
+async function tmdbGenreIdsForId(tmdbId, contentType) {
+    if (!tmdbId || !process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+        return [];
+    }
+    const tmdbType = contentType === 'show' ? 'tv' : 'movie';
+    const url = `https://api.themoviedb.org/3/${tmdbType}/${tmdbId}?api_key=${process.env.TMDB_API_KEY}`;
+    const tmdbRes = await fetch(url);
+    if (!tmdbRes.ok) return [];
+    const d = await tmdbRes.json();
+    return (d.genres || []).map((g) => g.id).filter((id) => Number.isFinite(id));
+}
+
+function parseGenreIdsFromRequest(req) {
+    const q = req.query || {};
+    const b = req.body || {};
+    const raw = b.genreIds !== undefined && b.genreIds !== null ? b.genreIds : q.genreIds;
+    if (Array.isArray(raw)) {
+        return raw.map((n) => parseInt(String(n), 10)).filter((n) => !isNaN(n) && n > 0);
+    }
+    if (typeof raw === 'string' && raw.trim()) {
+        return raw.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n) && n > 0);
+    }
+    return [];
+}
+
+function parseProviderIdsFromRequest(req) {
+    const q = req.query || {};
+    const b = req.body || {};
+    const raw = b.providerIds !== undefined && b.providerIds !== null ? b.providerIds : q.providerIds;
+    if (Array.isArray(raw)) {
+        return raw.map((s) => String(s).trim()).filter(Boolean);
+    }
+    if (typeof raw === 'string' && raw.trim()) {
+        return raw.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+}
+
+function genreFilterMatches(selectedIds, titleGenreIds) {
+    if (!selectedIds || selectedIds.length === 0) return true;
+    if (!titleGenreIds || titleGenreIds.length === 0) return false;
+    const set = new Set(titleGenreIds.map((n) => Number(n)));
+    return selectedIds.some((s) => set.has(Number(s)));
+}
+
+function providerFilterMatches(selectedIds, tmdbProviderIds) {
+    if (!selectedIds || selectedIds.length === 0) return true;
+    if (!tmdbProviderIds || tmdbProviderIds.length === 0) return false;
+    const set = new Set((tmdbProviderIds || []).map(String));
+    return selectedIds.some((s) => set.has(String(s)));
+}
+
+/** Aligns with public/js/shows.js PROVIDER_IDS for saveSubscriptions keys. */
+const SUBSCRIPTION_KEY_TO_TMDB_PROVIDER_IDS = {
+    netflix: ['8'],
+    prime: ['9', '119', '10'],
+    amazon: ['9', '119', '10'],
+    hulu: ['15'],
+    disney: ['337', '390'],
+    max: ['384', '189', '1899'],
+};
+
+function subscriptionKeysToNormalizedKeys(userKeys) {
+    const out = new Set();
+    for (const raw of userKeys || []) {
+        const s = String(raw).toLowerCase().trim();
+        if (!s) continue;
+        if (SUBSCRIPTION_KEY_TO_TMDB_PROVIDER_IDS[raw]) {
+            out.add(raw);
+            continue;
+        }
+        if (SUBSCRIPTION_KEY_TO_TMDB_PROVIDER_IDS[s]) {
+            out.add(s);
+            continue;
+        }
+        if (s.includes('netflix')) out.add('netflix');
+        else if (s.includes('hulu')) out.add('hulu');
+        else if (s.includes('disney')) out.add('disney');
+        else if (s.includes('prime') || s.includes('amazon')) out.add('prime');
+        else if (s.includes('max') || s.includes('hbo')) out.add('max');
+    }
+    return [...out];
+}
+
+function subscriptionKeysOverlapTmdbProviderIds(userKeys, tmdbProviderIds) {
+    const idSet = new Set((tmdbProviderIds || []).map(String));
+    const keys = subscriptionKeysToNormalizedKeys(userKeys);
+    for (const key of keys) {
+        const mapped = SUBSCRIPTION_KEY_TO_TMDB_PROVIDER_IDS[key];
+        if (mapped && mapped.some((id) => idSet.has(String(id)))) return true;
+    }
+    return false;
+}
+
+const RANDOM_WATCHLIST_MAX_ATTEMPTS = 15;
+
 app.get('/api/suggestions', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
@@ -1207,6 +1377,182 @@ app.get('/api/suggestions', authenticateToken, async (req, res) => {
         return res.status(500).json({ message: 'Error retrieving suggestions.' });
     }
 });
+
+/**
+ * Random title from Want to Watch (watch_status) with TMDB streaming info when available.
+ * GET query or POST JSON: type=all|movie|show, requireSubscriptionMatch, genreIds (comma or array), providerIds (comma or array).
+ */
+async function handleRandomWatchlist(req, res) {
+    let connection;
+    try {
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const rawType = String(
+            body.type !== undefined && body.type !== null ? body.type : req.query.type || 'all'
+        ).toLowerCase();
+        const typeFilter = ['all', 'movie', 'show'].includes(rawType) ? rawType : 'all';
+        const subRaw =
+            body.requireSubscriptionMatch !== undefined && body.requireSubscriptionMatch !== null
+                ? body.requireSubscriptionMatch
+                : req.query.requireSubscriptionMatch;
+        const requireSubscriptionMatch =
+            String(subRaw || '').toLowerCase() === 'true' ||
+            subRaw === true ||
+            subRaw === 1 ||
+            req.query.requireSubscriptionMatch === '1';
+
+        const genreIds = parseGenreIdsFromRequest(req);
+        const providerIds = parseProviderIdsFromRequest(req);
+
+        if (genreIds.length > 0 && typeFilter === 'all') {
+            return res.status(400).json({
+                message: 'Choose Movies or TV (not All) to filter by genre, or clear genre pills.',
+            });
+        }
+
+        connection = await createConnection();
+        const email = req.user.email;
+
+        let userSubKeys = [];
+        if (requireSubscriptionMatch) {
+            try {
+                const [subRows] = await connection.execute(
+                    'SELECT provider_key FROM user_subscription WHERE user_email = ?',
+                    [email]
+                );
+                userSubKeys = subRows.map((r) => r.provider_key);
+            } catch (subErr) {
+                if (subErr.code !== 'ER_NO_SUCH_TABLE') {
+                    console.error(subErr);
+                }
+            }
+            if (userSubKeys.length === 0) {
+                await connection.end();
+                return res.status(200).json({
+                    pick: null,
+                    message:
+                        'Add your streaming services on the Subscriptions page, or turn off “Only on my services” to pick without that filter.',
+                });
+            }
+        }
+
+        const emptyMessageForFilter = () => {
+            if (typeFilter === 'movie') {
+                return 'No movies in your Want to Watch list for this filter. Add movies on the dashboard or choose All.';
+            }
+            if (typeFilter === 'show') {
+                return 'No TV shows in your Want to Watch list for this filter. Add shows on the dashboard or choose All.';
+            }
+            return 'Your Want to Watch list is empty. Add titles on the dashboard, then try again.';
+        };
+
+        for (let attempt = 0; attempt < RANDOM_WATCHLIST_MAX_ATTEMPTS; attempt++) {
+            let rows;
+            try {
+                let sql =
+                    'SELECT title, type FROM watch_status WHERE user_email = ? AND status = ?';
+                const params = [email, 'want_to_watch'];
+                if (typeFilter === 'movie') {
+                    sql += " AND type = 'movie'";
+                } else if (typeFilter === 'show') {
+                    sql += " AND type = 'show'";
+                }
+                sql += ' ORDER BY RAND() LIMIT 1';
+                [rows] = await connection.execute(sql, params);
+            } catch (e) {
+                if (e.code === 'ER_NO_SUCH_TABLE') {
+                    await connection.end();
+                    return res.status(200).json({
+                        pick: null,
+                        message:
+                            'Want to Watch is not available yet. Run the watch_status migration, then add titles on your dashboard.',
+                    });
+                }
+                throw e;
+            }
+
+            if (!rows || rows.length === 0) {
+                await connection.end();
+                return res.status(200).json({
+                    pick: null,
+                    message: emptyMessageForFilter(),
+                });
+            }
+
+            const row = rows[0];
+            const title = row.title;
+            const type = row.type === 'show' ? 'show' : 'movie';
+
+            const match = await tmdbSearchMatchFromTitle(title, type);
+            const tmdbId = match?.id ?? null;
+            const providerPayload = tmdbId
+                ? await tmdbWatchProvidersForId(tmdbId, type)
+                : {
+                      available: false,
+                      providers: [],
+                      streamingProviders: [],
+                      label: 'Availability unavailable',
+                      providerIds: [],
+                  };
+
+            const tmdbProvIds = providerPayload.providerIds || [];
+
+            if (requireSubscriptionMatch) {
+                if (!subscriptionKeysOverlapTmdbProviderIds(userSubKeys, tmdbProvIds)) {
+                    continue;
+                }
+            }
+
+            if (!providerFilterMatches(providerIds, tmdbProvIds)) {
+                continue;
+            }
+
+            if (genreIds.length > 0) {
+                if (!tmdbId) {
+                    continue;
+                }
+                const titleGenreIds = await tmdbGenreIdsForId(tmdbId, type);
+                if (!genreFilterMatches(genreIds, titleGenreIds)) {
+                    continue;
+                }
+            }
+
+            await connection.end();
+            connection = null;
+
+            return res.status(200).json({
+                pick: {
+                    title,
+                    type,
+                    tmdbId,
+                    posterPath: match?.poster_path || null,
+                    streamingProviders: providerPayload.streamingProviders,
+                    providersLabel: providerPayload.label,
+                    allProviders: providerPayload.providers,
+                    available: providerPayload.available,
+                },
+            });
+        }
+
+        await connection.end();
+        connection = null;
+        return res.status(200).json({
+            pick: null,
+            message:
+                'No title matched your filters after several tries. Try fewer genre or provider pills, adjust format, or add more titles to Want to Watch.',
+        });
+    } catch (error) {
+        console.error(error);
+        if (connection) {
+            try {
+                await connection.end();
+            } catch (_) {}
+        }
+        return res.status(500).json({ message: 'Error picking from your watchlist.' });
+    }
+}
+
+app.get('/api/suggestions/random-watchlist', authenticateToken, handleRandomWatchlist);
+app.post('/api/suggestions/random-watchlist', authenticateToken, handleRandomWatchlist);
 
 //////////////////////////////////////
 // USERS
@@ -1377,6 +1723,24 @@ app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: 'Error searching TMDB.' });
+    }
+});
+
+app.get('/api/tmdb/genres', authenticateToken, async (req, res) => {
+    const raw = String(req.query.type || 'movie').toLowerCase();
+    const listType = raw === 'tv' || raw === 'show' ? 'tv' : 'movie';
+    if (!process.env.TMDB_API_KEY || process.env.TMDB_API_KEY === 'your-tmdb-api-key-here') {
+        return res.status(503).json({ message: 'TMDB API key not configured.' });
+    }
+    try {
+        const url = `https://api.themoviedb.org/3/genre/${listType}/list?api_key=${process.env.TMDB_API_KEY}`;
+        const tmdbRes = await fetch(url);
+        if (!tmdbRes.ok) return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
+        const data = await tmdbRes.json();
+        return res.status(200).json({ genres: data.genres || [] });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error loading genres.' });
     }
 });
 

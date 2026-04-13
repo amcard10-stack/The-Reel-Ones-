@@ -38,6 +38,36 @@
         </div>
     </div>
 
+    <div class="section" id="pickSection">
+        <h2>Pick Something for Me</h2>
+        <p class="section-hint">We’ll choose a random title from your <strong>Want to Watch</strong> list and show where you can stream it.</p>
+        <div class="pick-filters" role="group" aria-label="Pick filters">
+            <span class="pick-filters-label">Format</span>
+            <div class="pick-segment" id="pickTypeSegment">
+                <button type="button" class="pick-segment-btn is-active" data-pick-type="all" aria-pressed="true">All</button>
+                <button type="button" class="pick-segment-btn" data-pick-type="movie" aria-pressed="false">Movies</button>
+                <button type="button" class="pick-segment-btn" data-pick-type="show" aria-pressed="false">TV</button>
+            </div>
+            <label class="pick-subscription-check">
+                <input type="checkbox" id="pickRequireSubscription" />
+                <span>Only on a service I subscribe to</span>
+            </label>
+            <div id="pickGenreRow" class="pick-pill-block" hidden>
+                <span class="pick-filters-label">Genres</span>
+                <p class="pick-pill-hint" id="pickGenreHint">Select one or more (optional).</p>
+                <div class="pick-pill-wrap" id="pickGenrePills" role="group" aria-label="Genres"></div>
+            </div>
+            <div class="pick-pill-block">
+                <span class="pick-filters-label">Streaming</span>
+                <p class="pick-pill-hint">Select services the title must be available on (optional).</p>
+                <div class="pick-pill-wrap" id="pickProviderPills" role="group" aria-label="Streaming providers"></div>
+                <button type="button" class="pick-link-btn" id="pickApplySubscriptionsBtn">Use my saved services</button>
+            </div>
+        </div>
+        <button type="button" id="pickRandomBtn" class="primary pick-random-btn">Pick something for me</button>
+        <div id="pickResult" class="pick-result" aria-live="polite"></div>
+    </div>
+
     <div class="section" id="toRateSection">
         <h2>Rate These to Improve Recommendations</h2>
         <p class="section-hint">Titles from your watch history you haven't rated yet.</p>
