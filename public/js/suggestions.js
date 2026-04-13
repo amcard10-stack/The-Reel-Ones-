@@ -264,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadSuggestions() {
     const data = await DataModel.getSuggestions();
     if (!data) {
-        document.getElementById('ratingsSummary').textContent = 'Unable to load suggestions.';
+        document.getElementById('ratingsSummary').textContent = 'Unable to load recommendations.';
         return;
     }
 
