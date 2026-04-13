@@ -183,6 +183,26 @@
   </div>
 </div>
 
+<!-- Prompt when marking a title as completed -->
+<div id="completedRatingModal" class="popup-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="completedRatingHeading">
+    <div class="popup-content completed-rating-modal">
+        <h3 id="completedRatingHeading">Mark as completed</h3>
+        <p id="completedRatingSubtitle" class="completed-rating-subtitle"></p>
+        <p class="completed-rating-hint">Rate it to save to your ratings, watch history, and completed — or skip to add to watch history without a rating.</p>
+        <label class="completed-rating-label">Your rating</label>
+        <div class="star-rating" id="completedRatingStars">
+            <span class="star" data-rating="1">☆</span><span class="star" data-rating="2">☆</span><span class="star" data-rating="3">☆</span><span class="star" data-rating="4">☆</span><span class="star" data-rating="5">☆</span>
+        </div>
+        <label class="completed-rating-label" for="completedRatingReview">Review (optional)</label>
+        <textarea id="completedRatingReview" rows="2" placeholder="Short review…" class="completed-rating-review"></textarea>
+        <div class="popup-actions completed-rating-actions">
+            <button type="button" id="completedRatingCancel" class="popup-btn">Cancel</button>
+            <button type="button" id="completedRatingSkip" class="popup-btn">Skip rating</button>
+            <button type="button" id="completedRatingSave" class="popup-btn primary">Save rating</button>
+        </div>
+    </div>
+</div>
+
 <!-- Profile Prompt Popup -->
 <div id="profilePrompt" class="popup-overlay" style="display:none;">
     <div class="popup-content" style="text-align:center; max-width:360px;">

@@ -679,6 +679,14 @@ body {
 .star-rating span { color: var(--text-secondary); transition: color 0.15s; }
 .star-rating span:hover, .star-rating span.filled { color: var(--danger); }
 
+.completed-rating-modal { max-width: 440px; }
+.completed-rating-modal h3 { margin: 0 0 8px 0; font-size: 18px; }
+.completed-rating-subtitle { margin: 0 0 8px 0; font-weight: 600; color: var(--text-primary); word-break: break-word; }
+.completed-rating-hint { font-size: 13px; color: var(--text-secondary); margin: 0 0 16px 0; line-height: 1.45; }
+.completed-rating-label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.completed-rating-review { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--bg-input); color: var(--text-primary); margin-bottom: 16px; resize: vertical; font: inherit; }
+.completed-rating-actions { flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+
 .popup-friends-ratings {
     min-height: 1.5em;
     font-size: 14px;

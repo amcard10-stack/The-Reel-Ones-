@@ -114,6 +114,26 @@ markAllNotificationsReadBtn?.addEventListener('click', async () => {
     // TMDB search for Status add
     setupTMDBSearch(statusTitle, statusType, 'statusResults', async (item) => {
         const status = normalizeWatchStatusKey(statusValue?.value) || 'want_to_watch';
+        if (status === 'completed') {
+            const choice = await promptCompletedRating(item.title, item.type);
+            if (choice.action === 'cancel') return;
+            let result;
+            if (choice.action === 'rated') {
+                result = await DataModel.addRating(item.title, item.type, choice.rating, choice.review);
+            } else {
+                result = await DataModel.addWatchHistory(item.title, item.type);
+            }
+            if (result.ok) {
+                statusTitle.value = '';
+                document.getElementById('statusResults').innerHTML = '';
+                await refreshStatusesFromServer();
+                await renderDashboard();
+                document.querySelector('.status-grid')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                alert(result?.data?.message || 'Could not save. Try again.');
+            }
+            return;
+        }
         const result = await DataModel.setStatus(item.title, item.type, status);
         if (result.ok) {
             statusTitle.value = '';
@@ -140,40 +160,6 @@ markAllNotificationsReadBtn?.addEventListener('click', async () => {
             renderDashboard();
         }
     }, true);
-
-    function populateListSelect() {
-        if (!listSelect) return;
-        const allLists = [
-            ...(cachedLists || []).map(l => ({ ...l, _owned: true })),
-            ...(cachedSharedLists || []).map(l => ({ ...l, _owned: false }))
-        ];
-        if (allLists.length === 0) {
-            document.getElementById('addToListForm').style.display = 'none';
-            return;
-        }
-        document.getElementById('addToListForm').style.display = 'flex';
-        listSelect.innerHTML = '<option value="">Select a list</option>';
-        if (cachedLists.length > 0) {
-            const grp1 = document.createElement('optgroup');
-            grp1.label = 'My Lists';
-            cachedLists.forEach(l => {
-                const opt = document.createElement('option');
-                opt.value = l.id; opt.textContent = l.name;
-                grp1.appendChild(opt);
-            });
-            listSelect.appendChild(grp1);
-        }
-        if (cachedSharedLists.length > 0) {
-            const grp2 = document.createElement('optgroup');
-            grp2.label = 'Shared With Me';
-            cachedSharedLists.forEach(l => {
-                const opt = document.createElement('option');
-                opt.value = l.id; opt.textContent = l.name;
-                grp2.appendChild(opt);
-            });
-            listSelect.appendChild(grp2);
-        }
-    }
 
     // Item popup
     const popup = document.getElementById('itemPopup');
@@ -216,10 +202,18 @@ markAllNotificationsReadBtn?.addEventListener('click', async () => {
                 }
             }
             if (status) {
-                const sr = await DataModel.setStatus(currentPopupItem.title, currentPopupItem.type, status);
-                if (!sr.ok) {
-                    alert(sr?.data?.message || 'Could not update status.');
-                    return;
+                if (status === 'completed' && rating < 1) {
+                    const whr = await DataModel.addWatchHistory(currentPopupItem.title, currentPopupItem.type);
+                    if (!whr.ok) {
+                        alert(whr?.data?.message || 'Could not add to watch history.');
+                        return;
+                    }
+                } else if (!(status === 'completed' && rating >= 1)) {
+                    const sr = await DataModel.setStatus(currentPopupItem.title, currentPopupItem.type, status);
+                    if (!sr.ok) {
+                        alert(sr?.data?.message || 'Could not update status.');
+                        return;
+                    }
                 }
             }
             popup.style.display = 'none';
@@ -234,6 +228,51 @@ markAllNotificationsReadBtn?.addEventListener('click', async () => {
         if (!currentPopupItem || popupStatusSection?.style.display === 'none') return;
         if (popupStatusSelect.dataset.programmatic === '1') return;
         const v = popupStatusSelect.value;
+        const prev = normalizeWatchStatusKey(currentPopupItem.status) || 'want_to_watch';
+
+        if (v === 'completed' && prev !== 'completed') {
+            popupStatusSelect.dataset.programmatic = '1';
+            popupStatusSelect.value = prev;
+            delete popupStatusSelect.dataset.programmatic;
+
+            const choice = await promptCompletedRating(currentPopupItem.title, currentPopupItem.type);
+            if (choice.action === 'cancel') {
+                return;
+            }
+
+            let ok = false;
+            if (choice.action === 'rated') {
+                const result = await DataModel.addRating(
+                    currentPopupItem.title,
+                    currentPopupItem.type,
+                    choice.rating,
+                    choice.review
+                );
+                ok = !!result?.ok;
+                if (!ok) alert(result?.data?.message || 'Could not save rating.');
+            } else {
+                const result = await DataModel.addWatchHistory(currentPopupItem.title, currentPopupItem.type);
+                ok = !!result?.ok;
+                if (!ok) alert(result?.data?.message || 'Could not update.');
+            }
+            if (!ok) return;
+
+            popupStatusSelect.dataset.programmatic = '1';
+            popupStatusSelect.value = 'completed';
+            delete popupStatusSelect.dataset.programmatic;
+
+            syncCachedStatusRow(currentPopupItem.title, currentPopupItem.type, 'completed');
+            currentPopupItem.status = 'completed';
+            const statusEl = document.getElementById('popupStatus');
+            if (statusEl) {
+                statusEl.textContent = 'Status: completed';
+                statusEl.style.display = 'block';
+            }
+            renderStatuses();
+            await renderDashboard();
+            return;
+        }
+
         const sr = await DataModel.setStatus(currentPopupItem.title, currentPopupItem.type, v);
         if (!sr.ok) {
             alert(sr?.data?.message || 'Could not update status.');
@@ -252,6 +291,12 @@ markAllNotificationsReadBtn?.addEventListener('click', async () => {
 
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
+        const crm = document.getElementById('completedRatingModal');
+        if (crm && crm.style.display === 'flex' && dismissCompletedRatingPrompt) {
+            dismissCompletedRatingPrompt();
+            e.preventDefault();
+            return;
+        }
         const p = document.getElementById('itemPopup');
         if (p && p.style.display === 'flex') {
             p.style.display = 'none';
@@ -263,7 +308,8 @@ markAllNotificationsReadBtn?.addEventListener('click', async () => {
         if (DataModel.deleteWatchHistory) await DataModel.deleteWatchHistory(currentPopupItem.title, currentPopupItem.type);
         if (DataModel.deleteStatus) await DataModel.deleteStatus(currentPopupItem.title, currentPopupItem.type);
         if (DataModel.deleteRating) await DataModel.deleteRating(currentPopupItem.title, currentPopupItem.type);
-        const listsWithItem = (cachedLists || []).map(l => {
+        const allLists = [...(cachedLists || []), ...(cachedSharedLists || [])];
+        const listsWithItem = allLists.map(l => {
             const item = (l.items || []).find(i => (i.title || '').trim().toLowerCase() === (currentPopupItem.title || '').trim().toLowerCase());
             return item ? { listId: l.id, itemTitle: item.title } : null;
         }).filter(Boolean);
@@ -577,6 +623,79 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
+/** Set by promptCompletedRating while modal is open; Escape calls it to resolve cancel */
+let dismissCompletedRatingPrompt = null;
+
+/**
+ * Shown when moving a title to Completed (drag, status dropdown, or add-as-completed).
+ * @returns {Promise<{ action: 'rated', rating: number, review: string | null } | { action: 'skip' } | { action: 'cancel' }>}
+ */
+function promptCompletedRating(title, type) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('completedRatingModal');
+        const subtitle = document.getElementById('completedRatingSubtitle');
+        const reviewEl = document.getElementById('completedRatingReview');
+        const starsEl = document.getElementById('completedRatingStars');
+        const btnCancel = document.getElementById('completedRatingCancel');
+        const btnSkip = document.getElementById('completedRatingSkip');
+        const btnSave = document.getElementById('completedRatingSave');
+
+        if (!modal || !subtitle || !starsEl || !btnCancel || !btnSkip || !btnSave) {
+            resolve({ action: 'skip' });
+            return;
+        }
+
+        let selected = 0;
+        const typeLabel = type === 'show' ? 'TV' : 'Movie';
+        subtitle.textContent = `${title} (${typeLabel})`;
+        if (reviewEl) reviewEl.value = '';
+        [...starsEl.querySelectorAll('[data-rating]')].forEach((s, i) => {
+            s.textContent = '☆';
+            s.classList.remove('filled');
+        });
+
+        const done = (payload) => {
+            starsEl.removeEventListener('click', onStarClick);
+            btnCancel.removeEventListener('click', onCancel);
+            btnSkip.removeEventListener('click', onSkip);
+            btnSave.removeEventListener('click', onSave);
+            modal.style.display = 'none';
+            dismissCompletedRatingPrompt = null;
+            resolve(payload);
+        };
+
+        const onStarClick = (e) => {
+            const span = e.target.closest('[data-rating]');
+            if (!span) return;
+            selected = parseInt(span.dataset.rating, 10);
+            [...starsEl.querySelectorAll('[data-rating]')].forEach((s, i) => {
+                const n = parseInt(s.dataset.rating, 10);
+                s.textContent = n <= selected ? '★' : '☆';
+                s.classList.toggle('filled', n <= selected);
+            });
+        };
+
+        const onCancel = () => done({ action: 'cancel' });
+        const onSkip = () => done({ action: 'skip' });
+        const onSave = () => {
+            if (selected < 1) {
+                alert('Select 1–5 stars, or use Skip rating.');
+                return;
+            }
+            const rev = (reviewEl?.value || '').trim();
+            done({ action: 'rated', rating: selected, review: rev || null });
+        };
+
+        dismissCompletedRatingPrompt = () => done({ action: 'cancel' });
+
+        starsEl.addEventListener('click', onStarClick);
+        btnCancel.addEventListener('click', onCancel);
+        btnSkip.addEventListener('click', onSkip);
+        btnSave.addEventListener('click', onSave);
+
+        modal.style.display = 'flex';
+    });
+}
 
 async function updateFriendActivityTeaser() {
     const wrap = document.getElementById('friendActivityTeaser');
@@ -761,6 +880,7 @@ function setupTMDBSearch(inputEl, typeSelectEl, resultsContainerId, onSelect, se
 //////////////////////////////////////////
 let cachedWatchHistory = [];
 let cachedLists = [];
+let cachedSharedLists = [];
 let cachedStatuses = [];
 let posterCache = {};
 let currentPopupItem = null;
@@ -861,7 +981,8 @@ function showItemPopup(item) {
         });
     }
 
-    const listsWithExactItem = (cachedLists || []).map(l => {
+    const allListsForPopup = [...(cachedLists || []), ...(cachedSharedLists || [])];
+    const listsWithExactItem = allListsForPopup.map(l => {
         const item = (l.items || []).find(i => (i.title || '').trim().toLowerCase() === (merged.title || '').trim().toLowerCase());
         return item ? { list: l, itemTitle: item.title } : null;
     }).filter(Boolean);
@@ -935,16 +1056,19 @@ function loadPopupFriendsRatings(merged) {
 }
 
 async function renderDashboard() {
-    [cachedWatchHistory, cachedLists, cachedStatuses] = await Promise.all([
+    [cachedWatchHistory, cachedLists, cachedSharedLists, cachedStatuses] = await Promise.all([
         DataModel.getWatchHistory(),
         DataModel.getLists(),
+        DataModel.getSharedLists ? DataModel.getSharedLists() : Promise.resolve([]),
         DataModel.getStatuses ? DataModel.getStatuses() : Promise.resolve([])
     ]);
+    cachedSharedLists = Array.isArray(cachedSharedLists) ? cachedSharedLists : [];
 
     const posterItems = [
         ...cachedWatchHistory.map(w => ({ title: w.title, type: w.type || 'movie' })),
         ...cachedStatuses.map(s => ({ title: s.title, type: s.type || 'movie' })),
-        ...cachedLists.flatMap(l => (l.items || []).map(i => ({ title: i.title, type: 'movie' })))
+        ...cachedLists.flatMap(l => (l.items || []).map(i => ({ title: i.title, type: 'movie' }))),
+        ...cachedSharedLists.flatMap(l => (l.items || []).map(i => ({ title: i.title, type: 'movie' })))
     ];
     posterCache = (DataModel.getPostersForItems && posterItems.length > 0)
         ? await DataModel.getPostersForItems(posterItems)
@@ -1123,6 +1247,25 @@ function setupStatusBoardDragDrop() {
                 (s) => s.title === title && (s.type || 'movie') === type
             );
             if (existing && normalizeWatchStatusKey(existing.status) === status) return;
+
+            if (status === 'completed') {
+                const choice = await promptCompletedRating(title, type);
+                if (choice.action === 'cancel') return;
+                let result;
+                if (choice.action === 'rated') {
+                    result = await DataModel.addRating(title, type, choice.rating, choice.review);
+                } else {
+                    result = await DataModel.addWatchHistory(title, type);
+                }
+                if (!result?.ok) {
+                    await refreshStatusesFromServer();
+                    alert(result?.data?.message || 'Could not update.');
+                    return;
+                }
+                await refreshStatusesFromServer();
+                await renderDashboard();
+                return;
+            }
 
             if (existing) {
                 existing.status = status;
@@ -1446,10 +1589,11 @@ function renderLists(searchTerm) {
     const addToListForm = document.getElementById('addToListForm');
     if (!el) return;
 
-    const lists = cachedLists;
+    const lists = cachedLists || [];
+    const shared = cachedSharedLists || [];
     el.innerHTML = '';
 
-    if (lists.length === 0) {
+    if (lists.length === 0 && shared.length === 0) {
         el.innerHTML = '<p class="empty-message">No lists yet.</p>';
         if (addToListForm) addToListForm.style.display = 'none';
         return;
@@ -1458,12 +1602,37 @@ function renderLists(searchTerm) {
     if (addToListForm) addToListForm.style.display = 'flex';
     if (listSelect) {
         listSelect.innerHTML = '<option value="">Select a list</option>';
-        lists.forEach(list => {
-            listSelect.innerHTML += `<option value="${list.id}">${list.name}</option>`;
-        });
+        if (lists.length > 0) {
+            const grp1 = document.createElement('optgroup');
+            grp1.label = 'My Lists';
+            lists.forEach((list) => {
+                const opt = document.createElement('option');
+                opt.value = list.id;
+                opt.textContent = list.name;
+                grp1.appendChild(opt);
+            });
+            listSelect.appendChild(grp1);
+        }
+        if (shared.length > 0) {
+            const grp2 = document.createElement('optgroup');
+            grp2.label = 'Shared With Me';
+            shared.forEach((list) => {
+                const opt = document.createElement('option');
+                opt.value = list.id;
+                opt.textContent = list.name;
+                grp2.appendChild(opt);
+            });
+            listSelect.appendChild(grp2);
+        }
     }
 
-    lists.forEach(list => {
+    lists.forEach((list) => {
         el.appendChild(buildListCard(list, { isShared: false, searchTerm }));
+    });
+    shared.forEach((list) => {
+        const ownerName = list.ownerFirstName
+            ? `${list.ownerFirstName} ${list.ownerLastName}`.trim()
+            : (list.ownerUsername || list.ownerEmail || 'Friend');
+        el.appendChild(buildListCard(list, { isShared: true, ownerName, searchTerm }));
     });
 }

@@ -644,6 +644,25 @@ app.put('/api/dashboard/ratings', authenticateToken, async (req, res) => {
             );
         }
 
+        try {
+            await connection.execute(
+                'INSERT INTO watch_history (user_email, title, type) VALUES (?, ?, ?)',
+                [req.user.email, titleTrim, contentType]
+            );
+        } catch (whErr) {
+            // ignore duplicate entry
+        }
+        try {
+            await connection.execute(
+                `INSERT INTO watch_status (user_email, title, type, status)
+                 VALUES (?, ?, ?, 'completed')
+                 ON DUPLICATE KEY UPDATE status = 'completed'`,
+                [req.user.email, titleTrim, contentType]
+            );
+        } catch (statusErr) {
+            if (statusErr.code !== 'ER_NO_SUCH_TABLE') console.error('watch_status:', statusErr.message);
+        }
+
         await connection.end();
         res.status(200).json({ message: 'Rating updated.' });
     } catch (error) {
@@ -875,7 +894,6 @@ app.get('/api/dashboard/lists', authenticateToken, async (req, res) => {
         const [lists] = await connection.execute(
             `SELECT id, name, created_at FROM list
              WHERE user_email = ?
-               AND NOT EXISTS (SELECT 1 FROM list_collaborator lc WHERE lc.list_id = list.id)
              ORDER BY created_at ASC`,
             [req.user.email]
         );
@@ -1686,7 +1704,7 @@ app.get('/api/trending/movies', authenticateToken, async (req, res) => {
     }
 });
 
-app.get('/api/trending/tv', authenticateToken, async (req, res) => {
+async function handleTrendingTv(req, res) {
     const page = req.query.page || 1;
     if (!process.env.TMDB_API_KEY) {
         return res.status(500).json({ message: 'TMDB API key missing' });
@@ -1703,7 +1721,11 @@ app.get('/api/trending/tv', authenticateToken, async (req, res) => {
         console.error(error);
         return res.status(500).json({ message: 'Error fetching trending shows' });
     }
-});
+}
+
+app.get('/api/trending/tv', authenticateToken, handleTrendingTv);
+/** Alias: dashboard/subscriptions call this path for TV trending */
+app.get('/api/trending/shows', authenticateToken, handleTrendingTv);
 
 app.get('/api/tmdb/search', authenticateToken, async (req, res) => {
     const q = (req.query.q || '').trim();
