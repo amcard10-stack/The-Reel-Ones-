@@ -39,6 +39,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!q || q.length < MIN_CHARS) loadRatingSearch(true);
     });
 
+    // Pre-fill from URL params (e.g. coming from Recommendations page)
+    const urlParams = new URLSearchParams(window.location.search);
+    const preTitle = urlParams.get('title');
+    const preType = urlParams.get('type');
+    if (preTitle) {
+        ratingTitle.value = preTitle;
+        if (preType && (preType === 'movie' || preType === 'show')) {
+            ratingType.value = preType;
+        }
+        loadRatingSearch();
+        ratingTitle.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     async function loadRatingSearch(showTrending = false) {
         if (!ratingSearchResults) return;
         const query = ratingTitle.value?.trim();
@@ -176,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const result = await DataModel.addRating(title, type, selectedRating, review || null);
         if (result.ok) {
+            localStorage.setItem('recsStale', '1');
             messageEl.textContent = 'Rating added! Added to watch history and marked as completed.';
             messageEl.style.color = '#28a745';
             ratingTitle.value = '';

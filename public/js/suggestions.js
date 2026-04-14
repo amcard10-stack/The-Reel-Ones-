@@ -257,62 +257,104 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = '/';
     });
 
+    // Wire up the type toggle to re-fetch recommendations
+    const toggle = document.getElementById('recommendationTypeToggle');
+    if (toggle) {
+        toggle.addEventListener('click', (e) => {
+            const btn = e.target.closest('.type-tab');
+            if (!btn) return;
+            toggle.querySelectorAll('.type-tab').forEach((b) => b.classList.remove('active'));
+            btn.classList.add('active');
+            loadSuggestions(btn.dataset.type || 'both', false, false);
+        });
+    }
+
+    document.getElementById('moreRecsBtn')?.addEventListener('click', () => {
+        const activeType = toggle?.querySelector('.type-tab.active')?.dataset?.type || 'both';
+        loadSuggestions(activeType, true, true);
+    });
+
+    // Re-fetch only when the user actually changed their ratings or watch history
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && localStorage.getItem('recsStale') === '1') {
+            localStorage.removeItem('recsStale');
+            const activeType = toggle?.querySelector('.type-tab.active')?.dataset?.type || 'both';
+            loadSuggestions(activeType, false, false);
+        }
+    });
+
     setupPickRandom();
-    loadSuggestions();
+    loadSuggestions('both', false, false);
 });
 
-async function loadSuggestions() {
-    const data = await DataModel.getSuggestions();
+async function loadSuggestions(type, append, refresh) {
+    const activeType = type || 'both';
+    const moreBtn = document.getElementById('moreRecsBtn');
+
+    if (moreBtn && refresh) { moreBtn.disabled = true; moreBtn.textContent = 'Loading…'; }
+
+    const data = await DataModel.getSuggestions(activeType, refresh);
+
+    if (moreBtn) { moreBtn.disabled = false; moreBtn.textContent = 'Generate More Recommendations'; }
+
     if (!data) {
         document.getElementById('ratingsSummary').textContent = 'Unable to load recommendations.';
         return;
     }
 
-    // Ratings summary
-    const summaryEl = document.getElementById('ratingsSummary');
-    if (data.ratingsCount > 0) {
-        summaryEl.textContent = `You've rated ${data.ratingsCount} title${data.ratingsCount === 1 ? '' : 's'}. More ratings = better recommendations!`;
-    } else {
-        summaryEl.textContent = 'Rate movies and shows to get personalized recommendations.';
+    // Ratings summary and title — only update on full (non-refresh) loads
+    if (!refresh) {
+        const summaryEl = document.getElementById('ratingsSummary');
+        summaryEl.textContent = data.ratingsCount > 0
+            ? `You've rated ${data.ratingsCount} title${data.ratingsCount === 1 ? '' : 's'}. More ratings = better recommendations!`
+            : 'Rate movies and shows to get personalized recommendations.';
+
+        const titleEl = document.getElementById('recommendationsSectionTitle');
+        if (titleEl) {
+            const label = activeType === 'movie' ? 'Movies' : activeType === 'show' ? 'Shows' : 'Titles';
+            titleEl.textContent = `Recommended ${label} For You`;
+        }
     }
 
     const toRate = data.toRate || [];
     const recommendations = data.recommendations || [];
     const posterItems = [
-        ...toRate.map((i) => ({ title: i.title, type: i.type })),
+        ...(!append ? toRate.map((i) => ({ title: i.title, type: i.type })) : []),
         ...recommendations.map((i) => ({ title: i.title, type: i.type })),
     ];
     const posterMap = await DataModel.getPostersForItems(posterItems);
 
-    // To-rate list (from watch history)
-    const toRateList = document.getElementById('toRateList');
-    if (toRate.length > 0) {
-        toRateList.innerHTML = toRate.map((item) => {
-            const path = posterMap[posterKey(item.title, item.type)];
-            return recommendationCardHtml(
-                item,
-                path,
-                (typeLabel) => typeLabel,
-                '<a href="/ratings" class="primary">Rate Now</a>'
-            );
-        }).join('');
-    } else {
-        document.getElementById('toRateSection').style.display = 'none';
+    // To-rate list — only render on initial load
+    if (!append) {
+        const toRateSection = document.getElementById('toRateSection');
+        const toRateList = document.getElementById('toRateList');
+        if (toRate.length > 0) {
+            toRateSection.style.display = '';
+            toRateList.innerHTML = toRate.map((item) => {
+                const path = posterMap[posterKey(item.title, item.type)];
+                const rateUrl = `/ratings?title=${encodeURIComponent(item.title)}&type=${encodeURIComponent(item.type)}`;
+                return recommendationCardHtml(item, path, (t) => t, `<a href="${rateUrl}" class="primary">Rate Now</a>`);
+            }).join('');
+        } else {
+            toRateSection.style.display = 'none';
+        }
     }
 
-    // Recommendations (from other users' high ratings)
+    // Recommendations — replace on refresh, set fresh on initial load
     const recList = document.getElementById('recommendationsList');
     if (recommendations.length > 0) {
         recList.innerHTML = recommendations.map((item) => {
             const path = posterMap[posterKey(item.title, item.type)];
-            return recommendationCardHtml(
-                item,
-                path,
-                (typeLabel) => `${typeLabel} · Avg ${item.avgRating}★`,
-                '<a href="/ratings" class="primary">Rate It</a>'
-            );
+            const rateUrl = `/ratings?title=${encodeURIComponent(item.title)}&type=${encodeURIComponent(item.type)}`;
+            return recommendationCardHtml(item, path, (t) => `${t} · Avg ${item.avgRating}★`, `<a href="${rateUrl}" class="primary">Rate It</a>`);
         }).join('');
-    } else {
-        recList.innerHTML = '<p class="empty-message">Rate more titles to see personalized recommendations!</p>';
+    } else if (!refresh) {
+        const typeLabel = activeType === 'movie' ? 'movies' : activeType === 'show' ? 'shows' : 'titles';
+        recList.innerHTML = `<p class="empty-message">Rate more ${typeLabel} to see personalized recommendations!</p>`;
+    }
+
+    // Always show button once there are any recommendations
+    if (moreBtn) {
+        moreBtn.style.display = recommendations.length > 0 ? '' : 'none';
     }
 }

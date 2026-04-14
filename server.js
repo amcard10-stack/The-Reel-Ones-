@@ -582,18 +582,33 @@ app.post('/api/dashboard/ratings', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
 
-        await connection.execute(
-            'INSERT INTO rating (user_email, title, type, rating, review) VALUES (?, ?, ?, ?, ?)',
-            [req.user.email, title, contentType, r, review || null]
+        // Upsert rating — update if one already exists for this title, otherwise insert
+        const [existingRating] = await connection.execute(
+            'SELECT id FROM rating WHERE user_email = ? AND LOWER(title) = LOWER(?) AND type = ?',
+            [req.user.email, title, contentType]
         );
+        if (existingRating.length > 0) {
+            await connection.execute(
+                'UPDATE rating SET rating = ?, review = ?, rated_at = NOW() WHERE user_email = ? AND LOWER(title) = LOWER(?) AND type = ?',
+                [r, review || null, req.user.email, title, contentType]
+            );
+        } else {
+            await connection.execute(
+                'INSERT INTO rating (user_email, title, type, rating, review) VALUES (?, ?, ?, ?, ?)',
+                [req.user.email, title, contentType, r, review || null]
+            );
+        }
 
-        try {
+        // Only insert watch_history if not already present
+        const [existingWH] = await connection.execute(
+            'SELECT id FROM watch_history WHERE user_email = ? AND LOWER(title) = LOWER(?) AND type = ?',
+            [req.user.email, title, contentType]
+        );
+        if (existingWH.length === 0) {
             await connection.execute(
                 'INSERT INTO watch_history (user_email, title, type) VALUES (?, ?, ?)',
                 [req.user.email, title, contentType]
             );
-        } catch (whErr) {
-            // ignore duplicate entry errors
         }
 
         try {
@@ -644,13 +659,16 @@ app.put('/api/dashboard/ratings', authenticateToken, async (req, res) => {
             );
         }
 
-        try {
+        // Only insert watch_history if not already present
+        const [existingWH] = await connection.execute(
+            'SELECT id FROM watch_history WHERE user_email = ? AND LOWER(title) = LOWER(?) AND type = ?',
+            [req.user.email, titleTrim, contentType]
+        );
+        if (existingWH.length === 0) {
             await connection.execute(
                 'INSERT INTO watch_history (user_email, title, type) VALUES (?, ?, ?)',
                 [req.user.email, titleTrim, contentType]
             );
-        } catch (whErr) {
-            // ignore duplicate entry
         }
         try {
             await connection.execute(
@@ -1349,46 +1367,275 @@ app.get('/api/suggestions', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
         const email = req.user.email;
+        const typeFilter = req.query.type && req.query.type !== 'both' ? req.query.type : null;
+        const randomize = req.query.refresh === '1';
 
         const [[{ count: ratingsCount }]] = await connection.execute(
             'SELECT COUNT(*) as count FROM rating WHERE user_email = ?',
             [email]
         );
 
-        const [toRateRows] = await connection.execute(
-            `SELECT wh.title, wh.type
-             FROM watch_history wh
-             LEFT JOIN rating r ON r.user_email = wh.user_email AND LOWER(r.title) = LOWER(wh.title)
-             WHERE wh.user_email = ? AND r.id IS NULL
-             LIMIT 10`,
+        const toRateQuery = typeFilter
+            ? `SELECT wh.title, wh.type
+               FROM watch_history wh
+               LEFT JOIN rating r ON r.user_email = wh.user_email AND LOWER(r.title) = LOWER(wh.title)
+               WHERE wh.user_email = ? AND r.id IS NULL AND wh.type = ?
+               LIMIT 10`
+            : `SELECT wh.title, wh.type
+               FROM watch_history wh
+               LEFT JOIN rating r ON r.user_email = wh.user_email AND LOWER(r.title) = LOWER(wh.title)
+               WHERE wh.user_email = ? AND r.id IS NULL
+               LIMIT 10`;
+        const toRateParams = typeFilter ? [email, typeFilter] : [email];
+        const [toRateRows] = await connection.execute(toRateQuery, toRateParams);
+
+        const order = randomize ? 'RAND()' : 'avg_rating DESC';
+
+        // Collaborative filtering: find users who liked the same titles, then surface their other picks
+        const collabBaseQuery = typeFilter
+            ? `SELECT DISTINCT r.title, r.type, AVG(r.rating) as avg_rating
+               FROM rating r
+               WHERE r.user_email IN (
+                   SELECT DISTINCT r2.user_email
+                   FROM rating r1
+                   JOIN rating r2 ON LOWER(r2.title) = LOWER(r1.title)
+                       AND r2.user_email != ? AND r2.rating >= 4
+                   WHERE r1.user_email = ? AND r1.rating >= 4
+               )
+               AND r.rating >= 4 AND r.user_email != ? AND r.type = ?
+               AND NOT EXISTS (
+                   SELECT 1 FROM rating r3 WHERE r3.user_email = ? AND LOWER(r3.title) = LOWER(r.title)
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM watch_history wh WHERE wh.user_email = ? AND LOWER(wh.title) = LOWER(r.title)
+               )
+               GROUP BY r.title, r.type ORDER BY ${order} LIMIT 10`
+            : `SELECT DISTINCT r.title, r.type, AVG(r.rating) as avg_rating
+               FROM rating r
+               WHERE r.user_email IN (
+                   SELECT DISTINCT r2.user_email
+                   FROM rating r1
+                   JOIN rating r2 ON LOWER(r2.title) = LOWER(r1.title)
+                       AND r2.user_email != ? AND r2.rating >= 4
+                   WHERE r1.user_email = ? AND r1.rating >= 4
+               )
+               AND r.rating >= 4 AND r.user_email != ?
+               AND NOT EXISTS (
+                   SELECT 1 FROM rating r3 WHERE r3.user_email = ? AND LOWER(r3.title) = LOWER(r.title)
+               )
+               AND NOT EXISTS (
+                   SELECT 1 FROM watch_history wh WHERE wh.user_email = ? AND LOWER(wh.title) = LOWER(r.title)
+               )
+               GROUP BY r.title, r.type ORDER BY ${order} LIMIT 10`;
+        const collabParams = typeFilter
+            ? [email, email, email, typeFilter, email, email]
+            : [email, email, email, email, email];
+        const [collabRows] = await connection.execute(collabBaseQuery, collabParams);
+
+        let recRows = collabRows;
+
+        // Fall back to global top-rated if no collaborative matches (new user or no shared ratings)
+        if (recRows.length === 0) {
+            const fallbackQuery = typeFilter
+                ? `SELECT DISTINCT r.title, r.type, AVG(r.rating) as avg_rating
+                   FROM rating r
+                   WHERE r.user_email != ? AND r.rating >= 4 AND r.type = ?
+                     AND NOT EXISTS (
+                         SELECT 1 FROM rating r2 WHERE r2.user_email = ? AND LOWER(r2.title) = LOWER(r.title)
+                     )
+                   GROUP BY r.title, r.type ORDER BY ${order} LIMIT 10`
+                : `SELECT DISTINCT r.title, r.type, AVG(r.rating) as avg_rating
+                   FROM rating r
+                   WHERE r.user_email != ? AND r.rating >= 4
+                     AND NOT EXISTS (
+                         SELECT 1 FROM rating r2 WHERE r2.user_email = ? AND LOWER(r2.title) = LOWER(r.title)
+                     )
+                   GROUP BY r.title, r.type ORDER BY ${order} LIMIT 10`;
+            const fallbackParams = typeFilter ? [email, typeFilter, email] : [email, email];
+            [recRows] = await connection.execute(fallbackQuery, fallbackParams);
+        }
+
+        // All liked titles regardless of type — used for both TMDB similar and genre scoring
+        // so movie ratings can still drive show recommendations and vice versa
+        const [allLikedRows] = await connection.execute(
+            `SELECT title, type, rating FROM rating WHERE user_email = ? AND rating >= 4 ORDER BY rating DESC, rated_at DESC LIMIT 5`,
             [email]
         );
 
-        const [recRows] = await connection.execute(
-            `SELECT DISTINCT r.title, r.type, AVG(r.rating) as avg_rating
-             FROM rating r
-             WHERE r.user_email != ?
-               AND r.rating >= 4
-               AND NOT EXISTS (
-                   SELECT 1 FROM rating r2
-                   WHERE r2.user_email = ? AND LOWER(r2.title) = LOWER(r.title)
-               )
-             GROUP BY r.title, r.type
-             ORDER BY avg_rating DESC
-             LIMIT 10`,
-            [email, email]
+        // Recent watch history (unrated, any type) — genre signal at weight 1
+        const [watchGenreRows] = await connection.execute(
+            `SELECT wh.title, wh.type FROM watch_history wh
+             LEFT JOIN rating r ON r.user_email = wh.user_email AND LOWER(r.title) = LOWER(wh.title)
+             WHERE wh.user_email = ? AND r.id IS NULL
+             ORDER BY wh.watched_at DESC LIMIT 3`,
+            [email]
         );
 
+        // Already-seen titles (rated or watched) for filtering TMDB results
+        const [seenRows] = await connection.execute(
+            `SELECT LOWER(title) AS t FROM rating WHERE user_email = ?
+             UNION SELECT LOWER(title) AS t FROM watch_history WHERE user_email = ?`,
+            [email, email]
+        );
+        const seenSet = new Set(seenRows.map((r) => r.t));
+        recRows.forEach((r) => seenSet.add(r.title.toLowerCase()));
+
         await connection.end();
+
+        const tmdbSimilar = [];
+        const genreDiscover = [];
+
+        if (process.env.TMDB_API_KEY && process.env.TMDB_API_KEY !== 'your-tmdb-api-key-here') {
+            // Track genre scores separately per content type (movie/TV use different genre ID systems)
+            const movieGenreScore = {};
+            const tvGenreScore = {};
+
+            const addGenreScore = (genreIds, contentType, weight) => {
+                const score = contentType === 'show' ? tvGenreScore : movieGenreScore;
+                genreIds.forEach((gid) => { score[gid] = (score[gid] || 0) + weight; });
+            };
+
+            // Fetch TMDB similar + genre IDs for each liked title in parallel
+            await Promise.all(allLikedRows.map(async (liked) => {
+                try {
+                    const match = await tmdbSearchMatchFromTitle(liked.title, liked.type);
+                    if (!match) return;
+                    const tmdbType = liked.type === 'show' ? 'tv' : 'movie';
+
+                    const [simRes, recRes, genreIds] = await Promise.all([
+                        fetch(`https://api.themoviedb.org/3/${tmdbType}/${match.id}/similar?api_key=${process.env.TMDB_API_KEY}`),
+                        fetch(`https://api.themoviedb.org/3/${tmdbType}/${match.id}/recommendations?api_key=${process.env.TMDB_API_KEY}`),
+                        tmdbGenreIdsForId(match.id, liked.type),
+                    ]);
+
+                    addGenreScore(genreIds, liked.type, parseInt(liked.rating, 10) || 1);
+
+                    const simData = simRes.ok ? await simRes.json() : { results: [] };
+                    const recData = recRes.ok ? await recRes.json() : { results: [] };
+                    const combined = [...(recData.results || []), ...(simData.results || [])];
+                    for (const item of combined) {
+                        const title = liked.type === 'show' ? item.name : item.title;
+                        if (!title) continue;
+                        if (seenSet.has(title.toLowerCase())) continue;
+                        if (typeFilter && liked.type !== typeFilter) continue;
+                        seenSet.add(title.toLowerCase());
+                        tmdbSimilar.push({
+                            title,
+                            type: liked.type,
+                            avgRating: item.vote_average ? Math.round(item.vote_average / 2 * 10) / 10 : null,
+                            posterPath: item.poster_path || null,
+                            source: 'tmdb',
+                        });
+                    }
+                } catch (_) { /* best-effort */ }
+            }));
+
+            // Add genre signal from unrated watch history (weight 1 each)
+            await Promise.all(watchGenreRows.map(async (watched) => {
+                try {
+                    const match = await tmdbSearchMatchFromTitle(watched.title, watched.type);
+                    if (!match) return;
+                    const genreIds = await tmdbGenreIdsForId(match.id, watched.type);
+                    addGenreScore(genreIds, watched.type, 1);
+                } catch (_) { /* best-effort */ }
+            }));
+
+            // If we have no TV genre scores (user only has movie ratings/history),
+            // map top movie genres to their TV equivalents by name
+            // Map movie genres → TV genres when user has no show history
+            // Uses partial name matching so e.g. "Action" matches "Action & Adventure"
+            if (Object.keys(tvGenreScore).length === 0 && Object.keys(movieGenreScore).length > 0) {
+                try {
+                    const [movieListRes, tvListRes] = await Promise.all([
+                        fetch(`https://api.themoviedb.org/3/genre/movie/list?api_key=${process.env.TMDB_API_KEY}`),
+                        fetch(`https://api.themoviedb.org/3/genre/tv/list?api_key=${process.env.TMDB_API_KEY}`),
+                    ]);
+                    const movieGenres = movieListRes.ok ? (await movieListRes.json()).genres || [] : [];
+                    const tvGenres = tvListRes.ok ? (await tvListRes.json()).genres || [] : [];
+                    const movieIdToName = Object.fromEntries(movieGenres.map((g) => [g.id, g.name]));
+                    for (const [movieGenreId, score] of Object.entries(movieGenreScore)) {
+                        const movieName = movieIdToName[Number(movieGenreId)];
+                        if (!movieName) continue;
+                        // Exact match first, then partial (e.g. "Action" inside "Action & Adventure")
+                        const matched = tvGenres.find((g) =>
+                            g.name === movieName || g.name.includes(movieName) || movieName.includes(g.name)
+                        );
+                        if (matched) tvGenreScore[matched.id] = (tvGenreScore[matched.id] || 0) + score;
+                    }
+                } catch (_) { /* best-effort */ }
+            }
+
+            // Discover titles by top genres, using the correct genre IDs per content type.
+            // If no genre scores exist for a type, fall back to well-rated titles of that type
+            // so shows always appear in the Both tab even for movie-only users.
+            const discoverTypes = typeFilter
+                ? [{ tmdbType: typeFilter === 'show' ? 'tv' : 'movie', appType: typeFilter }]
+                : [{ tmdbType: 'movie', appType: 'movie' }, { tmdbType: 'tv', appType: 'show' }];
+
+            await Promise.all(discoverTypes.map(async ({ tmdbType, appType }) => {
+                const scoreMap = appType === 'show' ? tvGenreScore : movieGenreScore;
+                const topGenres = Object.entries(scoreMap)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 2)
+                    .map(([gid]) => gid);
+                try {
+                    const sortBy = randomize ? 'popularity.desc' : 'vote_average.desc';
+                    const page = randomize ? Math.floor(Math.random() * 3) + 1 : 1;
+                    // Use genre filter when available, otherwise just fetch well-rated titles of this type
+                    const genreParam = topGenres.length > 0 ? `&with_genres=${topGenres.join(',')}` : '';
+                    const url = `https://api.themoviedb.org/3/discover/${tmdbType}?api_key=${process.env.TMDB_API_KEY}${genreParam}&sort_by=${sortBy}&vote_count.gte=100&page=${page}`;
+                    const discRes = await fetch(url);
+                    if (!discRes.ok) return;
+                    const discData = await discRes.json();
+                    for (const item of (discData.results || [])) {
+                        const title = appType === 'show' ? item.name : item.title;
+                        if (!title) continue;
+                        if (seenSet.has(title.toLowerCase())) continue;
+                        seenSet.add(title.toLowerCase());
+                        genreDiscover.push({
+                            title,
+                            type: appType,
+                            avgRating: item.vote_average ? Math.round(item.vote_average / 2 * 10) / 10 : null,
+                            posterPath: item.poster_path || null,
+                            source: 'genre',
+                        });
+                    }
+                } catch (_) { /* best-effort */ }
+            }));
+        }
+
+        if (randomize) {
+            tmdbSimilar.sort(() => Math.random() - 0.5);
+            genreDiscover.sort(() => Math.random() - 0.5);
+        }
+
+        const collabMapped = recRows.map(row => ({
+            title: row.title,
+            type: row.type || 'movie',
+            avgRating: Math.round(parseFloat(row.avg_rating) * 10) / 10,
+            source: 'collab',
+        }));
+
+        // Interleave all three sources: up to 4 collab + up to 3 TMDB-similar + up to 3 genre-based
+        const merged = [];
+        const pools = [collabMapped.slice(0, 4), tmdbSimilar.slice(0, 3), genreDiscover.slice(0, 3)];
+        const maxLen = Math.max(...pools.map((p) => p.length));
+        for (let i = 0; i < maxLen && merged.length < 10; i++) {
+            for (const pool of pools) {
+                if (pool[i] && merged.length < 10) merged.push(pool[i]);
+            }
+        }
+        // Fill any remaining slots from leftovers
+        const leftovers = [
+            ...collabMapped.slice(4), ...tmdbSimilar.slice(3), ...genreDiscover.slice(3),
+        ];
+        if (randomize) leftovers.sort(() => Math.random() - 0.5);
+        merged.push(...leftovers.slice(0, Math.max(0, 10 - merged.length)));
 
         return res.status(200).json({
             ratingsCount,
             toRate: toRateRows,
-            recommendations: recRows.map(row => ({
-                title: row.title,
-                type: row.type || 'movie',
-                avgRating: Math.round(parseFloat(row.avg_rating) * 10) / 10
-            }))
+            recommendations: merged.slice(0, 10),
         });
     } catch (error) {
         console.error(error);
@@ -1455,24 +1702,29 @@ async function handleRandomWatchlist(req, res) {
 
         const emptyMessageForFilter = () => {
             if (typeFilter === 'movie') {
-                return 'No movies in your Want to Watch list for this filter. Add movies on the dashboard or choose All.';
+                return 'No unwatched movies in your Want to Watch list for this filter. Add movies on the dashboard or choose All.';
             }
             if (typeFilter === 'show') {
-                return 'No TV shows in your Want to Watch list for this filter. Add shows on the dashboard or choose All.';
+                return 'No unwatched TV shows in your Want to Watch list for this filter. Add shows on the dashboard or choose All.';
             }
-            return 'Your Want to Watch list is empty. Add titles on the dashboard, then try again.';
+            return 'No unwatched titles in your Want to Watch list. Add titles on the dashboard, then try again.';
         };
 
         for (let attempt = 0; attempt < RANDOM_WATCHLIST_MAX_ATTEMPTS; attempt++) {
             let rows;
             try {
                 let sql =
-                    'SELECT title, type FROM watch_status WHERE user_email = ? AND status = ?';
+                    `SELECT ws.title, ws.type FROM watch_status ws
+                     WHERE ws.user_email = ? AND ws.status = ?
+                     AND NOT EXISTS (
+                         SELECT 1 FROM watch_history wh
+                         WHERE wh.user_email = ws.user_email AND LOWER(wh.title) = LOWER(ws.title)
+                     )`;
                 const params = [email, 'want_to_watch'];
                 if (typeFilter === 'movie') {
-                    sql += " AND type = 'movie'";
+                    sql += " AND ws.type = 'movie'";
                 } else if (typeFilter === 'show') {
-                    sql += " AND type = 'show'";
+                    sql += " AND ws.type = 'show'";
                 }
                 sql += ' ORDER BY RAND() LIMIT 1';
                 [rows] = await connection.execute(sql, params);

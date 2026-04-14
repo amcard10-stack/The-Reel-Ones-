@@ -278,10 +278,15 @@ deleteStatus: async function (title, type) {
             }
         },
 
-        getSuggestions: async function () {
+        getSuggestions: async function (type, refresh) {
             if (!token) return null;
             try {
-                const response = await fetch('/api/suggestions', {
+                const params = new URLSearchParams();
+                if (type && type !== 'both') params.set('type', type);
+                if (refresh) params.set('refresh', '1');
+                const qs = params.toString();
+                const url = qs ? `/api/suggestions?${qs}` : '/api/suggestions';
+                const response = await fetch(url, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 });

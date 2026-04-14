@@ -105,6 +105,7 @@ markAllNotificationsReadBtn?.addEventListener('click', async () => {
     setupTMDBSearch(watchHistoryTitle, watchHistoryType, 'watchHistoryResults', async (item) => {
         const result = await DataModel.addWatchHistory(item.title, item.type);
         if (result.ok) {
+            localStorage.setItem('recsStale', '1');
             watchHistoryTitle.value = '';
             document.getElementById('watchHistoryResults').innerHTML = '';
             renderDashboard();
@@ -124,6 +125,7 @@ markAllNotificationsReadBtn?.addEventListener('click', async () => {
                 result = await DataModel.addWatchHistory(item.title, item.type);
             }
             if (result.ok) {
+                localStorage.setItem('recsStale', '1');
                 statusTitle.value = '';
                 document.getElementById('statusResults').innerHTML = '';
                 await refreshStatusesFromServer();
@@ -1257,6 +1259,7 @@ function setupStatusBoardDragDrop() {
                 } else {
                     result = await DataModel.addWatchHistory(title, type);
                 }
+                if (result?.ok) localStorage.setItem('recsStale', '1');
                 if (!result?.ok) {
                     await refreshStatusesFromServer();
                     alert(result?.data?.message || 'Could not update.');

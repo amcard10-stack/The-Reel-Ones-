@@ -20,24 +20,35 @@ body {
     justify-content: space-between;
     align-items: center;
     gap: 16px;
+    flex-wrap: wrap;
 }
 
 .header h1 {
     margin: 0;
+    flex: 1 1 auto;
+}
+
+.header-right {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .header-right button {
-    margin-left: 8px;
-    padding: 6px 12px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
     background-color: var(--accent);
     color: var(--on-accent);
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
+    white-space: nowrap;
 }
 
 .header-right button:hover {
-    background-color: var(--accent-hover-bg);
+    background-color: var(--text-accent);
+    color: var(--on-accent);
 }
 
 .section {
@@ -343,6 +354,34 @@ body {
     min-height: 0;
 }
 
+.rec-more-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.more-recs-btn {
+    font: inherit;
+    font-size: 0.95em;
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.more-recs-btn:hover {
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+.more-recs-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 .pick-card {
     border: 1px solid var(--border-subtle);
     padding: 16px;
@@ -408,21 +447,6 @@ body {
         padding: 20px;
     }
 
-    .header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .header-right {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-
-    .header-right button {
-        margin-left: 0;
-    }
-
     .recommendation-type-toggle {
         width: 100%;
         justify-content: space-between;
@@ -435,5 +459,54 @@ body {
 
     .recommendation-grid {
         grid-template-columns: 1fr;
+    }
+
+    /* Stack poster above content on narrow cards */
+    .recommendation-card--with-poster {
+        flex-wrap: wrap;
+    }
+
+    .recommendation-card__poster {
+        width: 100%;
+    }
+
+    .recommendation-card__poster .suggestion-poster,
+    .recommendation-card__poster .suggestion-poster-ph {
+        width: 72px;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        width: 96%;
+        padding: 14px;
+        margin: 12px auto;
+    }
+
+    .pick-filters {
+        gap: 10px;
+    }
+
+    .pick-segment {
+        width: 100%;
+        display: flex;
+    }
+
+    .pick-segment-btn {
+        flex: 1;
+        text-align: center;
+    }
+
+    .pick-card--with-poster {
+        flex-wrap: wrap;
+    }
+
+    .pick-card__poster {
+        width: 100%;
+    }
+
+    .pick-card__poster .suggestion-poster,
+    .pick-card__poster .suggestion-poster-ph {
+        width: 80px;
     }
 }
