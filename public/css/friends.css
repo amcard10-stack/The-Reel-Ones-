@@ -84,6 +84,7 @@ body {
     cursor: pointer;
     background-color: var(--accent);
     color: var(--on-accent);
+    font-weight: 600;
 }
 
 .header-right button:hover {
