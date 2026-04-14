@@ -3316,7 +3316,7 @@ app.get('/api/dashboard/shared-lists', authenticateToken, async (req, res) => {
              FROM list_collaborator lc
              JOIN list l ON l.id = lc.list_id
              JOIN user u ON u.email = l.user_email
-             WHERE lc.collaborator_email = ?
+             WHERE lc.collaborator_email = ? AND lc.status = 'accepted'
              ORDER BY l.created_at ASC`,
             [req.user.email]
         );
