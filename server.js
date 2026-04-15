@@ -2154,16 +2154,41 @@ app.get('/api/title/details', authenticateToken, async (req, res) => {
         const tmdbType = type === 'show' ? 'tv' : 'movie';
         const url = `https://api.themoviedb.org/3/${tmdbType}/${id}?api_key=${process.env.TMDB_API_KEY}`;
         const tmdbRes = await fetch(url);
+
         if (!tmdbRes.ok) {
             return res.status(tmdbRes.status).json({ message: 'TMDB request failed' });
         }
+
         const data = await tmdbRes.json();
+
+        let runtime = null;
+        let numberOfSeasons = null;
+
+        if (tmdbType === 'movie') {
+            runtime = typeof data.runtime === 'number' && data.runtime > 0 ? data.runtime : null;
+        } else {
+            const runtimes = Array.isArray(data.episode_run_time) ? data.episode_run_time : [];
+            if (runtimes.length > 0) {
+                const sum = runtimes.reduce((acc, val) => acc + (Number(val) || 0), 0);
+                runtime = Math.round(sum / runtimes.length) || null;
+            }
+            numberOfSeasons =
+                typeof data.number_of_seasons === 'number' && data.number_of_seasons > 0
+                    ? data.number_of_seasons
+                    : null;
+        }
+
         return res.status(200).json({
             id: data.id,
             title: data.title || data.name || 'Untitled',
             type: tmdbType === 'tv' ? 'show' : 'movie',
             posterPath: data.poster_path || null,
-            overview: data.overview || ''
+            overview: data.overview || '',
+            voteAverage: typeof data.vote_average === 'number' ? data.vote_average : null,
+            releaseDate: data.release_date || data.first_air_date || null,
+            runtime,
+            numberOfSeasons,
+            genres: Array.isArray(data.genres) ? data.genres.map(g => g.name).filter(Boolean) : []
         });
     } catch (error) {
         console.error(error);

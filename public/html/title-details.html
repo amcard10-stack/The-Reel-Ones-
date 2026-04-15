@@ -5,7 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Title Details</title>
     <meta name="theme-color" content="#0f1c2e">
-    <script>(function(){try{var t=localStorage.getItem('rollTheTapesTheme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}})();</script>
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem('rollTheTapesTheme');
+                if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+            } catch (e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="/css/theme.css?v=4">
     <link rel="stylesheet" href="/css/title-details.css">
 </head>
@@ -24,7 +31,12 @@
             <div class="title-info">
                 <h1 id="titleName">Loading...</h1>
                 <p id="titleType" class="meta"></p>
+
+                <div id="titleMeta" class="title-meta-row"></div>
                 <div id="titleRatingSummary" class="title-friends-pill-row" aria-live="polite"></div>
+                <div id="titleProviders" class="title-providers-block"></div>
+
+                <p class="about-label">About</p>
                 <p id="titleOverview" class="overview"></p>
             </div>
         </section>
@@ -32,9 +44,11 @@
         <section class="related-section">
             <h2>Connected Titles</h2>
             <div id="relatedTitlesGrid" class="related-grid"></div>
+
             <p id="relatedFallback" class="fallback-message" style="display:none;">
                 No related titles available.
             </p>
+
             <p id="relatedError" class="fallback-message error-message" style="display:none;">
                 Could not load connected titles.
             </p>

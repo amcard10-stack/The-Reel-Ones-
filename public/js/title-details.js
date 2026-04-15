@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const titleName = document.getElementById('titleName');
     const titleType = document.getElementById('titleType');
     const titleOverview = document.getElementById('titleOverview');
+    const titleMeta = document.getElementById('titleMeta');
+    const titleProviders = document.getElementById('titleProviders');
 
     const relatedTitlesGrid = document.getElementById('relatedTitlesGrid');
     const relatedFallback = document.getElementById('relatedFallback');
@@ -107,20 +109,89 @@ document.addEventListener('DOMContentLoaded', async () => {
         return card;
     }
 
+    function createMetaPill(text) {
+        const span = document.createElement('span');
+        span.className = 'title-meta-pill';
+        span.textContent = text;
+        return span;
+    }
+
+    function formatRuntime(mins) {
+        const total = Number(mins);
+        if (!Number.isFinite(total) || total <= 0) return null;
+
+        const h = Math.floor(total / 60);
+        const m = total % 60;
+
+        if (h > 0 && m > 0) return `${h}h ${m}m`;
+        if (h > 0) return `${h}h`;
+        return `${m}m`;
+    }
+
+    function renderMeta(detail) {
+        if (!titleMeta) return;
+        titleMeta.innerHTML = '';
+
+        const year = detail.releaseDate ? String(detail.releaseDate).slice(0, 4) : null;
+        const rating = typeof detail.voteAverage === 'number' ? `★ ${detail.voteAverage.toFixed(1)}` : null;
+        const runtime = formatRuntime(detail.runtime);
+        const genres = Array.isArray(detail.genres) ? detail.genres : [];
+
+        if (year) titleMeta.appendChild(createMetaPill(year));
+        if (rating) titleMeta.appendChild(createMetaPill(rating));
+        if (runtime) titleMeta.appendChild(createMetaPill(runtime));
+        genres.forEach((genre) => titleMeta.appendChild(createMetaPill(genre)));
+    }
+
+    function renderProviders(providersData) {
+        if (!titleProviders) return;
+
+        titleProviders.innerHTML = '';
+
+        const heading = document.createElement('p');
+        heading.className = 'title-section-label';
+        heading.textContent = 'Where to Watch';
+
+        if (!providersData || !providersData.available || !Array.isArray(providersData.providers) || providersData.providers.length === 0) {
+            const empty = document.createElement('p');
+            empty.className = 'title-provider-empty';
+            empty.textContent = 'Not available right now.';
+            titleProviders.appendChild(heading);
+            titleProviders.appendChild(empty);
+            return;
+        }
+
+        const row = document.createElement('div');
+        row.className = 'title-providers-row';
+
+        providersData.providers.forEach((provider) => {
+            const chip = document.createElement('span');
+            chip.className = 'title-provider-chip';
+            chip.textContent = provider;
+            row.appendChild(chip);
+        });
+
+        titleProviders.appendChild(heading);
+        titleProviders.appendChild(row);
+    }
+
     function renderFriendsPill(el, data, isError) {
         if (!el) return;
         el.style.display = '';
         el.classList.remove('title-friends-pill-row--loading', 'title-friends-pill-row--error');
         el.innerHTML = '';
         el.setAttribute('aria-busy', 'false');
+
         const span = document.createElement('span');
         span.className = 'title-friends-pill';
+
         if (isError || !data || typeof data.friends !== 'object') {
             el.classList.add('title-friends-pill-row--error');
             span.textContent = 'Friends: unavailable';
             el.appendChild(span);
             return;
         }
+
         const f = data.friends;
         if (f.count > 0) {
             const n = f.count;
@@ -128,15 +199,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             span.textContent = 'No friend ratings yet';
         }
+
         el.appendChild(span);
     }
 
     async function loadFriendsRatingSummary(detail) {
         if (!titleRatingSummary || !detail) return;
+
         titleRatingSummary.setAttribute('aria-busy', 'true');
         titleRatingSummary.className = 'title-friends-pill-row title-friends-pill-row--loading';
         titleRatingSummary.innerHTML =
             '<span class="title-friends-pill title-friends-pill--loading">Loading friends…</span>';
+
         try {
             const data = await DataModel.getRatingSummary(detail.title, detail.type);
             renderFriendsPill(titleRatingSummary, data, !data);
@@ -150,18 +224,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         titleType.textContent = type === 'show' ? 'TV series' : 'Movie';
 
         try {
-            const res = await fetch(
-                `/api/title/details?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}`,
-                {
-                    headers: { Authorization: `Bearer ${token}` }
-                }
-            );
+            const [detailRes, providersRes] = await Promise.all([
+                fetch(
+                    `/api/title/details?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                ),
+                fetch(
+                    `/api/title/providers?id=${encodeURIComponent(id)}&type=${encodeURIComponent(type)}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                )
+            ]);
 
-            if (!res.ok) {
+            if (!detailRes.ok) {
                 throw new Error('Failed to load title details');
             }
 
-            const detail = await res.json();
+            const detail = await detailRes.json();
+            const providersData = providersRes.ok ? await providersRes.json() : null;
 
             titleName.textContent = detail.title || 'Untitled';
             titleType.textContent = detail.type === 'show' ? 'TV series' : 'Movie';
@@ -176,15 +255,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             titlePoster.alt = titleName.textContent || 'No poster available';
             titlePoster.onerror = () => setDefaultPoster();
+
+            renderMeta(detail);
+            renderProviders(providersData);
+
             return detail;
         } catch (error) {
             console.error('Error loading title details:', error);
             titleName.textContent = 'Could not load title';
             titleOverview.textContent = 'There was a problem loading this title.';
             setDefaultPoster();
-            if (titleRatingSummary) {
-                titleRatingSummary.style.display = 'none';
-            }
+
+            if (titleRatingSummary) titleRatingSummary.style.display = 'none';
+            if (titleMeta) titleMeta.innerHTML = '';
+            if (titleProviders) titleProviders.innerHTML = '';
+
             return null;
         }
     }
