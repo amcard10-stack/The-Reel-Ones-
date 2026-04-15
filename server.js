@@ -1483,9 +1483,14 @@ app.get('/api/suggestions', authenticateToken, async (req, res) => {
         // Already-seen titles (rated or watched) for filtering TMDB results
         const [seenRows] = await connection.execute(
             `SELECT LOWER(title) AS t FROM rating WHERE user_email = ?
-             UNION SELECT LOWER(title) AS t FROM watch_history WHERE user_email = ?`,
-            [email, email]
-        );
+            UNION
+            SELECT LOWER(title) AS t FROM watch_history WHERE user_email = ?
+            UNION
+            SELECT LOWER(title) AS t
+            FROM suggestions
+            WHERE user_email = ? AND status = 'not_interested'`,
+            [email, email, email]
+);
         const seenSet = new Set(seenRows.map((r) => r.t));
         recRows.forEach((r) => seenSet.add(r.title.toLowerCase()));
 
