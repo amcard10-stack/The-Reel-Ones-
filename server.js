@@ -910,11 +910,20 @@ app.get('/api/dashboard/lists', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
         const [lists] = await connection.execute(
-            `SELECT id, name, created_at FROM list
-             WHERE user_email = ?
-             ORDER BY created_at ASC`,
-            [req.user.email]
-        );
+    `SELECT DISTINCT l.id, l.name, l.created_at
+     FROM list l
+     WHERE l.user_email = ?
+
+     UNION
+
+     SELECT DISTINCT l.id, l.name, l.created_at
+     FROM list l
+     JOIN list_collaborator lc ON lc.list_id = l.id
+     WHERE lc.collaborator_email = ?
+
+     ORDER BY created_at ASC`,
+    [req.user.email, req.user.email]
+);
 
         const listsWithItems = [];
         for (const list of lists) {
