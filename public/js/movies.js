@@ -77,7 +77,6 @@ const searchBtn = document.getElementById('movieSearchBtn');
             return `/api/movies/by-genre?genreId=${currentGenre}&page=${page}${providerQuery}`;
         }
     }
-
     async function renderMoviesWithFilter(movies, selectedFilters, reset = true) {
         if (reset) {
             moviesRow.innerHTML = '';

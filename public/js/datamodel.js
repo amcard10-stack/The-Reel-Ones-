@@ -716,5 +716,87 @@ markAllNotificationsRead: async function () {
     }
 },
 
+saveSuggestionAction: async function (title, type, status) {
+    if (!token) return { ok: false };
+
+    try {
+        const response = await fetch('/api/suggestions/action', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                title: String(title).trim(),
+                type: type === 'show' ? 'show' : 'movie',
+                status
+            }),
+        });
+
+        const data = await response.json();
+        return { ok: response.ok, data };
+    } catch (error) {
+        console.error('Error saving suggestion action:', error);
+        return { ok: false };
+    }
+},
+
+getSuggestionActionStatus: async function (title, type) {
+    if (!token) return null;
+
+    const cleanTitle = String(title || '').trim();
+    const cleanType = type === 'show' ? 'show' : 'movie';
+
+    if (!cleanTitle) return null;
+
+    try {
+        const params = new URLSearchParams({
+            title: cleanTitle,
+            type: cleanType
+        });
+
+        const response = await fetch(`/api/suggestions/action-status?${params.toString()}`, {
+            method: 'GET',
+            headers: authHeaders(),
+        });
+
+        if (!response.ok) return null;
+
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching suggestion action status:', error);
+        return null;
+    }
+},
+
+removeSuggestionAction: async function (title, type) {
+    if (!token) return { ok: false };
+
+    const cleanTitle = String(title || '').trim();
+    const cleanType = type === 'show' ? 'show' : 'movie';
+
+    if (!cleanTitle) {
+        return { ok: false, data: { message: 'Title is required.' } };
+    }
+
+    try {
+        const response = await fetch('/api/suggestions/action', {
+            method: 'DELETE',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                title: cleanTitle,
+                type: cleanType
+            }),
+        });
+
+        let data = {};
+        try {
+            data = await response.json();
+        } catch (_) {}
+
+        return { ok: response.ok, data };
+    } catch (error) {
+        console.error('Error removing suggestion action:', error);
+        return { ok: false };
+    }
+},
+
    };
 })();

@@ -106,9 +106,10 @@ body {
     color: var(--on-accent);
 }
 
+/* recommendation cards */
 .recommendation-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     gap: 20px;
     margin-top: 16px;
 }
@@ -119,6 +120,7 @@ body {
     border-radius: 10px;
     background: var(--bg-input);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
 }
 
 .recommendation-card:hover {
@@ -127,6 +129,12 @@ body {
 }
 
 .recommendation-card--with-poster {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.recommendation-card__main {
     display: flex;
     align-items: flex-start;
     gap: 14px;
@@ -139,6 +147,9 @@ body {
 .recommendation-card__content {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
 }
 
 .recommendation-card h3 {
@@ -160,12 +171,6 @@ body {
     line-height: 1.4;
 }
 
-.recommendation-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
 .suggestion-poster {
     display: block;
     width: 92px;
@@ -184,7 +189,7 @@ body {
 }
 
 .recommendation-card a.primary {
-    display: inline-block;
+    display: inline-flex;
     text-decoration: none;
     padding: 6px 12px;
     border-radius: 5px;
@@ -208,6 +213,50 @@ body {
     background-color: var(--success-hover);
 }
 
+.recommendation-card__content a.primary {
+    display: inline-flex;
+    margin-bottom: 10px;
+}
+
+.recommendation-card__actions-row {
+    width: 100%;
+    min-width: 0;
+}
+
+.recommendation-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+    width: 100%;
+    align-items: stretch;
+}
+
+.suggestion-btn {
+    min-width: 0;
+    width: 100%;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    padding: 8px 8px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1.2;
+    box-sizing: border-box;
+}
+
+.add-to-list-panel {
+    grid-column: 1 / -1;
+    margin-top: 8px;
+}
+
+/* pick random section */
 .pick-filters {
     margin-bottom: 16px;
     display: flex;
@@ -462,9 +511,8 @@ body {
         grid-template-columns: 1fr;
     }
 
-    /* Stack poster above content on narrow cards */
     .recommendation-card--with-poster {
-        flex-wrap: wrap;
+        flex-direction: column;
     }
 
     .recommendation-card__poster {

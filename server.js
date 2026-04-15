@@ -3712,6 +3712,135 @@ app.put('/api/recommendations/:id/read', authenticateToken, async (req, res) => 
     }
 });
 
+//////////////////////////////////////
+// SUGGESTION ACTIONS
+//////////////////////////////////////
+app.post('/api/suggestions/action', authenticateToken, async (req, res) => {
+    const title = String(req.body?.title || '').trim();
+    const type = req.body?.type === 'show' ? 'show' : 'movie';
+    const rawStatus = String(req.body?.status || '').trim().toLowerCase();
+
+    const status =
+        rawStatus === 'interested'
+            ? 'interested'
+            : rawStatus === 'not_interested'
+                ? 'not_interested'
+                : null;
+
+    if (!title || !status) {
+        return res.status(400).json({ message: 'Valid title and status are required.' });
+    }
+
+    let connection;
+    try {
+        connection = await createConnection();
+
+        await connection.execute(
+            `INSERT INTO suggestions (user_email, title, type, status)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                status = VALUES(status),
+                updated_at = CURRENT_TIMESTAMP`,
+            [req.user.email, title, type, status]
+        );
+
+        await connection.end();
+        return res.status(200).json({ message: 'Suggestion action saved.', status });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error saving suggestion action.' });
+    }
+});
+
+app.get('/api/suggestions/actions', authenticateToken, async (req, res) => {
+    let connection;
+    try {
+        connection = await createConnection();
+
+        const [rows] = await connection.execute(
+            `SELECT id, title, type, status, updated_at
+             FROM suggestions
+             WHERE user_email = ?
+             ORDER BY updated_at DESC`,
+            [req.user.email]
+        );
+
+        await connection.end();
+        return res.status(200).json({ actions: rows });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error retrieving suggestion actions.' });
+    }
+});
+
+app.get('/api/suggestions/action-status', authenticateToken, async (req, res) => {
+    const title = String(req.query.title || '').trim();
+    const type = req.query.type === 'show' ? 'show' : 'movie';
+
+    if (!title) {
+        return res.status(400).json({ message: 'title is required.' });
+    }
+
+    let connection;
+    try {
+        connection = await createConnection();
+
+        const [rows] = await connection.execute(
+            `SELECT status, updated_at
+             FROM suggestions
+             WHERE user_email = ? AND LOWER(title) = LOWER(?) AND type = ?
+             LIMIT 1`,
+            [req.user.email, title, type]
+        );
+
+        await connection.end();
+
+        return res.status(200).json({
+            status: rows.length ? rows[0].status : null,
+            updated_at: rows.length ? rows[0].updated_at : null
+        });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error retrieving suggestion action status.' });
+    }
+});
+
+app.delete('/api/suggestions/action', authenticateToken, async (req, res) => {
+    const title = String(req.body?.title || '').trim();
+    const type = req.body?.type === 'show' ? 'show' : 'movie';
+
+    if (!title) {
+        return res.status(400).json({ message: 'title is required.' });
+    }
+
+    let connection;
+    try {
+        connection = await createConnection();
+
+        const [result] = await connection.execute(
+            `DELETE FROM suggestions
+             WHERE user_email = ? AND LOWER(title) = LOWER(?) AND type = ?`,
+            [req.user.email, title, type]
+        );
+
+        await connection.end();
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Suggestion action not found.' });
+        }
+
+        return res.status(200).json({ message: 'Suggestion action removed.' });
+    } catch (error) {
+        console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
+        return res.status(500).json({ message: 'Error removing suggestion action.' });
+    }
+});
+
+
 app.use(express.static('public'));
 
 app.listen(port, () => {

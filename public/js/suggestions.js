@@ -45,15 +45,135 @@ function posterMarkup(posterPath, title) {
 
 function recommendationCardHtml(item, posterPath, extraLine, buttonHtml) {
     const t = item.type === 'show' ? 'TV Show' : 'Movie';
+
     return `
         <div class="recommendation-card recommendation-card--with-poster">
-            <div class="recommendation-card__poster">${posterMarkup(posterPath, item.title)}</div>
-            <div class="recommendation-card__content">
-                <h3>${escapeHtml(item.title)}</h3>
-                <p>${escapeHtml(extraLine(t))}</p>
-                ${buttonHtml}
+            <div class="recommendation-card__main">
+                <div class="recommendation-card__poster">${posterMarkup(posterPath, item.title)}</div>
+
+                <div class="recommendation-card__content">
+                    <h3>${escapeHtml(item.title)}</h3>
+                    <p class="recommendation-meta">${escapeHtml(extraLine(t))}</p>
+                    <div class="recommendation-card__top-actions">
+                        ${buttonHtml || ''}
+                    </div>
+                </div>
             </div>
-        </div>`;
+        </div>
+    `;
+}
+
+// interested, not interested, add to list buttons for each recommendation card
+function recommendationActionsHtml(item) {
+    const safeTitle = escapeHtml(item.title);
+    const safeType = escapeHtml(item.type === 'show' ? 'show' : 'movie');
+
+    return `
+        <div class="recommendation-actions" data-title="${safeTitle}" data-type="${safeType}">
+            <button type="button" class="suggestion-btn suggestion-btn--interested" data-action="interested">
+                Interested
+            </button>
+            <button type="button" class="suggestion-btn suggestion-btn--not-interested" data-action="not_interested">
+                Not Interested
+            </button>
+            <button type="button" class="suggestion-btn suggestion-btn--add-to-list" data-action="add_to_list">
+                Add to My List
+            </button>
+            <div class="add-to-list-panel" hidden>
+                <p class="add-to-list-panel__title">Choose a list to add it to</p>
+                <div class="add-to-list-panel__content"></div>
+            </div>
+        </div>
+    `;
+}
+
+async function openAddToListPanel(actionsWrap, title, type) {
+    const panel = actionsWrap.querySelector('.add-to-list-panel');
+    const content = actionsWrap.querySelector('.add-to-list-panel__content');
+    if (!panel || !content) return;
+
+    panel.hidden = false;
+    content.innerHTML = '<p class="section-hint">Loading lists…</p>';
+
+    const lists = await DataModel.getLists();
+
+    if (!lists || lists.length === 0) {
+        content.innerHTML = `
+            <p class="empty-message">You don’t have any lists yet.</p>
+            <p class="section-hint">Go create one on your Lists page first.</p>
+        `;
+        return;
+    }
+
+    content.innerHTML = lists.map((list) => `
+        <button type="button" class="list-choice-btn" data-list-id="${list.id}">
+            ${escapeHtml(list.name)}
+        </button>
+    `).join('');
+
+    content.querySelectorAll('.list-choice-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const listId = btn.dataset.listId;
+            btn.disabled = true;
+            btn.textContent = 'Adding…';
+
+            const result = await DataModel.addToList(listId, title);
+
+            if (result.ok) {
+                content.innerHTML = `<p class="section-hint">Added to list.</p>`;
+            } else {
+                const msg = result?.data?.message || 'Could not add to list.';
+                content.innerHTML = `<p class="empty-message">${escapeHtml(msg)}</p>`;
+            }
+        });
+    });
+}
+
+function wireRecommendationActions() {
+    document.querySelectorAll('.recommendation-actions').forEach((actionsWrap) => {
+        if (actionsWrap.dataset.wired === '1') return;
+        actionsWrap.dataset.wired = '1';
+
+        const title = actionsWrap.dataset.title || '';
+        const type = actionsWrap.dataset.type === 'show' ? 'show' : 'movie';
+
+        actionsWrap.querySelectorAll('.suggestion-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const action = btn.dataset.action;
+                const card = actionsWrap.closest('.recommendation-card');
+
+                if (action === 'interested') {
+                    btn.disabled = true;
+                    const result = await DataModel.saveSuggestionAction(title, type, 'interested');
+                    btn.disabled = false;
+
+                    if (result.ok) {
+                        btn.textContent = 'Saved';
+                    } else {
+                        alert(result?.data?.message || 'Could not save as interested.');
+                    }
+                    return;
+                }
+
+                if (action === 'not_interested') {
+                    btn.disabled = true;
+                    const result = await DataModel.saveSuggestionAction(title, type, 'not_interested');
+
+                    if (result.ok) {
+                        if (card) card.remove();
+                    } else {
+                        btn.disabled = false;
+                        alert(result?.data?.message || 'Could not save not interested.');
+                    }
+                    return;
+                }
+
+                if (action === 'add_to_list') {
+                    await openAddToListPanel(actionsWrap, title, type);
+                }
+            });
+        });
+    });
 }
 
 function setupPickRandom() {
@@ -346,8 +466,10 @@ async function loadSuggestions(type, append, refresh) {
         recList.innerHTML = recommendations.map((item) => {
             const path = posterMap[posterKey(item.title, item.type)];
             const rateUrl = `/ratings?title=${encodeURIComponent(item.title)}&type=${encodeURIComponent(item.type)}`;
-            return recommendationCardHtml(item, path, (t) => `${t} · Avg ${item.avgRating}★`, `<a href="${rateUrl}" class="primary">Rate It</a>`);
+            return recommendationCardHtml(item, path, (t) => `${t} · Avg ${item.avgRating}★`, `<a href="${rateUrl}" class="primary">Rate It</a>
+                ${recommendationActionsHtml(item)}`);
         }).join('');
+                wireRecommendationActions();
     } else if (!refresh) {
         const typeLabel = activeType === 'movie' ? 'movies' : activeType === 'show' ? 'shows' : 'titles';
         recList.innerHTML = `<p class="empty-message">Rate more ${typeLabel} to see personalized recommendations!</p>`;
