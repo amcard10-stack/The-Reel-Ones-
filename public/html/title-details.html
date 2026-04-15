@@ -9,7 +9,9 @@
         (function () {
             try {
                 var t = localStorage.getItem('rollTheTapesTheme');
-                if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+                if (t === 'light') {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
             } catch (e) {}
         })();
     </script>
