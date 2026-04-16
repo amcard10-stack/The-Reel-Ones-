@@ -13,7 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const watchHistoryTitle = document.getElementById('watchHistoryTitle');
     const watchHistoryType = document.getElementById('watchHistoryType');
     const statusTitle = document.getElementById('statusTitle');
-    const statusType = document.getElementById('statusType');
     const statusValue = document.getElementById('statusValue');
     const listItemTitle = document.getElementById('listItemTitle');
     const listSelect = document.getElementById('listSelect');
@@ -112,8 +111,8 @@ markAllNotificationsReadBtn?.addEventListener('click', async () => {
         }
     });
 
-    // TMDB search for Status add
-    setupTMDBSearch(statusTitle, statusType, 'statusResults', async (item) => {
+    // TMDB search for Status add (movies + TV from one search, type from selected result)
+    setupTMDBSearch(statusTitle, null, 'statusResults', async (item) => {
         const status = normalizeWatchStatusKey(statusValue?.value) || 'want_to_watch';
         if (status === 'completed') {
             const choice = await promptCompletedRating(item.title, item.type);
@@ -146,7 +145,7 @@ markAllNotificationsReadBtn?.addEventListener('click', async () => {
             const msg = result?.data?.message || 'Could not save status. Try again.';
             alert(msg);
         }
-    });
+    }, true);
 
     // TMDB search for List item add (owned + shared lists)
     setupTMDBSearch(listItemTitle, null, 'listItemResults', async (item) => {
