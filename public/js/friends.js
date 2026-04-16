@@ -754,19 +754,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                         return;
                     }
 
-                    contentEl.innerHTML = lists.map((list) => {
+                    const allItems = lists.flatMap((l) => (l.items || []).map((i) => ({ title: i.title, type: 'movie' })));
+                    let posters = {};
+                    if (allItems.length > 0) {
+                        try { posters = await DataModel.getPostersForItems(allItems); } catch (_) {}
+                    }
+
+                    contentEl.innerHTML = '';
+                    lists.forEach((list) => {
                         const items = list.items || [];
+                        const listDiv = document.createElement('div');
+                        listDiv.className = 'friend-list-card';
+
                         const itemsHtml = items.length > 0
-                            ? items.map((i) => `<span class="list-item-tag">${escapeHtml(i.title)}</span>`).join('')
+                            ? items.map((i) => {
+                                const posterPath = posters[`${i.title}|movie`];
+                                const img = posterPath
+                                    ? `<img src="https://image.tmdb.org/t/p/w92${posterPath}" alt="${escapeHtml(i.title)}">`
+                                    : `<div class="shared-list-item-card-ph"></div>`;
+                                return `<div class="shared-list-item-card">${img}<span>${escapeHtml(i.title)}</span></div>`;
+                            }).join('')
                             : '<span style="font-size:12px;opacity:0.6;">Empty list</span>';
 
-                        return `
-                            <div class="friend-list-card">
-                                <h4 class="friend-list-name">${escapeHtml(list.name)}</h4>
-                                <div class="friend-list-items">${itemsHtml}</div>
-                            </div>
+                        listDiv.innerHTML = `
+                            <h4 class="friend-list-name">${escapeHtml(list.name)}</h4>
+                            <div class="friend-list-items shared-list-poster-row" style="flex-wrap:wrap;">${itemsHtml}</div>
                         `;
-                    }).join('');
+                        contentEl.appendChild(listDiv);
+                    });
                 } catch (err) {
                     contentEl.innerHTML = '<p class="empty-message">Failed to load lists.</p>';
                 }
