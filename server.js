@@ -873,35 +873,61 @@ app.delete('/api/dashboard/lists/:listId/items', authenticateToken, async (req, 
     }
 });
 
+// Helper: copy a list's items into a new owned list for a given user
+async function copyListToUser(connection, listId, listName, targetEmail) {
+    const [newList] = await connection.execute(
+        'INSERT INTO list (user_email, name) VALUES (?, ?)',
+        [targetEmail, listName]
+    );
+    const newListId = newList.insertId;
+    const [items] = await connection.execute(
+        'SELECT title FROM list_item WHERE list_id = ? ORDER BY added_at ASC',
+        [listId]
+    );
+    for (const item of items) {
+        await connection.execute(
+            'INSERT INTO list_item (list_id, title) VALUES (?, ?)',
+            [newListId, item.title]
+        );
+    }
+}
+
 app.delete('/api/dashboard/lists/:listId', authenticateToken, async (req, res) => {
     const listId = parseInt(String(req.params.listId), 10);
     if (!Number.isFinite(listId) || listId < 1) {
         return res.status(400).json({ message: 'Invalid list id.' });
     }
 
+    let connection;
     try {
-        const connection = await createConnection();
+        connection = await createConnection();
         const [lists] = await connection.execute(
-            'SELECT id FROM list WHERE id = ? AND user_email = ?',
+            'SELECT id, name FROM list WHERE id = ? AND user_email = ?',
             [listId, req.user.email]
         );
         if (lists.length === 0) {
             await connection.end();
             return res.status(404).json({ message: 'List not found.' });
         }
-        const [collabCheck] = await connection.execute(
-            'SELECT id FROM list_collaborator WHERE list_id = ? LIMIT 1', [listId]
+        const listName = lists[0].name;
+
+        // Copy list to all active collaborators before deleting
+        const [collabs] = await connection.execute(
+            'SELECT collaborator_email FROM list_collaborator WHERE list_id = ? AND status = ?',
+            [listId, 'accepted']
         );
-        if (collabCheck.length > 0) {
-            await connection.end();
-            return res.status(403).json({ message: 'Cannot delete a shared list. Use "Leave list" instead.' });
+        for (const { collaborator_email } of collabs) {
+            await copyListToUser(connection, listId, listName, collaborator_email);
         }
+
+        await connection.execute('DELETE FROM list_collaborator WHERE list_id = ?', [listId]);
         await connection.execute('DELETE FROM list_item WHERE list_id = ?', [listId]);
         await connection.execute('DELETE FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
         await connection.end();
         res.status(200).json({ message: 'List deleted.' });
     } catch (error) {
         console.error(error);
+        if (connection) { try { await connection.end(); } catch (_) {} }
         res.status(500).json({ message: 'Error deleting list.' });
     }
 });
@@ -910,19 +936,11 @@ app.get('/api/dashboard/lists', authenticateToken, async (req, res) => {
     try {
         const connection = await createConnection();
         const [lists] = await connection.execute(
-    `SELECT DISTINCT l.id, l.name, l.created_at
-     FROM list l
-     WHERE l.user_email = ?
-
-     UNION
-
-     SELECT DISTINCT l.id, l.name, l.created_at
-     FROM list l
-     JOIN list_collaborator lc ON lc.list_id = l.id
-     WHERE lc.collaborator_email = ?
-
+    `SELECT id, name, created_at
+     FROM list
+     WHERE user_email = ?
      ORDER BY created_at ASC`,
-    [req.user.email, req.user.email]
+    [req.user.email]
 );
 
         const listsWithItems = [];
@@ -3579,11 +3597,15 @@ app.delete('/api/dashboard/lists/:listId/collaborators/:email', authenticateToke
     let connection;
     try {
         connection = await createConnection();
-        const [lists] = await connection.execute('SELECT id FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
+        const [lists] = await connection.execute('SELECT id, name FROM list WHERE id = ? AND user_email = ?', [listId, req.user.email]);
         if (lists.length === 0) {
             await connection.end();
             return res.status(404).json({ message: 'List not found.' });
         }
+
+        // Copy the list to the removed collaborator so they keep it
+        await copyListToUser(connection, listId, lists[0].name, email);
+
         await connection.execute(
             'DELETE FROM list_collaborator WHERE list_id = ? AND collaborator_email = ?',
             [listId, email]
