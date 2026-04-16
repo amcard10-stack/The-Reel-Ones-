@@ -108,13 +108,18 @@ body {
 
 /* recommendation cards */
 .recommendation-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 20px;
     margin-top: 16px;
+    align-items: flex-start;
 }
 
 .recommendation-card {
+    flex: 0 0 calc((100% - 40px) / 3);
+    max-width: calc((100% - 40px) / 3);
+    min-width: 0;
+    box-sizing: border-box;
     border: 1px solid var(--border-subtle);
     padding: 18px;
     border-radius: 10px;
@@ -253,8 +258,43 @@ body {
 
 .add-to-list-panel {
     grid-column: 1 / -1;
-    margin-top: 8px;
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 8px 20px var(--shadow-elevated);
 }
+
+.add-to-list-panel__title {
+    margin: 0 0 10px 0;
+}
+
+.add-to-list-panel__content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.add-to-list-panel__content button {
+    background-color: #3A6EA5;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.add-to-list-panel__content button:hover {
+    background-color: #274979;
+}
+
+.add-to-list-panel__title {
+    margin: 0 0 10px 0;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
 
 /* pick random section */
 .pick-filters {
@@ -525,41 +565,32 @@ body {
     }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
     .container {
-        width: 96%;
-        padding: 14px;
-        margin: 12px auto;
+        width: 92%;
+        padding: 20px;
     }
 
-    .pick-filters {
-        gap: 10px;
-    }
-
-    .pick-segment {
+    .recommendation-type-toggle {
         width: 100%;
-        display: flex;
+        justify-content: space-between;
     }
 
-    .pick-segment-btn {
+    .type-tab {
         flex: 1;
         text-align: center;
     }
 
-    .pick-card--with-poster {
-        flex-wrap: wrap;
+    .recommendation-card {
+        flex: 0 0 calc((100% - 20px) / 2);
+        max-width: calc((100% - 20px) / 2);
     }
 
-    .pick-card__poster {
-        width: 100%;
-    }
-
-    .pick-card__poster .suggestion-poster,
-    .pick-card__poster .suggestion-poster-ph {
-        width: 80px;
+    .recommendation-card__poster .suggestion-poster,
+    .recommendation-card__poster .suggestion-poster-ph {
+        width: 72px;
     }
 }
-
 .suggestion-btn--interested {
     background-color: #14532d;
     color: white; 
