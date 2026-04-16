@@ -137,7 +137,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                     : a.status === 'want_to_watch'
                     ? 'wants to watch'
                     : `updated status (${escapeHtml(String(a.status || ''))})`;
-
             const typeLabel = a.mediaType === 'show' ? 'show' : 'movie';
             line = `<strong>${who}</strong> ${verb} <em>${title}</em> (${typeLabel})`;
         } else {
@@ -480,7 +479,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // FIX: renderRatingsHTML now takes real DB ratings only (no inflated IDs from watch history)
     // The data-rating-id attribute now always uses the real integer DB id
     function renderRatingsHTML(ratings) {
-        return ratings.map((r) => {
+        return ratings.map((r, idx) => {
             // Ensure we always use the real numeric DB id
             const realId = Number(r.id);
             const date = new Date(r.rated_at).toLocaleDateString();
@@ -505,28 +504,65 @@ document.addEventListener('DOMContentLoaded', async () => {
             }).join('');
 
             return `
-                <div class="friend-rating-item">
-                    <strong>${escapeHtml(r.title)}</strong>
-                    <span class="type-badge">${r.type === 'show' ? 'TV Show' : 'Movie'}</span>
-                    <span class="rating-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
-                    <span class="meta">· ${date}</span>
-                    ${r.review ? `<p class="review-text">${escapeHtml(r.review)}</p>` : ''}
-
-                    <div class="reaction-bar">
-                        ${reactionButtons}
-                        ${myReaction ? `
-                            <button
-                                type="button"
-                                class="remove-reaction-btn"
-                                data-rating-id="${realId}"
-                            >
-                                ✖
-                            </button>
-                        ` : ''}
+                <div class="friend-rating-item friend-rating-item--with-poster">
+                    <div class="friend-rating-poster-wrap">
+                        <div class="friend-rating-poster-ph" id="fr-poster-${idx}"></div>
+                    </div>
+                    <div class="friend-rating-content">
+                        <div class="friend-rating-header">
+                            <strong>${escapeHtml(r.title)}</strong>
+                            <span class="type-badge">${r.type === 'show' ? 'TV Show' : 'Movie'}</span>
+                            <span class="rating-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
+                            <span class="meta">· ${date}</span>
+                        </div>
+                        ${r.review ? `<p class="review-text">${escapeHtml(r.review)}</p>` : ''}
+                        <div class="reaction-bar">
+                            ${reactionButtons}
+                            ${myReaction ? `
+                                <button
+                                    type="button"
+                                    class="remove-reaction-btn"
+                                    data-rating-id="${realId}"
+                                >
+                                    ✖
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
                 </div>
             `;
         }).join('');
+    }
+
+    async function fetchRatingPosters(ratings, containerEl) {
+        for (let i = 0; i < ratings.length; i++) {
+            const r = ratings[i];
+            const ph = containerEl.querySelector(`#fr-poster-${i}`);
+            if (!ph) continue;
+            try {
+                const tmdbType = r.type === 'show' ? 'tv' : 'movie';
+                const res = await fetch(
+                    `/api/tmdb/search?q=${encodeURIComponent(r.title)}&type=${tmdbType}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                if (!res.ok) continue;
+                const data = await res.json();
+                const results = data.results || [];
+                const exact = results.find(x => {
+                    const t = tmdbType === 'tv' ? x.name : x.title;
+                    return t && t.toLowerCase() === r.title.toLowerCase();
+                });
+                const chosen = exact || results[0];
+                if (chosen && chosen.poster_path) {
+                    const img = document.createElement('img');
+                    img.className = 'friend-rating-poster-img';
+                    img.src = `https://image.tmdb.org/t/p/w185${chosen.poster_path}`;
+                    img.alt = r.title;
+                    img.loading = 'lazy';
+                    ph.replaceWith(img);
+                }
+            } catch (_) {}
+        }
     }
 
     function attachReactionHandlers(contentEl, rerenderRatings) {
@@ -672,6 +708,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     contentEl.innerHTML = renderRatingsHTML(ratings);
                     attachReactionHandlers(contentEl, renderRatingsTab);
+                    fetchRatingPosters(ratings, contentEl);
                 };
 
                 try {
