@@ -559,3 +559,35 @@ body {
         width: 80px;
     }
 }
+
+.suggestion-btn--interested {
+    background-color: #14532d;
+    color: white; 
+}
+.suggestion-btn--interested:hover {
+    background-color: #166534;
+    color: white; 
+}
+
+.suggestion-btn--not-interested {
+    background-color: #e53e3e;
+    color: white; 
+}
+.suggestion-btn--not-interested:hover {
+    background-color: #c53030;
+    color: white; 
+}
+
+.suggestion-btn--add-to-list {
+    background-color: #3b82f6;
+    color: white;
+}
+
+.suggestion-btn--add-to-list:hover {
+    background-color: #2563eb;
+    color: white;
+}
+.suggestion-btn {
+    font-weight: 600;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
